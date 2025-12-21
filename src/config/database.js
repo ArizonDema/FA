@@ -29,7 +29,7 @@ module.exports = {
     username: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME,
-    host: process.env.DB_HOST || " mysql-363d1dc5-mbesseygodwin-4de5.j.aivencloud.com",
+    host: process.env.DB_HOST || "mysql-363d1dc5-mbesseygodwin-4de5.j.aivencloud.com",
     port: process.env.DB_PORT || 10506,
     dialect: process.env.DB_DIALECT || "mysql",
     logging: false,
