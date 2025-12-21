@@ -1,0 +1,228 @@
+# ---------------------------------------
+# OS FILES
+# ---------------------------------------
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.Spotlight-V100
+.Trashes
+*.swp
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+
+# ---------------------------------------
+# NODE / JAVASCRIPT / TYPESCRIPT
+# ---------------------------------------
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+package-lock.json
+npm-cache/
+.yarn/*
+.yarnrc.yml
+
+# Bun
+bun.lockb
+
+# TypeScript
+*.tsbuildinfo
+
+# ---------------------------------------
+# NEXT.JS
+# ---------------------------------------
+.next/
+.nextcache/
+out/
+dist/
+coverage/
+build/
+*.cache
+*.temp
+
+# Turbo / Turbopack
+.turbo/
+.turbopack/
+
+# Vercel
+.vercel
+
+# ---------------------------------------
+# ENVIRONMENT FILES
+# ---------------------------------------
+.env
+.env.*
+!.env.example
+*.local
+
+# Firebase / Supabase
+.firebase/
+.supabase/
+
+# Docker
+docker-compose.override.yml
+docker-compose.dev.yml
+.env.docker
+
+# ---------------------------------------
+# EDITORS / IDEs
+# ---------------------------------------
+# VSCode
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/tasks.json
+history/
+.code-profile
+
+# JetBrains (WebStorm, IntelliJ, PHPStorm, etc.)
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Others
+*.sublime-workspace
+*.sublime-project
+
+# ---------------------------------------
+# LOGS / TEMP FILES
+# ---------------------------------------
+logs/
+*.log
+log/
+debug.log
+npm-debug.log
+yarn-error.log
+*.pid
+*.seed
+*.pid.lock
+
+temp/
+tmp/
+
+# ---------------------------------------
+# BACKEND FRAMEWORKS / DATABASES
+# ---------------------------------------
+# Prisma
+prisma/*.db
+prisma/*.sqlite
+prisma/migrations/
+
+# SQLite
+*.sqlite
+*.sqlite3
+*.db
+
+# Postgres dumps
+*.sql
+
+# Sequelize
+.sequelize/
+
+# MongoDB
+dump/
+data/
+
+# ---------------------------------------
+# IMAGES / FILE STORAGE (Optional)
+# Comment out if storing assets in repo
+# ---------------------------------------
+uploads/
+storage/
+public/uploads/
+
+# ---------------------------------------
+# TESTING / CI
+# ---------------------------------------
+coverage/
+.nyc_output/
+.jest/
+jest-cache/
+jest-coverage/
+
+# Cypress
+cypress/screenshots/
+cypress/videos/
+.cypress/
+
+# Playwright
+test-results/
+playwright-report/
+playwright/.cache/
+
+# ---------------------------------------
+# CACHE FILES
+# ---------------------------------------
+.cache/
+.parcel-cache/
+.eslintcache
+.stylelintcache
+.next_build/
+webpack-cache/
+
+# SWC
+.swc/
+
+# Babel
+.babelrc
+
+# ---------------------------------------
+# OTHER
+# ---------------------------------------
+*.tgz
+*.tgz.asc
+*.pem
+*.key
+*.crt
+*.cert
+*.csr
+
+# Ignore lock files (Optional — uncomment if needed)
+# pnpm-lock.yaml
+# yarn.lock
+# package-lock.json
+
+# React Native (if needed)
+android/.gradle/
+android/app/build/
+ios/Pods/
+*.xcworkspace
+build/
+
+# ---------------------------------------
+# DEPLOYMENT
+# ---------------------------------------
+.vercel/
+.netlify/
+firebase-debug.log
+functions/node_modules/
+
+# ---------------------------------------
+# MONOREPO / WORKSPACE SUPPORT
+# ---------------------------------------
+**/node_modules/
+**/.turbo/
+**/.next/
+**/dist/
+**/out/
+
+# ---------------------------------------
+# SECURITY
+# ---------------------------------------
+secrets.json
+secret-*.json
+*.bak
+*.backup
+
