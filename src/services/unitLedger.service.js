@@ -1,17 +1,45 @@
-const { UnitLedger, InvestmentContract } = require("../models");
+// backend/src/services/unitLedger.service.js
+
+const { UnitLedger, InvestmentContract, User } = require("../models");
 const logger = require("../config/logger");
 
 class UnitLedgerService {
   static async getAll(filters = {}) {
     return await UnitLedger.findAll({
       where: filters,
-      include: [{ model: InvestmentContract, as: "contract" }],
+      include: [
+        {
+          model: InvestmentContract,
+          as: "contract",
+          include: [
+            {
+              model: User,
+              as: "user",
+              attributes: ["id", "full_name", "email"], // Only fetch needed fields
+            },
+          ],
+        },
+      ],
       order: [["event_date", "DESC"]],
     });
   }
 
   static async getById(id) {
-    const entry = await UnitLedger.findByPk(id);
+    const entry = await UnitLedger.findByPk(id, {
+      include: [
+        {
+          model: InvestmentContract,
+          as: "contract",
+          include: [
+            {
+              model: User,
+              as: "user",
+              attributes: ["id", "full_name", "email"],
+            },
+          ],
+        },
+      ],
+    });
     if (!entry) throw new Error("Unit ledger entry not found");
     return entry;
   }
