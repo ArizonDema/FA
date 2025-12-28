@@ -1,9 +1,22 @@
+// backend/src/controllers/admin.controller.js
+
 const PortfolioService = require("../services/portfolio.service")
 const NavService = require("../services/nav.service")
 const WithdrawalService = require("../services/withdrawal.service")
+
+// Don’t forget to require the new services at the top of admin.controller.js:
+const CashLedgerService = require("../services/cashLedger.service")
+const FeeRecordService = require("../services/feeRecord.service")
+const InvestmentContractService = require("../services/investmentContract.service")
+const StockAssetService = require("../services/stockAsset.service")
+const StockPositionService = require("../services/stockPosition.service")
+const TradeTransactionService = require("../services/tradeTransaction.service")
+const UnitLedgerService = require("../services/unitLedger.service")
+
 const { User, WithdrawalRequest, InvestmentContract, PortfolioRound, Portfolio } = require("../models")
 const ResponseHandler = require("../utils/responseHandler")
 const logger = require("../config/logger")
+
 
 /**
  * Admin Controller
@@ -142,6 +155,7 @@ class AdminController {
       next(error)
     }
   }
+  
 
   /**
    * Get AUM statistics
@@ -204,6 +218,274 @@ class AdminController {
       next(error)
     }
   }
+
+
+
+
+  // Extend Admin Controller (src/controllers/admin.controller.js)
+  // Add these static methods inside the existing AdminController class (after the existing ones):
+
+  // === CASH LEDGER ===
+  static async getCashLedger(req, res, next) {
+    try {
+      const records = await CashLedgerService.getAll(req.query);
+      ResponseHandler.success(res, { records }, "Cash ledger retrieved");
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async createCashLedger(req, res, next) {
+    try {
+      const record = await CashLedgerService.create(req.body);
+      ResponseHandler.created(res, { record }, "Cash ledger entry created");
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async updateCashLedger(req, res, next) {
+    try {
+      const record = await CashLedgerService.update(req.params.id, req.body);
+      ResponseHandler.success(res, { record }, "Cash ledger entry updated");
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async deleteCashLedger(req, res, next) {
+    try {
+      const result = await CashLedgerService.delete(req.params.id);
+      ResponseHandler.success(res, result, "Cash ledger entry deleted");
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // === FEE RECORD ===
+  static async getFeeRecords(req, res, next) {
+    try {
+      const records = await FeeRecordService.getAll(req.query);
+      ResponseHandler.success(res, { records }, "Fee records retrieved");
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async createFeeRecord(req, res, next) {
+    try {
+      const record = await FeeRecordService.create(req.body);
+      ResponseHandler.created(res, { record }, "Fee record created");
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async updateFeeRecord(req, res, next) {
+    try {
+      const record = await FeeRecordService.update(req.params.id, req.body);
+      ResponseHandler.success(res, { record }, "Fee record updated");
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async deleteFeeRecord(req, res, next) {
+    try {
+      const result = await FeeRecordService.delete(req.params.id);
+      ResponseHandler.success(res, result, "Fee record deleted");
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // === INVESTMENT CONTRACT ===
+  static async getInvestmentContracts(req, res, next) {
+    try {
+      const contracts = await InvestmentContractService.getAll(req.query);
+      ResponseHandler.success(res, { contracts }, "Investment contracts retrieved");
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async createInvestmentContract(req, res, next) {
+    try {
+      const contract = await InvestmentContractService.create(req.body);
+      ResponseHandler.created(res, { contract }, "Investment contract created");
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async updateInvestmentContract(req, res, next) {
+    try {
+      const contract = await InvestmentContractService.update(req.params.id, req.body);
+      ResponseHandler.success(res, { contract }, "Investment contract updated");
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async deleteInvestmentContract(req, res, next) {
+    try {
+      const result = await InvestmentContractService.delete(req.params.id);
+      ResponseHandler.success(res, result, "Investment contract deleted");
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // === STOCK ASSET ===
+  static async getStockAssets(req, res, next) {
+    try {
+      const assets = await StockAssetService.getAll(req.query);
+      ResponseHandler.success(res, { assets }, "Stock assets retrieved");
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async createStockAsset(req, res, next) {
+    try {
+      const asset = await StockAssetService.create(req.body);
+      ResponseHandler.created(res, { asset }, "Stock asset created");
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async updateStockAsset(req, res, next) {
+    try {
+      const asset = await StockAssetService.update(req.params.id, req.body);
+      ResponseHandler.success(res, { asset }, "Stock asset updated");
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async deleteStockAsset(req, res, next) {
+    try {
+      const result = await StockAssetService.delete(req.params.id);
+      ResponseHandler.success(res, result, "Stock asset deleted");
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // === STOCK POSITION ===
+  static async getStockPositions(req, res, next) {
+    try {
+      const positions = await StockPositionService.getAll(req.query);
+      ResponseHandler.success(res, { positions }, "Stock positions retrieved");
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async createStockPosition(req, res, next) {
+    try {
+      const position = await StockPositionService.create(req.body);
+      ResponseHandler.created(res, { position }, "Stock position created");
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async updateStockPosition(req, res, next) {
+    try {
+      const position = await StockPositionService.update(req.params.id, req.body);
+      ResponseHandler.success(res, { position }, "Stock position updated");
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async deleteStockPosition(req, res, next) {
+    try {
+      const result = await StockPositionService.delete(req.params.id);
+      ResponseHandler.success(res, result, "Stock position deleted");
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // === TRADE TRANSACTION ===
+  static async getTradeTransactions(req, res, next) {
+    try {
+      const trades = await TradeTransactionService.getAll(req.query);
+      ResponseHandler.success(res, { trades }, "Trade transactions retrieved");
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async createTradeTransaction(req, res, next) {
+    try {
+      const trade = await TradeTransactionService.create(req.body);
+      ResponseHandler.created(res, { trade }, "Trade transaction created");
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async updateTradeTransaction(req, res, next) {
+    try {
+      const trade = await TradeTransactionService.update(req.params.id, req.body);
+      ResponseHandler.success(res, { trade }, "Trade transaction updated");
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async deleteTradeTransaction(req, res, next) {
+    try {
+      const result = await TradeTransactionService.delete(req.params.id);
+      ResponseHandler.success(res, result, "Trade transaction deleted");
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // === UNIT LEDGER ===
+  static async getUnitLedger(req, res, next) {
+    try {
+      const entries = await UnitLedgerService.getAll(req.query);
+      ResponseHandler.success(res, { entries }, "Unit ledger retrieved");
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async createUnitLedger(req, res, next) {
+    try {
+      const entry = await UnitLedgerService.create(req.body);
+      ResponseHandler.created(res, { entry }, "Unit ledger entry created");
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async updateUnitLedger(req, res, next) {
+    try {
+      const entry = await UnitLedgerService.update(req.params.id, req.body);
+      ResponseHandler.success(res, { entry }, "Unit ledger entry updated");
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async deleteUnitLedger(req, res, next) {
+    try {
+      const result = await UnitLedgerService.delete(req.params.id);
+      ResponseHandler.success(res, result, "Unit ledger entry deleted");
+    } catch (error) {
+      next(error);
+    }
+  }
+
+
+
 }
 
 module.exports = AdminController

@@ -1,3 +1,5 @@
+// backend/src/models/index.js
+
 const fs = require("fs")
 const path = require("path")
 const Sequelize = require("sequelize")
@@ -24,7 +26,8 @@ sequelize
     logger.error("Unable to connect to the database:", err)
   })
 
-// Load all models
+// Load all models and log them for test and debug purposes
+
 fs.readdirSync(__dirname)
   .filter((file) => {
     return file.indexOf(".") !== 0 && file !== basename && file.slice(-3) === ".js"
@@ -33,6 +36,23 @@ fs.readdirSync(__dirname)
     const model = require(path.join(__dirname, file))(sequelize, Sequelize.DataTypes)
     db[model.name] = model
   })
+
+  console.log("Loaded models:", Object.keys(db))
+
+  // Loaded models: [
+  //   'CashLedger',
+  //   'FeeRecord',
+  //   'InvestmentContract',
+  //   'Portfolio',
+  //   'PortfolioNavHistory',
+  //   'PortfolioRound',
+  //   'StockAsset',
+  //   'StockPosition',
+  //   'TradeTransaction',
+  //   'UnitLedger',
+  //   'User',
+  //   'WithdrawalRequest'
+  // ]
 
 // Set up associations
 Object.keys(db).forEach((modelName) => {

@@ -1,6 +1,5 @@
 // backend/src/routes/admin.routes.js
 
-
 const express = require("express")
 const AdminController = require("../controllers/admin.controller")
 const { authenticate, authorize } = require("../middlewares/auth")
@@ -199,56 +198,5 @@ router.put("/users/:id/kyc", validate(kycSchema), AdminController.updateKYCStatu
  *       - bearerAuth: []
  */
 router.get("/users", AdminController.getUsers)
-
-
-
-// Extend Admin Routes (src/routes/admin.routes.js)
-// Add these routes after the existing ones (still inside the admin-protected block):
-// remember to make it work with swagger documentation as well
-
-
-// === CASH LEDGER ===
-router.get("/cash-ledger", AdminController.getCashLedger)
-router.post("/cash-ledger", AdminController.createCashLedger)
-router.put("/cash-ledger/:id", AdminController.updateCashLedger)
-router.delete("/cash-ledger/:id", AdminController.deleteCashLedger)
-
-// === FEE RECORDS ===
-router.get("/fee-records", AdminController.getFeeRecords)
-router.post("/fee-records", AdminController.createFeeRecord)
-router.put("/fee-records/:id", AdminController.updateFeeRecord)
-router.delete("/fee-records/:id", AdminController.deleteFeeRecord)
-
-// === INVESTMENT CONTRACTS ===
-router.get("/investment-contracts", AdminController.getInvestmentContracts)
-router.post("/investment-contracts", AdminController.createInvestmentContract)
-router.put("/investment-contracts/:id", AdminController.updateInvestmentContract)
-router.delete("/investment-contracts/:id", AdminController.deleteInvestmentContract)
-
-// === STOCK ASSETS ===
-router.get("/stock-assets", AdminController.getStockAssets)
-router.post("/stock-assets", AdminController.createStockAsset)
-router.put("/stock-assets/:id", AdminController.updateStockAsset)
-router.delete("/stock-assets/:id", AdminController.deleteStockAsset)
-
-// === STOCK POSITIONS ===
-router.get("/stock-positions", AdminController.getStockPositions)
-router.post("/stock-positions", AdminController.createStockPosition)
-router.put("/stock-positions/:id", AdminController.updateStockPosition)
-router.delete("/stock-positions/:id", AdminController.deleteStockPosition)
-
-// === TRADE TRANSACTIONS ===
-router.get("/trade-transactions", AdminController.getTradeTransactions)
-router.post("/trade-transactions", AdminController.createTradeTransaction)
-router.put("/trade-transactions/:id", AdminController.updateTradeTransaction)
-router.delete("/trade-transactions/:id", AdminController.deleteTradeTransaction)
-
-// === UNIT LEDGER ===
-router.get("/unit-ledger", AdminController.getUnitLedger)
-router.post("/unit-ledger", AdminController.createUnitLedger)
-router.put("/unit-ledger/:id", AdminController.updateUnitLedger)
-router.delete("/unit-ledger/:id", AdminController.deleteUnitLedger)
-
-
 
 module.exports = router
