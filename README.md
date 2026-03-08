@@ -13,6 +13,7 @@ A production-ready NAV-based managed investment platform built with Node.js, Exp
 - [Database Setup](#database-setup)
 - [Environment Configuration](#environment-configuration)
 - [Running the Application](#running-the-application)
+- [Frontend UI](#frontend-ui)
 - [API Documentation](#api-documentation)
 - [Background Jobs](#background-jobs)
 - [Testing](#testing)
@@ -237,6 +238,51 @@ Run everything at once:
 \`\`\`bash
 npm run db:setup  # Run migrations and seeds
 npm start         # Start server
+\`\`\`
+
+## Frontend UI
+
+This repository now includes a React frontend in \`/frontend\` with:
+
+- Authentication (register/login)
+- Investor workspace pages:
+  - Overview
+  - Invest
+  - Portfolios + NAV history
+  - Withdrawals
+  - Account profile
+- Admin workspace pages:
+  - Overview
+  - Portfolios + rounds
+  - Users + KYC actions
+  - Withdrawal queue approvals/rejections
+  - Operations data (cash ledger, fee records, contracts, stock assets)
+
+### Run Frontend
+
+\`\`\`bash
+cd frontend
+npm install
+npm run dev
+\`\`\`
+
+Frontend URL:
+
+\`\`\`
+http://localhost:3000
+\`\`\`
+
+The frontend connects to backend API at:
+
+\`\`\`
+http://localhost:8000/api/v1
+\`\`\`
+
+Demo users after seeding:
+
+\`\`\`
+admin@cssinvest.com / Password123!
+john@example.com / Password123!
 \`\`\`
 
 ## API Documentation

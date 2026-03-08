@@ -119,15 +119,21 @@ class PortfolioService {
   static async getAUM() {
     logger.info(`[v0] Calculating AUM`)
 
+    // AUM should reflect currently active (open) rounds only.
+    // Closed rounds may not have replayable NAV context and should not break admin dashboards.
     const activeRounds = await PortfolioRound.findAll({
-      where: { status: { [Op.in]: ["open", "closed"] } },
+      where: { status: "open" },
     })
 
     let totalAUM = 0
 
     for (const round of activeRounds) {
-      const navData = await NavService.getLatestNAV(round.id)
-      totalAUM += navData.portfolioValue
+      try {
+        const navData = await NavService.getLatestNAV(round.id)
+        totalAUM += navData.portfolioValue
+      } catch (error) {
+        logger.warn(`[v0] Skipping round ${round.id} in AUM calculation: ${error.message}`)
+      }
     }
 
     return {

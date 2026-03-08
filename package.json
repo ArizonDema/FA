@@ -6,6 +6,8 @@
   "scripts": {
     "start": "node src/server.js --omit=dev",
     "dev": "nodemon src/server.js",
+    "frontend:dev": "cd frontend && npm run dev",
+    "frontend:build": "cd frontend && npm run build",
     "migrate": "npx sequelize-cli db:migrate",
     "migrate:undo": "npx sequelize-cli db:migrate:undo",
     "seed": "npx sequelize-cli db:seed:all",
