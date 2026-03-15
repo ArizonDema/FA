@@ -164,14 +164,19 @@ textarea {
   grid-template-columns: 280px 1fr;
   gap: 14px;
   padding: 12px;
+  align-items: start;
 }
 
 .sidebar {
   padding: 16px;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
   gap: 16px;
+  align-self: start;
+  position: sticky;
+  top: 12px;
+  height: calc(100vh - 24px);
+  overflow: auto;
 }
 
 .sidebar-nav {
@@ -186,6 +191,7 @@ textarea {
 .sidebar-foot {
   display: grid;
   gap: 8px;
+  margin-top: auto;
 }
 
 .sidebar-foot a {
@@ -323,6 +329,16 @@ th {
   border-radius: 10px;
 }
 
+.alert.inline-actions {
+  align-items: center;
+  justify-content: space-between;
+}
+
+.alert.inline-actions button {
+  padding: 2px 8px;
+  line-height: 1;
+}
+
 .alert.ok {
   border: 1px solid rgba(30, 141, 99, 0.34);
   background: rgba(30, 141, 99, 0.16);
@@ -348,6 +364,9 @@ th {
 
   .sidebar {
     gap: 10px;
+    position: static;
+    height: auto;
+    overflow: visible;
   }
 
   .sidebar-nav {

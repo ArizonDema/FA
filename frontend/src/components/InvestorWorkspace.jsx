@@ -109,6 +109,18 @@ export function InvestorWorkspace({ token, user, onLogout, onUserUpdate }) {
       .catch(() => setNavHistory([]))
   }, [token, selectedRoundId])
 
+  useEffect(() => {
+    if (!error) return
+    const timer = window.setTimeout(() => setError(""), 8000)
+    return () => window.clearTimeout(timer)
+  }, [error])
+
+  useEffect(() => {
+    if (!note) return
+    const timer = window.setTimeout(() => setNote(""), 4000)
+    return () => window.clearTimeout(timer)
+  }, [note])
+
   async function submitInvestment(event) {
     event.preventDefault()
     setError("")
@@ -190,8 +202,22 @@ export function InvestorWorkspace({ token, user, onLogout, onUserUpdate }) {
       setActivePage={setActivePage}
     >
       {loading ? <p className="panel">Loading investor data...</p> : null}
-      {error ? <p className="alert error">{error}</p> : null}
-      {note ? <p className="alert ok">{note}</p> : null}
+      {error ? (
+        <div className="alert error inline-actions" role="alert">
+          <span>{error}</span>
+          <button type="button" onClick={() => setError("")}>
+            ×
+          </button>
+        </div>
+      ) : null}
+      {note ? (
+        <div className="alert ok inline-actions" role="status">
+          <span>{note}</span>
+          <button type="button" onClick={() => setNote("")}>
+            ×
+          </button>
+        </div>
+      ) : null}
 
       {activePage === "overview" ? (
         <div className="stack">

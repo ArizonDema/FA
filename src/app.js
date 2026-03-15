@@ -13,6 +13,7 @@ const authRoutes = require("./routes/auth.routes")
 const investorRoutes = require("./routes/investor.routes")
 const adminRoutes = require("./routes/admin.routes")
 const systemRoutes = require("./routes/system.routes")
+const fundAdminRoutes = require("./routes/fund-admin.routes")
 
 /**
  * Initialize Express Application
@@ -65,6 +66,7 @@ app.get("/health", (req, res) => {
 app.use(`${config.apiPrefix}/auth`, authRoutes)
 app.use(`${config.apiPrefix}/investor`, investorRoutes)
 app.use(`${config.apiPrefix}/admin`, adminRoutes)
+app.use(`${config.apiPrefix}`, fundAdminRoutes)
 app.use(`${config.apiPrefix}/system`, systemRoutes)
 
 // 404 Handler

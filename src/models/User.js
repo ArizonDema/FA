@@ -20,6 +20,31 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: "user_id",
         as: "withdrawalRequests",
       })
+
+      User.hasMany(models.InvestorUserLink, {
+        foreignKey: "user_id",
+        as: "investorLinks",
+      })
+
+      User.hasMany(models.JournalEntry, {
+        foreignKey: "posted_by",
+        as: "journalEntries",
+      })
+
+      User.hasMany(models.ReportRun, {
+        foreignKey: "created_by",
+        as: "reportRuns",
+      })
+
+      User.hasMany(models.FundDocument, {
+        foreignKey: "uploaded_by",
+        as: "fundDocuments",
+      })
+
+      User.hasMany(models.AuditLog, {
+        foreignKey: "actor_id",
+        as: "auditLogs",
+      })
     }
 
     /**

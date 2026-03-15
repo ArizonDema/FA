@@ -1,3 +1,5 @@
+import { API_DOCS_URL } from "../api"
+
 export function AppShell({ user, onLogout, navItems, activePage, setActivePage, children }) {
   return (
     <main className="app-root">
@@ -23,7 +25,7 @@ export function AppShell({ user, onLogout, navItems, activePage, setActivePage, 
         </nav>
 
         <div className="sidebar-foot">
-          <a href="http://localhost:8000/api/docs" target="_blank" rel="noreferrer">
+          <a href={API_DOCS_URL} target="_blank" rel="noreferrer">
             API Docs
           </a>
           <button type="button" onClick={onLogout}>

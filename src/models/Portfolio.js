@@ -15,6 +15,61 @@ module.exports = (sequelize, DataTypes) => {
         as: "rounds",
       })
 
+      Portfolio.hasOne(models.FundProfile, {
+        foreignKey: "portfolio_id",
+        as: "fundProfile",
+      })
+
+      Portfolio.hasOne(models.FundGovernance, {
+        foreignKey: "portfolio_id",
+        as: "fundGovernance",
+      })
+
+      Portfolio.hasOne(models.FundAccountingPolicy, {
+        foreignKey: "portfolio_id",
+        as: "fundAccountingPolicy",
+      })
+
+      Portfolio.hasOne(models.FundTaxProfile, {
+        foreignKey: "portfolio_id",
+        as: "fundTaxProfile",
+      })
+
+      Portfolio.hasMany(models.FundBankAccount, {
+        foreignKey: "portfolio_id",
+        as: "fundBankAccounts",
+      })
+
+      Portfolio.hasMany(models.ShareClass, {
+        foreignKey: "portfolio_id",
+        as: "shareClasses",
+      })
+
+      Portfolio.hasMany(models.CapitalCall, {
+        foreignKey: "portfolio_id",
+        as: "capitalCalls",
+      })
+
+      Portfolio.hasMany(models.Distribution, {
+        foreignKey: "portfolio_id",
+        as: "distributions",
+      })
+
+      Portfolio.hasMany(models.JournalEntry, {
+        foreignKey: "portfolio_id",
+        as: "journalEntries",
+      })
+
+      Portfolio.hasMany(models.ReportRun, {
+        foreignKey: "portfolio_id",
+        as: "reportRuns",
+      })
+
+      Portfolio.hasMany(models.FundDocument, {
+        foreignKey: "portfolio_id",
+        as: "fundDocuments",
+      })
+
       // Portfolio has many stock positions
       Portfolio.hasMany(models.StockPosition, {
         foreignKey: "portfolio_id",

@@ -1,0 +1,48 @@
+const { Model } = require("sequelize")
+
+module.exports = (sequelize, DataTypes) => {
+  class ReportRun extends Model {
+    static associate(models) {
+      ReportRun.belongsTo(models.Portfolio, {
+        foreignKey: "portfolio_id",
+        as: "portfolio",
+      })
+      ReportRun.belongsTo(models.User, {
+        foreignKey: "created_by",
+        as: "createdBy",
+      })
+    }
+  }
+
+  ReportRun.init(
+    {
+      id: {
+        type: DataTypes.UUID,
+        defaultValue: DataTypes.UUIDV4,
+        primaryKey: true,
+      },
+      type: {
+        type: DataTypes.ENUM("cash_flow", "shareholder_register", "financial_statements"),
+        allowNull: false,
+      },
+      portfolio_id: {
+        type: DataTypes.UUID,
+        allowNull: false,
+      },
+      period_start: DataTypes.DATEONLY,
+      period_end: DataTypes.DATEONLY,
+      inputs_json: DataTypes.JSON,
+      output_paths: DataTypes.JSON,
+      created_by: DataTypes.UUID,
+    },
+    {
+      sequelize,
+      modelName: "ReportRun",
+      tableName: "report_runs",
+      underscored: true,
+      timestamps: true,
+    },
+  )
+
+  return ReportRun
+}

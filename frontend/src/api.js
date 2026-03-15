@@ -1,4 +1,47 @@
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1"
+const DEFAULT_API_ORIGIN = "http://localhost:8000"
+const DEFAULT_API_PREFIX = "/api/v1"
+
+const RAW_BASE = import.meta.env.VITE_API_BASE_URL
+const RAW_PREFIX = import.meta.env.VITE_API_PREFIX || DEFAULT_API_PREFIX
+
+function normalizeApiBase() {
+  const base = (RAW_BASE && String(RAW_BASE).trim()) || DEFAULT_API_ORIGIN
+  const trimmedBase = base.replace(/\/+$/, "")
+  const prefix = RAW_PREFIX.startsWith("/") ? RAW_PREFIX : `/${RAW_PREFIX}`
+
+  if (!RAW_BASE) {
+    return `${trimmedBase}${prefix}`
+  }
+
+  try {
+    const parsed = new URL(trimmedBase)
+    if (parsed.pathname === "" || parsed.pathname === "/") {
+      return `${trimmedBase}${prefix}`
+    }
+    return trimmedBase
+  } catch {
+    if (trimmedBase.includes("/api/") || trimmedBase.endsWith("/api") || trimmedBase.endsWith("/api/v1")) {
+      return trimmedBase
+    }
+    return `${trimmedBase}${prefix}`
+  }
+}
+
+export const API_BASE = normalizeApiBase()
+export const API_ORIGIN = (() => {
+  try {
+    return new URL(API_BASE).origin
+  } catch {
+    return ""
+  }
+})()
+export const API_DOCS_URL = API_ORIGIN ? `${API_ORIGIN}/api/docs` : "/api/docs"
+
+export function apiUrl(path = "") {
+  if (!path) return API_BASE
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`
+  return `${API_BASE}${normalizedPath}`
+}
 
 async function parseResponse(response) {
   const contentType = response.headers.get("content-type") || ""
@@ -9,14 +52,18 @@ async function parseResponse(response) {
 }
 
 export async function apiRequest(path, { method = "GET", token, body } = {}) {
-  const response = await fetch(`${API_BASE}${path}`, {
-    method,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    ...(body ? { body: JSON.stringify(body) } : {}),
-  })
+  const headers = {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  }
+
+  const options = { method, headers }
+
+  if (body !== undefined) {
+    headers["Content-Type"] = "application/json"
+    options.body = JSON.stringify(body)
+  }
+
+  const response = await fetch(apiUrl(path), options)
 
   const payload = await parseResponse(response)
 

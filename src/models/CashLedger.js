@@ -37,7 +37,19 @@ module.exports = (sequelize, DataTypes) => {
         comment: "Positive for inflow, negative for outflow",
       },
       type: {
-        type: DataTypes.ENUM("deposit", "withdrawal", "fee", "trade", "dividend", "other"),
+        type: DataTypes.ENUM(
+          "deposit",
+          "withdrawal",
+          "fee",
+          "trade",
+          "dividend",
+          "other",
+          "capital_call",
+          "distribution",
+          "investment",
+          "expense",
+          "bank_fee",
+        ),
         allowNull: false,
       },
       reference_type: {
