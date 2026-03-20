@@ -1,17 +1,17 @@
-const DEFAULT_API_ORIGIN = "http://localhost:8000"
 const DEFAULT_API_PREFIX = "/api/v1"
 
 const RAW_BASE = import.meta.env.VITE_API_BASE_URL
 const RAW_PREFIX = import.meta.env.VITE_API_PREFIX || DEFAULT_API_PREFIX
 
 function normalizeApiBase() {
-  const base = (RAW_BASE && String(RAW_BASE).trim()) || DEFAULT_API_ORIGIN
-  const trimmedBase = base.replace(/\/+$/, "")
   const prefix = RAW_PREFIX.startsWith("/") ? RAW_PREFIX : `/${RAW_PREFIX}`
 
   if (!RAW_BASE) {
-    return `${trimmedBase}${prefix}`
+    return prefix
   }
+
+  const base = String(RAW_BASE).trim()
+  const trimmedBase = base.replace(/\/+$/, "")
 
   try {
     const parsed = new URL(trimmedBase)
@@ -63,13 +63,24 @@ export async function apiRequest(path, { method = "GET", token, body } = {}) {
     options.body = JSON.stringify(body)
   }
 
-  const response = await fetch(apiUrl(path), options)
+  let response
+  try {
+    response = await fetch(apiUrl(path), options)
+  } catch (error) {
+    throw new Error(`Unable to reach the API at ${API_BASE}. Is the backend running?`)
+  }
 
   const payload = await parseResponse(response)
 
   if (!response.ok) {
     const reason =
       payload?.errors?.[0]?.message || payload?.message || `Request failed (${response.status})`
+    if (response.status >= 500) {
+      const message = String(payload?.message || "").toLowerCase()
+      if (!message || message.includes("econnrefused") || message.includes("proxy")) {
+        throw new Error("Backend is unavailable. Make sure the API server is running.")
+      }
+    }
     throw new Error(reason)
   }
 
