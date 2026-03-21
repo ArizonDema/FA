@@ -60,6 +60,22 @@ const readEnvValue = (contents, key) => {
 
 const escapeSql = (value) => String(value).replace(/'/g, "''")
 
+const readDbConfig = () => {
+  const envPath = path.resolve(repoRoot, ".env")
+  let dbName = "css_invest"
+  let dbPassword = ""
+  let autoMigrate = ""
+  let autoSeed = ""
+  if (fs.existsSync(envPath)) {
+    const envContents = fs.readFileSync(envPath, "utf8")
+    dbName = readEnvValue(envContents, "DB_NAME") || dbName
+    dbPassword = readEnvValue(envContents, "DB_PASSWORD") || dbPassword
+    autoMigrate = readEnvValue(envContents, "AUTO_MIGRATE")
+    autoSeed = readEnvValue(envContents, "AUTO_SEED")
+  }
+  return { dbName, dbPassword, autoMigrate, autoSeed }
+}
+
 const ensureLocalMysqlConfig = (exePath) => {
   const baseDir = path.dirname(path.dirname(exePath))
   const localDir = path.resolve(repoRoot, ".mysql-local")
@@ -91,7 +107,7 @@ const ensureLocalMysqlConfig = (exePath) => {
     fs.writeFileSync(iniPath, iniContents, "utf8")
   }
 
-  return { baseDir, dataDir, iniPath }
+  return { baseDir, dataDir, iniPath, localDir }
 }
 
 const initializeLocalMysql = (exePath, iniPath, dataDir) => {
@@ -99,24 +115,53 @@ const initializeLocalMysql = (exePath, iniPath, dataDir) => {
   if (fs.existsSync(mysqlSystemDir)) {
     return
   }
-  const result = spawnSync(exePath, [`--initialize-insecure`, `--defaults-file=${iniPath}`], {
-    stdio: "inherit",
-    windowsHide: true,
-  })
+  if (fs.existsSync(dataDir)) {
+    const entries = fs.readdirSync(dataDir)
+    if (entries.length > 0) {
+      console.warn("Cleaning existing local MySQL data directory before initialization.")
+      entries.forEach((entry) => {
+        fs.rmSync(path.join(dataDir, entry), { recursive: true, force: true })
+      })
+    }
+  }
+  const result = spawnSync(
+    exePath,
+    [`--defaults-file=${iniPath}`, `--initialize-insecure`, `--datadir=${dataDir}`],
+    {
+      stdio: "inherit",
+      windowsHide: true,
+    },
+  )
   if (result.status !== 0) {
     console.error("MySQL initialization failed. Start MySQL80 service or run setup manually.")
   }
 }
 
-const ensureDatabase = (baseDir) => {
-  const envPath = path.resolve(repoRoot, ".env")
-  let dbName = "css_invest"
-  let dbPassword = ""
-  if (fs.existsSync(envPath)) {
-    const envContents = fs.readFileSync(envPath, "utf8")
-    dbName = readEnvValue(envContents, "DB_NAME") || dbName
-    dbPassword = readEnvValue(envContents, "DB_PASSWORD") || dbPassword
-  }
+const ensureMysqlInitFile = (localDir, dbName, dbPassword) => {
+  const initFilePath = path.join(localDir, "bootstrap.sql")
+  const normalizedInit = initFilePath.replace(/\\/g, "/")
+  const passwordValue = dbPassword ? escapeSql(dbPassword) : ""
+  const passwordClause = `IDENTIFIED BY '${passwordValue}'`
+  const initSql = [
+    `CREATE USER IF NOT EXISTS 'root'@'127.0.0.1' ${passwordClause};`,
+    `CREATE USER IF NOT EXISTS 'root'@'localhost' ${passwordClause};`,
+    `ALTER USER 'root'@'localhost' ${passwordClause};`,
+    `GRANT ALL PRIVILEGES ON *.* TO 'root'@'127.0.0.1' WITH GRANT OPTION;`,
+    `GRANT ALL PRIVILEGES ON *.* TO 'root'@'localhost' WITH GRANT OPTION;`,
+    `CREATE DATABASE IF NOT EXISTS \`${escapeSql(
+      dbName,
+    )}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`,
+    "FLUSH PRIVILEGES;",
+    "",
+  ].join("\n")
+  fs.writeFileSync(initFilePath, initSql, "utf8")
+  return normalizedInit
+}
+
+const ensureDatabase = (baseDir, dbName, dbPassword) => {
+  const resolvedConfig = dbName ? { dbName, dbPassword } : readDbConfig()
+  const finalName = resolvedConfig.dbName || "css_invest"
+  const finalPassword = resolvedConfig.dbPassword || ""
 
   const mysqlExe = path.join(baseDir, "bin", "mysql.exe")
   if (!fs.existsSync(mysqlExe)) {
@@ -127,13 +172,15 @@ const ensureDatabase = (baseDir) => {
   const runQuery = (args, query) =>
     spawnSync(mysqlExe, [...baseArgs, ...args, "-e", query], { stdio: "ignore" }).status === 0
 
-  const passwordQuery = dbPassword
-    ? `ALTER USER 'root'@'localhost' IDENTIFIED BY '${escapeSql(dbPassword)}';`
+  const passwordQuery = finalPassword
+    ? `ALTER USER 'root'@'localhost' IDENTIFIED BY '${escapeSql(finalPassword)}';`
     : ""
-  const createDbQuery = `CREATE DATABASE IF NOT EXISTS \`${escapeSql(dbName)}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`
+  const createDbQuery = `CREATE DATABASE IF NOT EXISTS \`${escapeSql(
+    finalName,
+  )}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`
 
-  if (dbPassword && runQuery([`-p${dbPassword}`], "SELECT 1;")) {
-    runQuery([`-p${dbPassword}`], createDbQuery)
+  if (finalPassword && runQuery([`-p${finalPassword}`], "SELECT 1;")) {
+    runQuery([`-p${finalPassword}`], createDbQuery)
     return
   }
 
@@ -146,28 +193,58 @@ const ensureDatabase = (baseDir) => {
   }
 }
 
+const isEnvEnabled = (value, fallback = true) => {
+  if (!value) return fallback
+  return !["0", "false", "no", "off"].includes(value.toLowerCase())
+}
+
+const runCommand = (command, cwd) =>
+  spawnSync(command, {
+    cwd,
+    stdio: "inherit",
+    shell: true,
+  })
+
+const runMigrations = () => runCommand("npm run migrate", repoRoot)
+
+const runSeeds = () => runCommand("npm run seed", repoRoot)
+
 const startMysqlIfNeeded = async () => {
   const ready = await isPortOpen(3306, "127.0.0.1")
-  if (ready) return
   const exePath = findMysqlExe()
-  if (!exePath) {
-    console.error("MySQL is not running and no mysqld executable was found.")
-    console.error("Start MySQL80 service or set MYSQLD_PATH and MYSQLD_INI.")
-    return
+  const { dbName, dbPassword, autoMigrate, autoSeed } = readDbConfig()
+
+  if (!ready) {
+    if (!exePath) {
+      console.error("MySQL is not running and no mysqld executable was found.")
+      console.error("Start MySQL80 service or set MYSQLD_PATH and MYSQLD_INI.")
+      return
+    }
+    const { baseDir, dataDir, iniPath, localDir } = ensureLocalMysqlConfig(exePath)
+    initializeLocalMysql(exePath, iniPath, dataDir)
+    const initFilePath = ensureMysqlInitFile(localDir, dbName, dbPassword)
+    mysql = spawn(exePath, [`--defaults-file=${iniPath}`, `--init-file=${initFilePath}`], {
+      stdio: "inherit",
+      windowsHide: true,
+    })
+    mysql.on("close", (code, signal) => {
+      if (shuttingDown) return
+      const reason = signal ? `signal ${signal}` : `code ${code}`
+      console.error(`MySQL stopped (${reason}).`)
+    })
+    await new Promise((resolve) => setTimeout(resolve, 2000))
+    ensureDatabase(baseDir, dbName, dbPassword)
+  } else if (exePath) {
+    const baseDir = path.dirname(path.dirname(exePath))
+    ensureDatabase(baseDir, dbName, dbPassword)
   }
-  const { baseDir, dataDir, iniPath } = ensureLocalMysqlConfig(exePath)
-  initializeLocalMysql(exePath, iniPath, dataDir)
-  mysql = spawn(exePath, [`--defaults-file=${iniPath}`], {
-    stdio: "inherit",
-    windowsHide: true,
-  })
-  mysql.on("close", (code, signal) => {
-    if (shuttingDown) return
-    const reason = signal ? `signal ${signal}` : `code ${code}`
-    console.error(`MySQL stopped (${reason}).`)
-  })
-  await new Promise((resolve) => setTimeout(resolve, 2000))
-  ensureDatabase(baseDir)
+
+  if (isEnvEnabled(autoMigrate, true)) {
+    runMigrations()
+  }
+  if (isEnvEnabled(autoSeed, true)) {
+    runSeeds()
+  }
 }
 
 const startBackend = () => {
