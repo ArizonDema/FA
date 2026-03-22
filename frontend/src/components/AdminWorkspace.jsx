@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { apiRequest, apiUrl, currency, percent, shortDate } from "../api"
+import { apiMultipartRequest, apiRequest, apiUrl, currency, percent, shortDate } from "../api"
 import { AppShell } from "./AppShell"
+import { CashFlowTemplatesPanel } from "./CashFlowTemplatesPanel"
+import { CashFlowExtractorPanel } from "./CashFlowExtractorPanel"
 
 const emptyBank = {
   bank_name: "",
@@ -23,6 +25,8 @@ export function AdminWorkspace({ token, user, onLogout }) {
     { key: "ledger", label: "Ledger & Bank" },
     { key: "journal", label: "Journal Entries" },
     { key: "reports", label: "Reports" },
+    { key: "cash-flow-templates", label: "Cash Flow Templates" },
+    { key: "cash-flow-extractor", label: "Cash Flow Extractor" },
     { key: "documents", label: "Documents" },
   ]
 
@@ -172,7 +176,7 @@ export function AdminWorkspace({ token, user, onLogout }) {
   })
 
   const [reportForm, setReportForm] = useState({
-    type: "cash_flow",
+    type: "shareholder_register",
     period_start: "",
     period_end: "",
     format: "both",
@@ -591,17 +595,11 @@ export function AdminWorkspace({ token, user, onLogout }) {
     }
 
     try {
-      const response = await fetch(apiUrl("/documents"), {
+      await apiMultipartRequest("/documents", {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        body: formData,
+        token,
+        formData,
       })
-      if (!response.ok) {
-        const payload = await response.json()
-        throw new Error(payload?.message || "Document upload failed")
-      }
       setNote("Document uploaded.")
       setDocumentForm({ document_type: "LPA", investor_profile_id: "", file: null })
       await loadFundScoped()
@@ -1537,11 +1535,11 @@ export function AdminWorkspace({ token, user, onLogout }) {
         {activePage === "reports" && (
           <section className="panel stack">
             <h2>Reports</h2>
+            <p className="muted small">Use the dedicated Cash Flow Extractor page for cash flow generation.</p>
             <form className="form-grid" onSubmit={handleRunReport}>
               <label>
                 Report Type
                 <select value={reportForm.type} onChange={(e) => setReportForm({ ...reportForm, type: e.target.value })}>
-                  <option value="cash_flow">Cash Flow</option>
                   <option value="shareholder_register">Shareholder Register</option>
                   <option value="financial_statements">Financial Statements</option>
                 </select>
@@ -1626,6 +1624,24 @@ export function AdminWorkspace({ token, user, onLogout }) {
               </table>
             </div>
           </section>
+        )}
+
+        {activePage === "cash-flow-templates" && (
+          <CashFlowTemplatesPanel
+            token={token}
+            selectedFundId={selectedFundId}
+            onError={setError}
+            onNote={setNote}
+          />
+        )}
+
+        {activePage === "cash-flow-extractor" && (
+          <CashFlowExtractorPanel
+            token={token}
+            selectedFundId={selectedFundId}
+            onError={setError}
+            onNote={setNote}
+          />
         )}
 
         {activePage === "documents" && (

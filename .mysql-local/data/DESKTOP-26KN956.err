@@ -56,3 +56,16 @@
 2026-03-21T20:15:25.128603Z 7 [Warning] [MY-010235] [Server] Following users were specified in CREATE USER IF NOT EXISTS but they already exist. Corresponding entry in binary log used default authentication plugin 'mysql_native_password' to rewrite authentication information (if any) for them: 'root'@'localhost'
 2026-03-21T20:15:25.142403Z 0 [System] [MY-011323] [Server] X Plugin ready for connections. Bind-address: '::' port: 33060
 2026-03-21T20:15:25.142503Z 0 [System] [MY-010931] [Server] C:\Program Files\MySQL\MySQL Server 8.0\bin\mysqld.exe: ready for connections. Version: '8.0.45'  socket: ''  port: 3306  MySQL Community Server - GPL.
+2026-03-22T16:56:17.923116Z 0 [Warning] [MY-010918] [Server] 'default_authentication_plugin' is deprecated and will be removed in a future release. Please use authentication_policy instead.
+2026-03-22T16:56:17.923128Z 0 [System] [MY-010116] [Server] C:\Program Files\MySQL\MySQL Server 8.0\bin\mysqld.exe (mysqld 8.0.45) starting as process 20424
+2026-03-22T16:56:17.939451Z 1 [System] [MY-013576] [InnoDB] InnoDB initialization has started.
+2026-03-22T16:56:18.484647Z 1 [System] [MY-013577] [InnoDB] InnoDB initialization has ended.
+2026-03-22T16:56:18.639889Z 0 [System] [MY-010229] [Server] Starting XA crash recovery...
+2026-03-22T16:56:18.643685Z 0 [System] [MY-010232] [Server] XA crash recovery finished.
+2026-03-22T16:56:18.746357Z 0 [Warning] [MY-010068] [Server] CA certificate ca.pem is self signed.
+2026-03-22T16:56:18.746789Z 0 [System] [MY-013602] [Server] Channel mysql_main configured to support TLS. Encrypted connections are now supported for this channel.
+2026-03-22T16:56:18.788937Z 7 [Warning] [MY-013360] [Server] Plugin mysql_native_password reported: ''mysql_native_password' is deprecated and will be removed in a future release. Please use caching_sha2_password instead'
+2026-03-22T16:56:18.789837Z 7 [Warning] [MY-010235] [Server] Following users were specified in CREATE USER IF NOT EXISTS but they already exist. Corresponding entry in binary log used default authentication plugin 'mysql_native_password' to rewrite authentication information (if any) for them: 'root'@'127.0.0.1'
+2026-03-22T16:56:18.792217Z 7 [Warning] [MY-010235] [Server] Following users were specified in CREATE USER IF NOT EXISTS but they already exist. Corresponding entry in binary log used default authentication plugin 'mysql_native_password' to rewrite authentication information (if any) for them: 'root'@'localhost'
+2026-03-22T16:56:18.805240Z 0 [System] [MY-011323] [Server] X Plugin ready for connections. Bind-address: '::' port: 33060
+2026-03-22T16:56:18.805347Z 0 [System] [MY-010931] [Server] C:\Program Files\MySQL\MySQL Server 8.0\bin\mysqld.exe: ready for connections. Version: '8.0.45'  socket: ''  port: 3306  MySQL Community Server - GPL.

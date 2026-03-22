@@ -41,6 +41,11 @@ module.exports = (sequelize, DataTypes) => {
         as: "fundDocuments",
       })
 
+      User.hasMany(models.CashFlowTemplate, {
+        foreignKey: "uploaded_by",
+        as: "cashFlowTemplates",
+      })
+
       User.hasMany(models.AuditLog, {
         foreignKey: "actor_id",
         as: "auditLogs",

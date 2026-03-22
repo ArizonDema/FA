@@ -1,4 +1,5 @@
 const DEFAULT_API_PREFIX = "/api/v1"
+const MAX_NETWORK_RETRIES = 3
 
 const RAW_BASE = import.meta.env.VITE_API_BASE_URL
 const RAW_PREFIX = import.meta.env.VITE_API_PREFIX || DEFAULT_API_PREFIX
@@ -51,6 +52,29 @@ async function parseResponse(response) {
   return { message: await response.text() }
 }
 
+function delay(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms)
+  })
+}
+
+async function fetchWithRetry(url, options) {
+  let lastError = null
+
+  for (let attempt = 1; attempt <= MAX_NETWORK_RETRIES; attempt += 1) {
+    try {
+      return await fetch(url, options)
+    } catch (error) {
+      lastError = error
+      if (attempt < MAX_NETWORK_RETRIES) {
+        await delay(300 * attempt)
+      }
+    }
+  }
+
+  throw lastError
+}
+
 export async function apiRequest(path, { method = "GET", token, body } = {}) {
   const headers = {
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -65,7 +89,7 @@ export async function apiRequest(path, { method = "GET", token, body } = {}) {
 
   let response
   try {
-    response = await fetch(apiUrl(path), options)
+    response = await fetchWithRetry(apiUrl(path), options)
   } catch (error) {
     throw new Error(`Unable to reach the API at ${API_BASE}. Is the backend running?`)
   }
@@ -81,6 +105,37 @@ export async function apiRequest(path, { method = "GET", token, body } = {}) {
         throw new Error("Backend is unavailable. Make sure the API server is running.")
       }
     }
+    throw new Error(reason)
+  }
+
+  return payload
+}
+
+export async function apiMultipartRequest(path, { method = "POST", token, formData } = {}) {
+  if (!(formData instanceof FormData)) {
+    throw new Error("apiMultipartRequest requires a FormData instance")
+  }
+
+  const headers = {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  }
+
+  let response
+  try {
+    response = await fetchWithRetry(apiUrl(path), {
+      method,
+      headers,
+      body: formData,
+    })
+  } catch (error) {
+    throw new Error(`Unable to reach the API at ${API_BASE}. Is the backend running?`)
+  }
+
+  const payload = await parseResponse(response)
+
+  if (!response.ok) {
+    const reason =
+      payload?.errors?.[0]?.message || payload?.message || `Request failed (${response.status})`
     throw new Error(reason)
   }
 
