@@ -790,6 +790,7 @@ async function fillTemplateWorkbook({ templatePath, outputPath, config, fiscalDa
     setNumberCellIfWritable(row.getCell(closingColumn), month.closing_balance)
   })
 
+  workbook.calcProperties.fullCalcOnLoad = true
   fs.mkdirSync(path.dirname(outputPath), { recursive: true })
   await workbook.xlsx.writeFile(outputPath)
 }

@@ -75,6 +75,36 @@ async function fetchWithRetry(url, options) {
   throw lastError
 }
 
+async function parseApiError(response) {
+  const payload = await parseResponse(response)
+  return (
+    payload?.errors?.[0]?.message ||
+    payload?.message ||
+    `Request failed (${response.status})`
+  )
+}
+
+function extractFilenameFromDisposition(dispositionHeader) {
+  const header = String(dispositionHeader || "")
+  if (!header) return null
+
+  const utfMatch = header.match(/filename\*=UTF-8''([^;]+)/i)
+  if (utfMatch?.[1]) {
+    try {
+      return decodeURIComponent(utfMatch[1].replace(/["']/g, ""))
+    } catch {
+      return utfMatch[1].replace(/["']/g, "")
+    }
+  }
+
+  const simpleMatch = header.match(/filename="?([^";]+)"?/i)
+  if (simpleMatch?.[1]) {
+    return simpleMatch[1].trim()
+  }
+
+  return null
+}
+
 export async function apiRequest(path, { method = "GET", token, body } = {}) {
   const headers = {
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -140,6 +170,36 @@ export async function apiMultipartRequest(path, { method = "POST", token, formDa
   }
 
   return payload
+}
+
+export async function apiDownload(path, { method = "GET", token, body, defaultFileName } = {}) {
+  const headers = {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  }
+
+  const options = { method, headers }
+  if (body !== undefined) {
+    headers["Content-Type"] = "application/json"
+    options.body = JSON.stringify(body)
+  }
+
+  let response
+  try {
+    response = await fetchWithRetry(apiUrl(path), options)
+  } catch (error) {
+    throw new Error(`Unable to reach the API at ${API_BASE}. Is the backend running?`)
+  }
+
+  if (!response.ok) {
+    const reason = await parseApiError(response)
+    throw new Error(reason)
+  }
+
+  const blob = await response.blob()
+  const disposition = response.headers.get("content-disposition")
+  const filename = extractFilenameFromDisposition(disposition) || defaultFileName || "download.xlsx"
+
+  return { blob, filename }
 }
 
 export function currency(value) {

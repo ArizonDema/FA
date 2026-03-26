@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { apiMultipartRequest, apiRequest, apiUrl, currency, shortDate } from "../api"
+import { apiDownload, apiMultipartRequest, apiRequest, currency, shortDate } from "../api"
 
 function currentYear() {
   return new Date().getFullYear()
@@ -12,6 +12,7 @@ export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote 
   const [latestRun, setLatestRun] = useState(null)
   const [latestPreview, setLatestPreview] = useState(null)
   const [latestWarnings, setLatestWarnings] = useState([])
+  const [downloadingRunId, setDownloadingRunId] = useState(null)
   const tbInputRef = useRef(null)
   const glInputRef = useRef(null)
   const [form, setForm] = useState({
@@ -104,8 +105,29 @@ export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote 
     }
   }
 
-  const downloadRun = (runId) => {
-    window.open(apiUrl(`/cash-flow/reports/download/${runId}`), "_blank")
+  const downloadRun = async (runId) => {
+    try {
+      setDownloadingRunId(runId)
+      const { blob, filename } = await apiDownload(`/cash-flow/reports/download/${runId}`, {
+        token,
+        defaultFileName: `cash_flow_${runId}.xlsx`,
+      })
+
+      const objectUrl = window.URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = objectUrl
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(objectUrl)
+
+      onNote(`Downloaded ${filename}`)
+    } catch (error) {
+      onError(error.message)
+    } finally {
+      setDownloadingRunId(null)
+    }
   }
 
   if (!selectedFundId) {
@@ -190,8 +212,12 @@ export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote 
         <div className="panel stack">
           <div className="inline-actions">
             <h3>Latest Run</h3>
-            <button type="button" onClick={() => downloadRun(latestRun.id)}>
-              Download XLSX
+            <button
+              type="button"
+              onClick={() => downloadRun(latestRun.id)}
+              disabled={downloadingRunId === latestRun.id}
+            >
+              {downloadingRunId === latestRun.id ? "Downloading..." : "Download XLSX"}
             </button>
           </div>
           <p className="muted small">
@@ -284,8 +310,12 @@ export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote 
                   <td>{run.inputs_json?.fiscal_year || "-"}</td>
                   <td>{run.inputs_json?.template_name || "-"}</td>
                   <td>
-                    <button type="button" onClick={() => downloadRun(run.id)}>
-                      Download XLSX
+                    <button
+                      type="button"
+                      onClick={() => downloadRun(run.id)}
+                      disabled={downloadingRunId === run.id}
+                    >
+                      {downloadingRunId === run.id ? "Downloading..." : "Download XLSX"}
                     </button>
                   </td>
                 </tr>

@@ -266,4 +266,30 @@ describe("cash-flow API", () => {
     expect(response.status).toBe(400)
     expect(String(response.body.message || "").toLowerCase()).toContain("no active cash flow template")
   })
+
+  test("downloads generated cash flow workbook", async () => {
+    const reportPath = path.join(tempDir, "download_report.xlsx")
+    await writeTinyWorkbook(reportPath)
+
+    mockReportRunModel.findByPk.mockResolvedValue(
+      createRunRecord({
+        id: "run-download",
+        type: "cash_flow",
+        output_paths: { xlsx: reportPath },
+      }),
+    )
+
+    const response = await request(app)
+      .get("/api/v1/cash-flow/reports/download/run-download")
+      .buffer(true)
+      .parse((res, callback) => {
+        const chunks = []
+        res.on("data", (chunk) => chunks.push(chunk))
+        res.on("end", () => callback(null, Buffer.concat(chunks)))
+      })
+
+    expect(response.status).toBe(200)
+    expect(String(response.headers["content-disposition"] || "").toLowerCase()).toContain("attachment")
+    expect(response.body.slice(0, 2).toString()).toBe("PK")
+  })
 })
