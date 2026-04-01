@@ -35,9 +35,11 @@ const upload = multer({
 })
 
 router.get("/templates", CashFlowController.getTemplates)
+router.post("/templates/analyze", upload.single("template_file"), CashFlowController.analyzeTemplate)
 router.post("/templates", upload.single("template_file"), CashFlowController.createTemplate)
 router.put("/templates/:id", CashFlowController.updateTemplate)
 router.put("/templates/:id/activate", CashFlowController.activateTemplate)
+router.post("/templates/:id/reanalyze", CashFlowController.reanalyzeTemplate)
 
 router.post(
   "/reports/run",

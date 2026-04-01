@@ -332,6 +332,67 @@ describe("cashFlow.service", () => {
     expect(febOpening.formula).toBe("K2")
   })
 
+  test("analyzes a template and suggests v3 period bindings", async () => {
+    const templatePath = path.join(tempDir, "analyze_template.xlsx")
+    await writeTemplateWorkbook(templatePath)
+
+    const analysis = await CashFlowService.analyzeTemplateWorkbook({
+      templatePath,
+    })
+
+    expect(analysis.detected_layout_type).toBe("rows")
+    expect(analysis.confidence).toBeGreaterThan(0.5)
+    expect(analysis.suggested_config_json.version).toBe("v3")
+    expect(analysis.suggested_config_json.period_axis.labels.length).toBe(12)
+    expect(analysis.suggested_config_json.bucket_bindings.length).toBeGreaterThan(0)
+  })
+
+  test("auto-creates mappings with confidence metadata", () => {
+    const buckets = [
+      {
+        bucket_key: "sales_inflow",
+        label: "Sales Inflow",
+        direction: "inflow",
+        fallback: false,
+        rules: [{ match_type: "exact", pattern: "Accounts Receivable", priority: 1 }],
+      },
+      {
+        bucket_key: "other_inflow",
+        label: "Other Inflow",
+        direction: "inflow",
+        fallback: true,
+        rules: [],
+      },
+      {
+        bucket_key: "other_outflow",
+        label: "Other Outflows",
+        direction: "outflow",
+        fallback: true,
+        rules: [],
+      },
+    ]
+
+    const movements = [
+      { account_name: "Accounts Receivable", date: new Date("2025-01-10"), amount: 100 },
+      { account_name: "Platform Revenue", date: new Date("2025-01-12"), amount: 55 },
+      { account_name: "Office Expense", date: new Date("2025-01-13"), amount: -30 },
+    ]
+
+    const mapped = CashFlowService.mapMovementsToBuckets(movements, buckets, {
+      mappingPolicy: {
+        auto_create: true,
+        high_confidence_threshold: 0.7,
+        low_confidence_threshold: 0.35,
+      },
+      learnedMappings: [],
+    })
+
+    expect(mapped.unmapped).toHaveLength(0)
+    expect(mapped.autoCreatedMappings.length).toBeGreaterThan(0)
+    expect(mapped.finalBucketAssignments.length).toBeGreaterThan(0)
+    expect(mapped.lowConfidenceMappings.length).toBeGreaterThan(0)
+  })
+
   test("deterministic verification against provided sample files", async () => {
     const sampleTB = "C:\\Users\\Mano PC\\OneDrive\\Documents\\Samples;Data\\Trial_Balance_GLC_Services.xlsx"
     const sampleGL = "C:\\Users\\Mano PC\\OneDrive\\Documents\\Samples;Data\\General_Ledger_GLC_Services.xlsx"
@@ -402,6 +463,6 @@ describe("cashFlow.service", () => {
 
     expect(result.preview.monthly[5].closing_balance).toBe(228575)
     expect(result.preview.monthly[11].closing_balance).toBe(228575)
-    expect(result.preview.totals.closing_balance_december).toBe(228575)
+    expect(result.preview.totals.closing_balance_end).toBe(228575)
   })
 })

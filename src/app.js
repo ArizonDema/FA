@@ -3,6 +3,8 @@ const cors = require("cors")
 const helmet = require("helmet")
 const morgan = require("morgan")
 const swaggerUi = require("swagger-ui-express")
+const fs = require("fs")
+const path = require("path")
 const config = require("./config/app")
 const logger = require("./config/logger")
 const swaggerSpec = require("./config/swagger")
@@ -98,6 +100,25 @@ app.use(`${config.apiPrefix}/admin`, adminRoutes)
 app.use(`${config.apiPrefix}`, fundAdminRoutes)
 app.use(`${config.apiPrefix}/cash-flow`, cashFlowRoutes)
 app.use(`${config.apiPrefix}/system`, systemRoutes)
+
+const frontendDistPath = path.resolve(__dirname, "..", "frontend", "dist")
+const frontendIndexPath = path.join(frontendDistPath, "index.html")
+const frontendBuildAvailable = fs.existsSync(frontendIndexPath)
+
+if (frontendBuildAvailable) {
+  app.use(express.static(frontendDistPath, { index: false }))
+
+  app.get("*", (req, res, next) => {
+    if (req.method !== "GET") return next()
+    if (req.path === "/health") return next()
+    if (req.path.startsWith("/api/") || req.path === "/api") return next()
+    return res.sendFile(frontendIndexPath)
+  })
+} else if (config.env !== "production") {
+  logger.warn(
+    `[v0] Frontend build not found at ${frontendIndexPath}. Run "npm run frontend:build" for stable runtime mode.`,
+  )
+}
 
 // 404 Handler
 app.use((req, res) => {

@@ -225,7 +225,21 @@ npm run dev
 
 The server will start with hot-reload enabled.
 
-### Production Mode
+### Stable Runtime Mode (One-Click)
+
+Click the desktop shortcut:
+
+\`\`\`
+CSS Invest Website.lnk
+\`\`\`
+
+Or run the launcher directly:
+
+\`\`\`bash
+npm run website:start
+\`\`\`
+
+### Runtime Mode (manual)
 
 \`\`\`bash
 npm start
@@ -237,7 +251,7 @@ Run everything at once:
 
 \`\`\`bash
 npm run db:setup  # Run migrations and seeds
-npm start         # Start server
+npm start         # Start runtime server
 \`\`\`
 
 ## Frontend UI
@@ -263,16 +277,22 @@ This repository now includes a React frontend in \`/frontend\` with:
 \`\`\`bash
 cd frontend
 npm install
-npm run dev
+npm run dev:solo
 \`\`\`
 
-Frontend URL:
+Frontend dev URL:
 
 \`\`\`
 http://localhost:3000
 \`\`\`
 
-The frontend connects to backend API at:
+Stable runtime URL (backend serves frontend bundle):
+
+\`\`\`
+http://localhost:8000
+\`\`\`
+
+API base URL:
 
 \`\`\`
 http://localhost:8000/api/v1
@@ -290,7 +310,7 @@ john@example.com / Password123!
 Once the server is running, access the interactive Swagger documentation at:
 
 \`\`\`
-http://localhost:3000/api/docs
+http://localhost:8000/api/docs
 \`\`\`
 
 ### Key Endpoints
@@ -319,7 +339,7 @@ http://localhost:3000/api/docs
 #### Register User
 
 \`\`\`bash
-curl -X POST http://localhost:3000/api/v1/auth/register \
+curl -X POST http://localhost:8000/api/v1/auth/register \
   -H "Content-Type: application/json" \
   -d '{
     "full_name": "John Doe",
@@ -333,7 +353,7 @@ curl -X POST http://localhost:3000/api/v1/auth/register \
 #### Login
 
 \`\`\`bash
-curl -X POST http://localhost:3000/api/v1/auth/login \
+curl -X POST http://localhost:8000/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{
     "email": "john@example.com",
@@ -344,7 +364,7 @@ curl -X POST http://localhost:3000/api/v1/auth/login \
 #### Create Investment
 
 \`\`\`bash
-curl -X POST http://localhost:3000/api/v1/investor/invest \
+curl -X POST http://localhost:8000/api/v1/investor/invest \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -d '{

@@ -17,6 +17,7 @@ npm-debug.log*
 # Database
 *.sqlite
 *.sqlite3
+.mysql-local/
 
 # OS files
 .DS_Store

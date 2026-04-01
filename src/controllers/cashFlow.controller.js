@@ -1,9 +1,12 @@
 const fs = require("fs")
 const path = require("path")
+const { Op } = require("sequelize")
 const {
   sequelize,
   Portfolio,
   CashFlowTemplate,
+  CashFlowTemplateAnalysis,
+  CashFlowAccountMapping,
   ReportRun,
   AuditLog,
 } = require("../models")
@@ -14,6 +17,7 @@ const CashFlowService = require("../services/cashFlow.service")
 const ROOT_DIR = path.join(__dirname, "..", "..")
 const CASH_FLOW_DIR = path.join(ROOT_DIR, "uploads", "cash-flow")
 const TEMPLATE_DIR = path.join(CASH_FLOW_DIR, "templates")
+const TEMPLATE_ANALYSIS_DIR = path.join(CASH_FLOW_DIR, "template-analyses")
 const RUN_DIR = path.join(CASH_FLOW_DIR, "runs")
 
 function ensureDirectory(directoryPath) {
@@ -42,6 +46,120 @@ function parseConfigJson(value) {
     }
   }
   throw new CashFlowService.CashFlowValidationError("config_json must be valid JSON")
+}
+
+function buildAnalysisConfigPayload(analysisResult) {
+  if (analysisResult?.suggested_config_json) {
+    return analysisResult.suggested_config_json
+  }
+
+  return {
+    version: "v3",
+    sheet_name: "Cash Flow",
+    layout_type: "freeform",
+    period_granularity: "custom",
+    period_axis: {
+      orientation: "row",
+      labels: [{ period_key: "period_1", label: "Period 1", period_type: "custom" }],
+      period_bindings: [{ period_key: "period_1", label: "Period 1", cell: "A1" }],
+    },
+    period_resolution_rules: {
+      custom_periods: [
+        {
+          period_key: "period_1",
+          date_start: new Date().toISOString().slice(0, 10),
+          date_end: new Date().toISOString().slice(0, 10),
+        },
+      ],
+    },
+    opening_binding: null,
+    closing_binding: null,
+    bucket_bindings: [
+      {
+        bucket_key: "inflow_bucket",
+        label: "Inflow Bucket",
+        direction: "inflow",
+        fallback: true,
+        rules: [],
+        cells: [{ period_key: "period_1", label: "Period 1", cell: "B1" }],
+      },
+      {
+        bucket_key: "outflow_bucket",
+        label: "Outflow Bucket",
+        direction: "outflow",
+        fallback: true,
+        rules: [],
+        cells: [{ period_key: "period_1", label: "Period 1", cell: "C1" }],
+      },
+    ],
+    writer_policy: {
+      preserve_formulas: true,
+      full_recalc_on_open: true,
+    },
+    mapping_policy: {
+      auto_create: true,
+      high_confidence_threshold: 0.7,
+      low_confidence_threshold: 0.35,
+    },
+  }
+}
+
+function deepMerge(target, source) {
+  const base = Array.isArray(target) ? [...target] : { ...(target || {}) }
+  if (!source || typeof source !== "object") return base
+
+  Object.entries(source).forEach(([key, value]) => {
+    if (Array.isArray(value)) {
+      base[key] = value.map((item) => (typeof item === "object" && item ? deepMerge({}, item) : item))
+      return
+    }
+    if (value && typeof value === "object") {
+      const current = base[key] && typeof base[key] === "object" ? base[key] : {}
+      base[key] = deepMerge(current, value)
+      return
+    }
+    base[key] = value
+  })
+  return base
+}
+
+async function resolveConfigFromAnalysisOrPayload({ body, portfolioId }) {
+  const hasAnalysisId = Boolean(body.analysis_id)
+  const explicitConfig = parseConfigJson(body.config_json)
+
+  if (!hasAnalysisId && !explicitConfig) {
+    throw new CashFlowService.CashFlowValidationError(
+      "Either analysis_id or config_json is required for template creation",
+    )
+  }
+
+  if (!hasAnalysisId) {
+    return {
+      analysis: null,
+      normalizedConfig: CashFlowService.validateTemplateConfig(explicitConfig),
+    }
+  }
+
+  const analysis = await CashFlowTemplateAnalysis.findByPk(body.analysis_id)
+  if (!analysis || analysis.portfolio_id !== portfolioId) {
+    throw new CashFlowService.CashFlowValidationError("analysis_id is invalid for the selected fund")
+  }
+  if (analysis.expires_at && new Date(analysis.expires_at) < new Date()) {
+    throw new CashFlowService.CashFlowValidationError("analysis_id has expired. Re-run template analysis.")
+  }
+
+  const analysisConfig = analysis.suggested_config_json
+  if (!analysisConfig) {
+    throw new CashFlowService.CashFlowValidationError(
+      "Analysis did not produce a usable config. Provide config_json with manual anchors.",
+    )
+  }
+
+  const mergedConfig = explicitConfig ? deepMerge(analysisConfig, explicitConfig) : analysisConfig
+  return {
+    analysis,
+    normalizedConfig: CashFlowService.validateTemplateConfig(mergedConfig),
+  }
 }
 
 function removeFileSilently(filePath) {
@@ -107,6 +225,73 @@ class CashFlowController {
     }
   }
 
+  static async analyzeTemplate(req, res, next) {
+    try {
+      if (!req.file) {
+        return ResponseHandler.badRequest(res, "template_file is required")
+      }
+
+      const { portfolio_id: portfolioId } = req.body
+      if (!portfolioId) {
+        removeFileSilently(req.file.path)
+        return ResponseHandler.badRequest(res, "portfolio_id is required")
+      }
+
+      const portfolio = await Portfolio.findByPk(portfolioId)
+      if (!portfolio) {
+        removeFileSilently(req.file.path)
+        return ResponseHandler.notFound(res, "Fund not found")
+      }
+
+      ensureDirectory(TEMPLATE_ANALYSIS_DIR)
+      const analysisFileName = `${Date.now()}_${safeFileName(req.file.originalname, "cash_flow_template_analysis")}`
+      const analysisFilePath = path.join(TEMPLATE_ANALYSIS_DIR, analysisFileName)
+      moveFile(req.file.path, analysisFilePath)
+
+      const analysisResult = await CashFlowService.analyzeTemplateWorkbook({
+        templatePath: analysisFilePath,
+      })
+      const analysisConfigPayload = buildAnalysisConfigPayload(analysisResult)
+
+      const analysis = await CashFlowTemplateAnalysis.create({
+        portfolio_id: portfolioId,
+        source_file_name: req.file.originalname,
+        source_file_path: analysisFilePath,
+        status: "suggested",
+        detected_layout_type: analysisResult.detected_layout_type,
+        confidence: analysisResult.confidence,
+        suggested_config_json: analysisConfigPayload,
+        issues_json: {
+          issues: analysisResult.issues || [],
+          required_anchors: analysisResult.required_anchors || [],
+        },
+        created_by: req.user?.id || null,
+        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      })
+
+      await recordAudit(req, "cash_flow_template_analysis", analysis.id, "create", null, analysis.toJSON())
+
+      return ResponseHandler.success(
+        res,
+        {
+          analysis,
+          detected_layout: analysisResult.detected_layout_type,
+          confidence: analysisResult.confidence,
+          issues: analysisResult.issues || [],
+          required_anchors: analysisResult.required_anchors || [],
+          suggested_config_json: analysisConfigPayload,
+        },
+        "Template analysis completed",
+      )
+    } catch (error) {
+      removeFileSilently(req.file?.path)
+      if (error instanceof CashFlowService.CashFlowValidationError) {
+        return ResponseHandler.badRequest(res, error.message, error.details || null)
+      }
+      return next(error)
+    }
+  }
+
   static async createTemplate(req, res, next) {
     try {
       if (!req.file) {
@@ -129,8 +314,28 @@ class CashFlowController {
         return ResponseHandler.notFound(res, "Fund not found")
       }
 
-      const configPayload = parseConfigJson(req.body.config_json)
-      const normalizedConfig = CashFlowService.validateTemplateConfig(configPayload)
+      let analysis = null
+      let normalizedConfig = null
+      try {
+        const resolved = await resolveConfigFromAnalysisOrPayload({
+          body: req.body,
+          portfolioId,
+        })
+        analysis = resolved.analysis
+        normalizedConfig = resolved.normalizedConfig
+      } catch (error) {
+        // Backward compatibility path: if client sent old/invalid config, fall back to automatic analysis.
+        if (!(error instanceof CashFlowService.CashFlowValidationError)) throw error
+
+        const autoAnalysis = await CashFlowService.analyzeTemplateWorkbook({
+          templatePath: req.file.path,
+        })
+        if (!autoAnalysis?.suggested_config_json) {
+          throw error
+        }
+
+        normalizedConfig = CashFlowService.validateTemplateConfig(autoAnalysis.suggested_config_json)
+      }
       const requestedActive = parseBoolean(req.body.is_active, false)
 
       ensureDirectory(TEMPLATE_DIR)
@@ -176,6 +381,28 @@ class CashFlowController {
           },
           { transaction },
         )
+
+        if (analysis) {
+          await analysis.update(
+            {
+              status: "confirmed",
+              template_id: template.id,
+            },
+            { transaction },
+          )
+
+          await CashFlowTemplateAnalysis.update(
+            { status: "superseded" },
+            {
+              where: {
+                portfolio_id: portfolioId,
+                id: { [Op.ne]: analysis.id },
+                status: "suggested",
+              },
+              transaction,
+            },
+          )
+        }
 
         return template
       })
@@ -276,6 +503,79 @@ class CashFlowController {
     }
   }
 
+  static async reanalyzeTemplate(req, res, next) {
+    try {
+      const template = await CashFlowTemplate.findByPk(req.params.id)
+      if (!template) {
+        return ResponseHandler.notFound(res, "Cash flow template not found")
+      }
+      if (!template.template_file_path || !fs.existsSync(template.template_file_path)) {
+        return ResponseHandler.badRequest(res, "Template file is missing and cannot be reanalyzed")
+      }
+
+      const analysisResult = await CashFlowService.analyzeTemplateWorkbook({
+        templatePath: template.template_file_path,
+      })
+      const analysisConfigPayload = buildAnalysisConfigPayload(analysisResult)
+
+      const analysis = await CashFlowTemplateAnalysis.create({
+        portfolio_id: template.portfolio_id,
+        template_id: template.id,
+        source_file_name: template.template_file_name,
+        source_file_path: template.template_file_path,
+        status: "suggested",
+        detected_layout_type: analysisResult.detected_layout_type,
+        confidence: analysisResult.confidence,
+        suggested_config_json: analysisConfigPayload,
+        issues_json: {
+          issues: analysisResult.issues || [],
+          required_anchors: analysisResult.required_anchors || [],
+        },
+        created_by: req.user?.id || null,
+        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      })
+
+      let updatedTemplate = null
+      if (parseBoolean(req.body?.apply, false)) {
+        if (!analysisResult.suggested_config_json) {
+          return ResponseHandler.badRequest(
+            res,
+            "Reanalysis needs manual anchors before config can be applied.",
+            analysisResult.required_anchors || [],
+          )
+        }
+
+        const normalizedConfig = CashFlowService.validateTemplateConfig(analysisResult.suggested_config_json)
+        await template.update({ config_json: normalizedConfig })
+        await analysis.update({ status: "confirmed" })
+        updatedTemplate = template
+      }
+
+      await recordAudit(req, "cash_flow_template_analysis", analysis.id, "create", null, analysis.toJSON())
+
+      return ResponseHandler.success(
+        res,
+        {
+          analysis,
+          template: updatedTemplate,
+          detected_layout: analysisResult.detected_layout_type,
+          confidence: analysisResult.confidence,
+          issues: analysisResult.issues || [],
+          required_anchors: analysisResult.required_anchors || [],
+          suggested_config_json: analysisConfigPayload,
+        },
+        updatedTemplate
+          ? "Template reanalyzed and config applied"
+          : "Template reanalysis completed",
+      )
+    } catch (error) {
+      if (error instanceof CashFlowService.CashFlowValidationError) {
+        return ResponseHandler.badRequest(res, error.message, error.details || null)
+      }
+      return next(error)
+    }
+  }
+
   static async runCashFlowReport(req, res, next) {
     const cleanupTempUploads = () => {
       const tbUpload = req.files?.tb_file?.[0]
@@ -286,7 +586,14 @@ class CashFlowController {
 
     try {
       const { portfolio_id: portfolioId, template_id: templateId } = req.body
-      const fiscalYear = Number.parseInt(req.body.fiscal_year, 10)
+      const dateStart = req.body.date_start ? String(req.body.date_start).trim() : null
+      const dateEnd = req.body.date_end ? String(req.body.date_end).trim() : null
+      const preset = req.body.preset ? String(req.body.preset).trim().toUpperCase() : null
+      const fiscalYearRaw = req.body.fiscal_year
+      const fiscalYear =
+        fiscalYearRaw === undefined || fiscalYearRaw === null || String(fiscalYearRaw).trim() === ""
+          ? null
+          : Number.parseInt(fiscalYearRaw, 10)
       const tbUpload = req.files?.tb_file?.[0]
       const glUpload = req.files?.gl_file?.[0]
 
@@ -294,13 +601,36 @@ class CashFlowController {
         cleanupTempUploads()
         return ResponseHandler.badRequest(res, "portfolio_id is required")
       }
-      if (!Number.isInteger(fiscalYear)) {
+      if (!dateStart && !dateEnd && !preset && !Number.isInteger(fiscalYear)) {
         cleanupTempUploads()
-        return ResponseHandler.badRequest(res, "fiscal_year is required and must be a valid year")
+        return ResponseHandler.badRequest(
+          res,
+          "Provide date_start/date_end, or preset, or fiscal_year (deprecated fallback).",
+        )
+      }
+      if ((dateStart && !dateEnd) || (!dateStart && dateEnd)) {
+        cleanupTempUploads()
+        return ResponseHandler.badRequest(res, "date_start and date_end must be provided together")
       }
       if (!tbUpload || !glUpload) {
         cleanupTempUploads()
         return ResponseHandler.badRequest(res, "tb_file and gl_file are required")
+      }
+
+      let resolvedRange = null
+      try {
+        resolvedRange = CashFlowService.resolveRunDateRange({
+          dateStart,
+          dateEnd,
+          preset,
+          fiscalYear,
+        })
+      } catch (rangeError) {
+        cleanupTempUploads()
+        if (rangeError instanceof CashFlowService.CashFlowValidationError) {
+          return ResponseHandler.badRequest(res, rangeError.message, rangeError.details || null)
+        }
+        throw rangeError
       }
 
       const portfolio = await Portfolio.findByPk(portfolioId)
@@ -334,10 +664,13 @@ class CashFlowController {
       const run = await ReportRun.create({
         type: "cash_flow",
         portfolio_id: portfolioId,
-        period_start: `${fiscalYear}-01-01`,
-        period_end: `${fiscalYear}-12-31`,
+        period_start: resolvedRange.start.toISOString().slice(0, 10),
+        period_end: resolvedRange.end.toISOString().slice(0, 10),
         inputs_json: {
-          fiscal_year: fiscalYear,
+          date_start: resolvedRange.start.toISOString().slice(0, 10),
+          date_end: resolvedRange.end.toISOString().slice(0, 10),
+          preset: preset || null,
+          fiscal_year: Number.isInteger(fiscalYear) ? fiscalYear : null,
           template_id: template.id,
           template_name: template.name,
           tb_file_name: tbUpload.originalname,
@@ -354,15 +687,111 @@ class CashFlowController {
       moveFile(tbUpload.path, tbFilePath)
       moveFile(glUpload.path, glFilePath)
 
-      const outputFilePath = path.join(runFolder, `cash_flow_${fiscalYear}.xlsx`)
+      const outputFilePath = path.join(
+        runFolder,
+        `cash_flow_${resolvedRange.start.toISOString().slice(0, 10)}_${resolvedRange.end
+          .toISOString()
+          .slice(0, 10)}.xlsx`,
+      )
+
+      const learnedMappingsRaw = await CashFlowAccountMapping.findAll({
+        where: {
+          portfolio_id: portfolioId,
+          [Op.or]: [{ template_id: null }, { template_id: template.id }],
+        },
+      })
+      const learnedMappings = learnedMappingsRaw
+        .map((item) => item.toJSON())
+        .sort((left, right) => {
+          const leftTemplateSpecific = left.template_id === template.id ? 1 : 0
+          const rightTemplateSpecific = right.template_id === template.id ? 1 : 0
+          return leftTemplateSpecific - rightTemplateSpecific
+        })
 
       const result = await CashFlowService.generateCashFlowReport({
         templatePath: template.template_file_path,
         templateConfig: template.config_json,
         tbFilePath,
         glFilePath,
+        dateStart: resolvedRange.start.toISOString().slice(0, 10),
+        dateEnd: resolvedRange.end.toISOString().slice(0, 10),
+        preset,
         fiscalYear,
         outputFilePath,
+        learnedMappings,
+      })
+
+      await sequelize.transaction(async (transaction) => {
+        if (
+          result.normalizedConfig &&
+          JSON.stringify(template.config_json || null) !== JSON.stringify(result.normalizedConfig || null)
+        ) {
+          await template.update(
+            {
+              config_json: result.normalizedConfig,
+            },
+            { transaction },
+          )
+        }
+
+        const autoMappings = Array.isArray(result.mapping?.auto_mappings_created)
+          ? result.mapping.auto_mappings_created
+          : []
+
+        for (const mapping of autoMappings) {
+          const [record, created] = await CashFlowAccountMapping.findOrCreate({
+            where: {
+              portfolio_id: portfolioId,
+              template_id: template.id,
+              normalized_account: mapping.normalized_account,
+              direction: mapping.direction,
+            },
+            defaults: {
+              bucket_key: mapping.bucket_key,
+              confidence: mapping.confidence,
+              source: mapping.source || "auto_semantic",
+              usage_count: 0,
+              last_used_at: null,
+              created_by: req.user?.id || null,
+            },
+            transaction,
+          })
+
+          if (!created) {
+            await record.update(
+              {
+                bucket_key: mapping.bucket_key,
+                confidence: mapping.confidence,
+                source: mapping.source || record.source,
+              },
+              { transaction },
+            )
+          }
+        }
+
+        const finalAssignments = Array.isArray(result.mapping?.final_bucket_assignments)
+          ? result.mapping.final_bucket_assignments
+          : []
+        for (const assignment of finalAssignments) {
+          const existing = await CashFlowAccountMapping.findOne({
+            where: {
+              portfolio_id: portfolioId,
+              template_id: template.id,
+              normalized_account: assignment.normalized_account,
+              direction: assignment.direction,
+            },
+            transaction,
+          })
+          if (existing) {
+            await existing.update(
+              {
+                usage_count: Number(existing.usage_count || 0) + 1,
+                last_used_at: new Date(),
+              },
+              { transaction },
+            )
+          }
+        }
       })
 
       await run.update({
@@ -371,6 +800,9 @@ class CashFlowController {
           tb_file_path: tbFilePath,
           gl_file_path: glFilePath,
           warnings: result.warnings,
+          auto_mappings_created: result.mapping?.auto_mappings_created || [],
+          low_confidence_mappings: result.mapping?.low_confidence_mappings || [],
+          final_bucket_assignments: result.mapping?.final_bucket_assignments || [],
         },
         output_paths: {
           xlsx: result.outputFilePath,
@@ -391,6 +823,9 @@ class CashFlowController {
           outputs: { xlsx: true },
           preview: result.preview,
           warnings: result.warnings,
+          auto_mappings_created: result.mapping?.auto_mappings_created || [],
+          low_confidence_mappings: result.mapping?.low_confidence_mappings || [],
+          final_bucket_assignments: result.mapping?.final_bucket_assignments || [],
         },
         "Cash flow report generated",
       )

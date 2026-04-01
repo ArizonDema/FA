@@ -32,6 +32,18 @@ const mockReportRunModel = {
   create: jest.fn(),
 }
 
+const mockTemplateAnalysisModel = {
+  findByPk: jest.fn(),
+  update: jest.fn(),
+  create: jest.fn(),
+}
+
+const mockAccountMappingModel = {
+  findAll: jest.fn(),
+  findOrCreate: jest.fn(),
+  findOne: jest.fn(),
+}
+
 const mockModels = {
   sequelize: {
     transaction: jest.fn(async (callback) => callback({})),
@@ -40,6 +52,8 @@ const mockModels = {
     findByPk: jest.fn(),
   },
   CashFlowTemplate: mockTemplateModel,
+  CashFlowTemplateAnalysis: mockTemplateAnalysisModel,
+  CashFlowAccountMapping: mockAccountMappingModel,
   ReportRun: mockReportRunModel,
   AuditLog: {
     create: jest.fn(),
@@ -59,6 +73,17 @@ class MockCashFlowValidationError extends Error {
 const mockCashFlowService = {
   CashFlowValidationError: MockCashFlowValidationError,
   validateTemplateConfig: jest.fn((config) => config),
+  resolveRunDateRange: jest.fn(({ dateStart, dateEnd, fiscalYear }) => {
+    if (dateStart && dateEnd) {
+      return { start: new Date(dateStart), end: new Date(dateEnd) }
+    }
+    const year = Number.isInteger(fiscalYear) ? fiscalYear : 2025
+    return {
+      start: new Date(`${year}-01-01T00:00:00.000Z`),
+      end: new Date(`${year}-12-31T00:00:00.000Z`),
+    }
+  }),
+  analyzeTemplateWorkbook: jest.fn(),
   generateCashFlowReport: jest.fn(),
 }
 
@@ -145,6 +170,32 @@ describe("cash-flow API", () => {
     mockTemplateModel.findAll.mockResolvedValue([createTemplateRecord()])
     mockTemplateModel.update.mockResolvedValue([1])
     mockTemplateModel.create.mockResolvedValue(createTemplateRecord())
+    mockTemplateAnalysisModel.findByPk.mockResolvedValue(null)
+    mockTemplateAnalysisModel.create.mockResolvedValue({
+      id: "analysis-1",
+      portfolio_id: "fund-1",
+      toJSON() {
+        return { id: "analysis-1" }
+      },
+      update: jest.fn(async function update(values) {
+        Object.assign(this, values)
+        return this
+      }),
+    })
+    mockTemplateAnalysisModel.update.mockResolvedValue([1])
+    mockAccountMappingModel.findAll.mockResolvedValue([])
+    mockAccountMappingModel.findOrCreate.mockResolvedValue([
+      {
+        usage_count: 0,
+        source: "auto_semantic",
+        update: jest.fn(async function update(values) {
+          Object.assign(this, values)
+          return this
+        }),
+      },
+      true,
+    ])
+    mockAccountMappingModel.findOne.mockResolvedValue(null)
     mockReportRunModel.findAll.mockResolvedValue([createRunRecord()])
     mockReportRunModel.findByPk.mockResolvedValue(createRunRecord())
     mockReportRunModel.create.mockResolvedValue(createRunRecord())
@@ -156,6 +207,27 @@ describe("cash-flow API", () => {
         totals: {
           closing_balance_december: 100,
         },
+      },
+    })
+    mockCashFlowService.analyzeTemplateWorkbook.mockResolvedValue({
+      detected_layout_type: "rows",
+      confidence: 0.82,
+      issues: [],
+      required_anchors: [],
+      suggested_config_json: {
+        version: "v3",
+        sheet_name: "Cash Flow",
+        layout_type: "rows",
+        period_granularity: "monthly",
+        period_axis: {
+          orientation: "row",
+          labels: [{ period_key: "m01", label: "Jan", period_type: "monthly", month: 1 }],
+          period_bindings: [{ period_key: "m01", label: "Jan", cell: "A2" }],
+        },
+        opening_binding: null,
+        closing_binding: null,
+        period_resolution_rules: { custom_periods: [] },
+        bucket_bindings: [],
       },
     })
   })
@@ -218,6 +290,39 @@ describe("cash-flow API", () => {
     expect(mockTemplateModel.update).toHaveBeenCalled()
   })
 
+  test("analyzes uploaded template and returns suggested bindings", async () => {
+    const templateFile = path.join(tempDir, "template_analyze.xlsx")
+    await writeTinyWorkbook(templateFile)
+
+    const response = await request(app)
+      .post("/api/v1/cash-flow/templates/analyze")
+      .field("portfolio_id", "fund-1")
+      .attach("template_file", templateFile)
+
+    expect(response.status).toBe(200)
+    expect(response.body.data.analysis.id).toBeDefined()
+    expect(response.body.data.detected_layout).toBe("rows")
+    expect(mockCashFlowService.analyzeTemplateWorkbook).toHaveBeenCalled()
+  })
+
+  test("reanalyzes existing template", async () => {
+    const existingTemplatePath = path.join(tempDir, "template_existing.xlsx")
+    await writeTinyWorkbook(existingTemplatePath)
+
+    mockTemplateModel.findByPk.mockResolvedValue(
+      createTemplateRecord({
+        id: "template-existing",
+        template_file_path: existingTemplatePath,
+      }),
+    )
+
+    const response = await request(app).post("/api/v1/cash-flow/templates/template-existing/reanalyze")
+
+    expect(response.status).toBe(200)
+    expect(response.body.data.analysis.id).toBeDefined()
+    expect(mockCashFlowService.analyzeTemplateWorkbook).toHaveBeenCalled()
+  })
+
   test("runs cash flow report from TB + GL uploads", async () => {
     const tbFile = path.join(tempDir, "tb_upload.xlsx")
     const glFile = path.join(tempDir, "gl_upload.xlsx")
@@ -238,7 +343,8 @@ describe("cash-flow API", () => {
     const response = await request(app)
       .post("/api/v1/cash-flow/reports/run")
       .field("portfolio_id", "fund-1")
-      .field("fiscal_year", "2025")
+      .field("date_start", "2025-01-01")
+      .field("date_end", "2025-12-31")
       .attach("tb_file", tbFile)
       .attach("gl_file", glFile)
 
@@ -259,7 +365,8 @@ describe("cash-flow API", () => {
     const response = await request(app)
       .post("/api/v1/cash-flow/reports/run")
       .field("portfolio_id", "fund-1")
-      .field("fiscal_year", "2025")
+      .field("date_start", "2025-01-01")
+      .field("date_end", "2025-12-31")
       .attach("tb_file", tbFile)
       .attach("gl_file", glFile)
 

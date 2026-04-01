@@ -5,6 +5,25 @@ function currentYear() {
   return new Date().getFullYear()
 }
 
+function isoDate(year, monthIndex, day) {
+  return new Date(Date.UTC(year, monthIndex, day)).toISOString().slice(0, 10)
+}
+
+function buildPresetRange(preset, year) {
+  const normalized = String(preset || "").toUpperCase()
+  if (normalized === "Q1") return { start: isoDate(year, 0, 1), end: isoDate(year, 2, 31) }
+  if (normalized === "Q2") return { start: isoDate(year, 3, 1), end: isoDate(year, 5, 30) }
+  if (normalized === "Q3") return { start: isoDate(year, 6, 1), end: isoDate(year, 8, 30) }
+  if (normalized === "Q4") return { start: isoDate(year, 9, 1), end: isoDate(year, 11, 31) }
+  if (normalized === "YTD") {
+    return {
+      start: isoDate(year, 0, 1),
+      end: new Date().toISOString().slice(0, 10),
+    }
+  }
+  return { start: isoDate(year, 0, 1), end: isoDate(year, 11, 31) }
+}
+
 export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote }) {
   const [loading, setLoading] = useState(false)
   const [templates, setTemplates] = useState([])
@@ -12,12 +31,21 @@ export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote 
   const [latestRun, setLatestRun] = useState(null)
   const [latestPreview, setLatestPreview] = useState(null)
   const [latestWarnings, setLatestWarnings] = useState([])
+  const [latestAutoMappings, setLatestAutoMappings] = useState([])
+  const [latestLowConfidenceMappings, setLatestLowConfidenceMappings] = useState([])
   const [downloadingRunId, setDownloadingRunId] = useState(null)
   const tbInputRef = useRef(null)
   const glInputRef = useRef(null)
-  const [form, setForm] = useState({
-    fiscal_year: String(currentYear()),
-    template_id: "",
+  const [form, setForm] = useState(() => {
+    const year = currentYear()
+    const fy = buildPresetRange("FY", year)
+    return {
+      preset: "FY",
+      year: String(year),
+      date_start: fy.start,
+      date_end: fy.end,
+      template_id: "",
+    }
   })
 
   const activeTemplate = useMemo(
@@ -25,11 +53,11 @@ export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote 
     [templates],
   )
 
+  const previewRows = useMemo(() => latestPreview?.periods || [], [latestPreview])
   const previewBucketKeys = useMemo(() => {
-    if (!latestPreview?.monthly?.length) return []
-    const firstRow = latestPreview.monthly[0]
-    return Object.keys(firstRow.buckets || {})
-  }, [latestPreview])
+    if (!previewRows.length) return []
+    return Object.keys(previewRows[0].buckets || {})
+  }, [previewRows])
 
   const loadData = useCallback(async () => {
     if (!selectedFundId) return
@@ -54,11 +82,18 @@ export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote 
   }, [onError, selectedFundId, token])
 
   useEffect(() => {
+    const year = currentYear()
+    const fy = buildPresetRange("FY", year)
     setLatestRun(null)
     setLatestPreview(null)
     setLatestWarnings([])
+    setLatestAutoMappings([])
+    setLatestLowConfidenceMappings([])
     setForm({
-      fiscal_year: String(currentYear()),
+      preset: "FY",
+      year: String(year),
+      date_start: fy.start,
+      date_end: fy.end,
       template_id: "",
     })
     if (!selectedFundId) {
@@ -68,6 +103,22 @@ export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote 
     }
     loadData()
   }, [loadData, selectedFundId])
+
+  const applyPreset = (preset, yearText) => {
+    if (String(preset || "").toUpperCase() === "CUSTOM") {
+      setForm((prev) => ({ ...prev, preset: "CUSTOM", year: yearText }))
+      return
+    }
+    const year = Number.parseInt(yearText, 10) || currentYear()
+    const range = buildPresetRange(preset, year)
+    setForm((prev) => ({
+      ...prev,
+      preset: String(preset || "").toUpperCase(),
+      year: String(year),
+      date_start: range.start,
+      date_end: range.end,
+    }))
+  }
 
   const handleRun = async (event) => {
     event.preventDefault()
@@ -81,11 +132,19 @@ export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote 
       onError("Upload both Trial Balance and General Ledger files.")
       return
     }
+    if (!form.date_start || !form.date_end) {
+      onError("Provide date range for this run.")
+      return
+    }
 
     try {
       const formData = new FormData()
       formData.append("portfolio_id", selectedFundId)
-      formData.append("fiscal_year", form.fiscal_year)
+      formData.append("date_start", form.date_start)
+      formData.append("date_end", form.date_end)
+      if (form.preset && form.preset !== "CUSTOM") {
+        formData.append("preset", form.preset)
+      }
       if (form.template_id) {
         formData.append("template_id", form.template_id)
       }
@@ -96,6 +155,8 @@ export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote 
       setLatestRun(response.data.run || null)
       setLatestPreview(response.data.preview || null)
       setLatestWarnings(response.data.warnings || [])
+      setLatestAutoMappings(response.data.auto_mappings_created || [])
+      setLatestLowConfidenceMappings(response.data.low_confidence_mappings || [])
       onNote("Cash flow report generated.")
       if (tbInputRef.current) tbInputRef.current.value = ""
       if (glInputRef.current) glInputRef.current.value = ""
@@ -156,13 +217,52 @@ export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote 
         <h3>Run Cash Flow Report</h3>
         <div className="form-grid">
           <label>
-            Fiscal Year
+            Preset
+            <select
+              value={form.preset}
+              onChange={(event) => applyPreset(event.target.value, form.year)}
+            >
+              <option value="FY">FY</option>
+              <option value="YTD">YTD</option>
+              <option value="Q1">Q1</option>
+              <option value="Q2">Q2</option>
+              <option value="Q3">Q3</option>
+              <option value="Q4">Q4</option>
+              <option value="CUSTOM">Custom</option>
+            </select>
+          </label>
+          <label>
+            Preset Year
             <input
               type="number"
               min="1900"
               max="3000"
-              value={form.fiscal_year}
-              onChange={(event) => setForm({ ...form, fiscal_year: event.target.value })}
+              value={form.year}
+              onChange={(event) => {
+                const nextYear = event.target.value
+                if (form.preset && form.preset !== "CUSTOM") {
+                  applyPreset(form.preset, nextYear)
+                } else {
+                  setForm((prev) => ({ ...prev, year: nextYear }))
+                }
+              }}
+            />
+          </label>
+          <label>
+            Date Start
+            <input
+              type="date"
+              value={form.date_start}
+              onChange={(event) => setForm((prev) => ({ ...prev, preset: "CUSTOM", date_start: event.target.value }))}
+              required
+            />
+          </label>
+          <label>
+            Date End
+            <input
+              type="date"
+              value={form.date_end}
+              onChange={(event) => setForm((prev) => ({ ...prev, preset: "CUSTOM", date_end: event.target.value }))}
               required
             />
           </label>
@@ -183,23 +283,11 @@ export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote 
           </label>
           <label>
             Trial Balance (.xlsx)
-            <input
-              ref={tbInputRef}
-              name="tb_file"
-              type="file"
-              accept=".xlsx"
-              required
-            />
+            <input ref={tbInputRef} name="tb_file" type="file" accept=".xlsx" required />
           </label>
           <label>
             General Ledger (.xlsx)
-            <input
-              ref={glInputRef}
-              name="gl_file"
-              type="file"
-              accept=".xlsx"
-              required
-            />
+            <input ref={glInputRef} name="gl_file" type="file" accept=".xlsx" required />
           </label>
         </div>
 
@@ -221,7 +309,7 @@ export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote 
             </button>
           </div>
           <p className="muted small">
-            Run ID: {latestRun.id} | Created: {shortDate(latestRun.created_at)}
+            Run ID: {latestRun.id} | Created: {shortDate(latestRun.created_at)} | Scope: {latestPreview?.period_start || "-"} to {latestPreview?.period_end || "-"}
           </p>
 
           {latestWarnings.length > 0 && (
@@ -235,12 +323,34 @@ export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote 
             </div>
           )}
 
-          {latestPreview?.monthly?.length > 0 && (
+          {latestAutoMappings.length > 0 && (
+            <div className="mini-card">
+              <p className="kicker">Auto Mappings Created</p>
+              <p className="muted small">{latestAutoMappings.length} new learned account mapping(s) saved.</p>
+            </div>
+          )}
+
+          {latestLowConfidenceMappings.length > 0 && (
+            <div className="alert warn">
+              <strong>Low Confidence Account Mappings</strong>
+              <ul className="simple-list">
+                {latestLowConfidenceMappings.slice(0, 10).map((item, index) => (
+                  <li key={`${item.normalized_account}_${index}`}>
+                    {item.account_name || item.normalized_account}
+                    {" -> "}
+                    {item.bucket_key} ({item.confidence})
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {previewRows.length > 0 && (
             <div className="table-wrap">
               <table>
                 <thead>
                   <tr>
-                    <th>Month</th>
+                    <th>Period</th>
                     <th>Opening</th>
                     {previewBucketKeys.map((bucketKey) => (
                       <th key={bucketKey}>{bucketKey}</th>
@@ -250,14 +360,12 @@ export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote 
                   </tr>
                 </thead>
                 <tbody>
-                  {latestPreview.monthly.map((row) => (
-                    <tr key={row.month}>
-                      <td>{row.month}</td>
+                  {previewRows.map((row) => (
+                    <tr key={row.period_key}>
+                      <td>{row.label}</td>
                       <td>{currency(row.opening_balance)}</td>
                       {previewBucketKeys.map((bucketKey) => (
-                        <td key={`${row.month}_${bucketKey}`}>
-                          {currency(row.buckets?.[bucketKey] || 0)}
-                        </td>
+                        <td key={`${row.period_key}_${bucketKey}`}>{currency(row.buckets?.[bucketKey] || 0)}</td>
                       ))}
                       <td>{currency(row.net_cash_flow)}</td>
                       <td>{currency(row.closing_balance)}</td>
@@ -283,8 +391,8 @@ export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote 
                 <h3>{currency(latestPreview.totals.net_cash_flow)}</h3>
               </div>
               <div className="mini-card">
-                <p className="kicker">Dec Closing</p>
-                <h3>{currency(latestPreview.totals.closing_balance_december)}</h3>
+                <p className="kicker">Closing Balance</p>
+                <h3>{currency(latestPreview.totals.closing_balance_end)}</h3>
               </div>
             </div>
           )}
@@ -298,8 +406,10 @@ export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote 
             <thead>
               <tr>
                 <th>Created</th>
-                <th>Fiscal Year</th>
+                <th>Range</th>
                 <th>Template</th>
+                <th>Auto Mapped</th>
+                <th>Low Confidence</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -307,8 +417,12 @@ export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote 
               {history.map((run) => (
                 <tr key={run.id}>
                   <td>{shortDate(run.created_at)}</td>
-                  <td>{run.inputs_json?.fiscal_year || "-"}</td>
+                  <td>
+                    {run.inputs_json?.date_start || run.period_start || "-"} to {run.inputs_json?.date_end || run.period_end || "-"}
+                  </td>
                   <td>{run.inputs_json?.template_name || "-"}</td>
+                  <td>{run.inputs_json?.auto_mappings_created?.length || 0}</td>
+                  <td>{run.inputs_json?.low_confidence_mappings?.length || 0}</td>
                   <td>
                     <button
                       type="button"
@@ -322,7 +436,7 @@ export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote 
               ))}
               {history.length === 0 && (
                 <tr>
-                  <td colSpan={4}>No cash flow report runs yet.</td>
+                  <td colSpan={6}>No cash flow report runs yet.</td>
                 </tr>
               )}
             </tbody>
