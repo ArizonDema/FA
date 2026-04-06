@@ -43,6 +43,10 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING(500),
         allowNull: false,
       },
+      source_file_sha256: {
+        type: DataTypes.STRING(64),
+        allowNull: true,
+      },
       status: {
         type: DataTypes.ENUM("suggested", "confirmed", "superseded"),
         allowNull: false,
@@ -61,9 +65,26 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.JSON,
         allowNull: false,
       },
+      raw_structure_json: {
+        type: DataTypes.JSON,
+        allowNull: true,
+      },
       issues_json: {
         type: DataTypes.JSON,
         allowNull: true,
+      },
+      llm_meta_json: {
+        type: DataTypes.JSON,
+        allowNull: true,
+      },
+      schema_hash: {
+        type: DataTypes.STRING(64),
+        allowNull: true,
+      },
+      needs_human_review: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
       },
       created_by: {
         type: DataTypes.UUID,
@@ -85,4 +106,3 @@ module.exports = (sequelize, DataTypes) => {
 
   return CashFlowTemplateAnalysis
 }
-

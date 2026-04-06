@@ -45,4 +45,17 @@ module.exports = {
   logging: {
     level: process.env.LOG_LEVEL || "info",
   },
+
+  // Ollama template-ingestion LLM
+  ollama: {
+    baseUrl: process.env.OLLAMA_BASE_URL || "http://localhost:11434",
+    model: process.env.OLLAMA_MODEL || "qwen3:14b",
+    chatPath: process.env.OLLAMA_CHAT_PATH || "/api/chat",
+    timeoutMs: Number.parseInt(process.env.OLLAMA_TIMEOUT_MS || "90000", 10),
+    maxAttempts: Number.parseInt(process.env.OLLAMA_MAX_ATTEMPTS || "2", 10),
+    keepAlive: process.env.OLLAMA_KEEP_ALIVE || "10m",
+    temperature: Number.parseFloat(process.env.OLLAMA_TEMPERATURE || "0.1"),
+    numPredict: Number.parseInt(process.env.OLLAMA_NUM_PREDICT || "1200", 10),
+    deterministicBypassConfidence: Number.parseFloat(process.env.OLLAMA_DETERMINISTIC_BYPASS_CONFIDENCE || "0.995"),
+  },
 }

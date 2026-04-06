@@ -300,6 +300,20 @@ function parsePeriodToken(rawValue, options = {}) {
     }
   }
 
+  const compact = normalized.replace(/\s+/g, "")
+  const monthIndexMatch = compact.match(/^(?:m|month)(0?[1-9]|1[0-2])$/i)
+  if (monthIndexMatch) {
+    const monthIndex = Number.parseInt(monthIndexMatch[1], 10)
+    return {
+      label: text,
+      period_key: `m${String(monthIndex).padStart(2, "0")}`,
+      period_type: "monthly",
+      month: monthIndex,
+      year: null,
+      quarter: Math.floor((monthIndex - 1) / 3) + 1,
+    }
+  }
+
   const fyMatch = normalized.match(/(?:^|\b)fy\s*(\d{2,4})(?:\b|$)/i)
   if (fyMatch) {
     let year = Number.parseInt(fyMatch[1], 10)
@@ -1049,6 +1063,40 @@ function detectBucketDirection(label) {
   return "inflow"
 }
 
+const OPENING_LABEL_HINTS = [
+  "opening balance",
+  "opening cash",
+  "cash opening",
+  "cash at beginning",
+  "beginning cash",
+  "cash at start",
+  "start cash",
+  "cash beginning",
+]
+
+const CLOSING_LABEL_HINTS = [
+  "closing balance",
+  "closing cash",
+  "cash closing",
+  "cash at end",
+  "ending cash",
+  "cash ending",
+  "cash end",
+  "end cash",
+]
+
+function isOpeningLabel(value) {
+  const normalized = normalizeText(value)
+  if (!normalized) return false
+  return OPENING_LABEL_HINTS.some((hint) => normalized.includes(hint))
+}
+
+function isClosingLabel(value) {
+  const normalized = normalizeText(value)
+  if (!normalized) return false
+  return CLOSING_LABEL_HINTS.some((hint) => normalized.includes(hint))
+}
+
 function normalizeBucketKey(value, fallbackKey) {
   const key = String(value || "")
     .trim()
@@ -1063,8 +1111,10 @@ function shouldIgnoreBucketLabel(label) {
   if (!normalized) return true
   return (
     normalized.includes("month") ||
-    normalized.includes("opening") ||
-    normalized.includes("closing") ||
+    isOpeningLabel(normalized) ||
+    isClosingLabel(normalized) ||
+    normalized.includes("beginning") ||
+    normalized.includes("ending") ||
     normalized.includes("net") ||
     normalized.includes("total") ||
     normalized.includes("balance")
@@ -1151,8 +1201,8 @@ function pickRowLayoutCandidate(worksheet) {
       return null
     }
 
-    const openingColumn = findColumnByKeywords(["opening balance", "opening"])
-    const closingColumn = findColumnByKeywords(["closing balance", "closing"])
+    const openingColumn = findColumnByKeywords(OPENING_LABEL_HINTS)
+    const closingColumn = findColumnByKeywords(CLOSING_LABEL_HINTS)
 
     const bucketColumns = []
     for (const [headerText, headerColumn] of headerLookup.entries()) {
@@ -1270,11 +1320,11 @@ function pickColumnLayoutCandidate(worksheet) {
       const normalizedLabel = normalizeText(label)
       if (!normalizedLabel) continue
 
-      if (!openingRow && normalizedLabel.includes("opening")) {
+      if (!openingRow && isOpeningLabel(normalizedLabel)) {
         openingRow = scanRow
         continue
       }
-      if (!closingRow && normalizedLabel.includes("closing")) {
+      if (!closingRow && isClosingLabel(normalizedLabel)) {
         closingRow = scanRow
         continue
       }
@@ -2272,14 +2322,32 @@ function buildTemplatePeriodData({
 
 async function ensureV3TemplateConfig({ templateConfig, templatePath }) {
   const normalized = validateTemplateConfig(templateConfig)
-  if (normalized.version === "v3") return normalized
-  if (normalized.version === "v2") {
-    return migrateV2TemplateConfigToV3(normalized)
+  let v3Config = null
+
+  if (normalized.version === "v3") {
+    v3Config = normalized
+  } else if (normalized.version === "v2") {
+    v3Config = migrateV2TemplateConfigToV3(normalized)
+  } else {
+    v3Config = await migrateLegacyTemplateConfigToV3({
+      templatePath,
+      legacyConfig: normalized,
+    })
   }
-  return migrateLegacyTemplateConfigToV3({
-    templatePath,
-    legacyConfig: normalized,
-  })
+
+  if (templatePath) {
+    ensureFileExists(templatePath, "Cash flow template")
+    const workbook = new ExcelJS.Workbook()
+    await workbook.xlsx.readFile(templatePath)
+    const worksheet = workbook.getWorksheet(v3Config.sheet_name)
+    if (!worksheet) {
+      throw new CashFlowValidationError(`Template sheet "${v3Config.sheet_name}" not found`, {
+        available_sheets: workbook.worksheets.map((item) => item.name),
+      })
+    }
+  }
+
+  return v3Config
 }
 
 async function ensureV2TemplateConfig({ templateConfig, templatePath }) {

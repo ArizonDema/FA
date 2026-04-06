@@ -61,9 +61,13 @@ async function writeGeneralLedgerWorkbook(filePath, rows) {
   await workbook.xlsx.writeFile(filePath)
 }
 
-async function writeTemplateWorkbook(filePath) {
+async function writeTemplateWorkbook(
+  filePath,
+  sheetName = "Cash Flow",
+  periodLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+) {
   const workbook = new ExcelJS.Workbook()
-  const sheet = workbook.addWorksheet("Cash Flow")
+  const sheet = workbook.addWorksheet(sheetName)
   sheet.addRow([
     "Month",
     "Opening Balance",
@@ -78,8 +82,7 @@ async function writeTemplateWorkbook(filePath) {
     "Closing Balance",
   ])
 
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-  months.forEach((month, index) => {
+  periodLabels.forEach((month, index) => {
     const rowIndex = index + 2
     sheet.getCell(`A${rowIndex}`).value = month
 
@@ -345,6 +348,74 @@ describe("cashFlow.service", () => {
     expect(analysis.suggested_config_json.version).toBe("v3")
     expect(analysis.suggested_config_json.period_axis.labels.length).toBe(12)
     expect(analysis.suggested_config_json.bucket_bindings.length).toBeGreaterThan(0)
+  })
+
+  test("treats M1..M12 period labels as monthly instead of custom", async () => {
+    const templatePath = path.join(tempDir, "analyze_template_m_labels.xlsx")
+    await writeTemplateWorkbook(
+      templatePath,
+      "Cash Flow",
+      ["M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8", "M9", "M10", "M11", "M12"],
+    )
+
+    const analysis = await CashFlowService.analyzeTemplateWorkbook({
+      templatePath,
+    })
+
+    expect(analysis.suggested_config_json.period_granularity).toBe("monthly")
+    expect(analysis.required_anchors).not.toContain("period_ranges")
+    expect(
+      analysis.suggested_config_json.period_axis.labels.every(
+        (label) => label.period_type === "monthly" && Number.isInteger(label.month),
+      ),
+    ).toBe(true)
+  })
+
+  test("rejects v3 config when target sheet does not exist in workbook", async () => {
+    const templatePath = path.join(tempDir, "template_missing_sheet.xlsx")
+    await writeTemplateWorkbook(templatePath, "Template Layout")
+
+    await expect(
+      CashFlowService.ensureV3TemplateConfig({
+        templatePath,
+        templateConfig: {
+          version: "v3",
+          sheet_name: "Cash Flow",
+          layout_type: "freeform",
+          period_granularity: "custom",
+          period_axis: {
+            orientation: "row",
+            labels: [{ period_key: "period_1", label: "Period 1", period_type: "custom" }],
+            period_bindings: [{ period_key: "period_1", label: "Period 1", cell: "A1" }],
+          },
+          period_resolution_rules: {
+            custom_periods: [{ period_key: "period_1", date_start: "2025-01-01", date_end: "2025-01-01" }],
+          },
+          opening_binding: null,
+          closing_binding: null,
+          bucket_bindings: [
+            {
+              bucket_key: "inflow_bucket",
+              label: "Inflow Bucket",
+              direction: "inflow",
+              fallback: true,
+              rules: [],
+              cells: [{ period_key: "period_1", label: "Period 1", cell: "B1" }],
+            },
+            {
+              bucket_key: "outflow_bucket",
+              label: "Outflow Bucket",
+              direction: "outflow",
+              fallback: true,
+              rules: [],
+              cells: [{ period_key: "period_1", label: "Period 1", cell: "C1" }],
+            },
+          ],
+          writer_policy: { preserve_formulas: true, full_recalc_on_open: true },
+          mapping_policy: { auto_create: true, high_confidence_threshold: 0.7, low_confidence_threshold: 0.35 },
+        },
+      }),
+    ).rejects.toThrow('Template sheet "Cash Flow" not found')
   })
 
   test("auto-creates mappings with confidence metadata", () => {

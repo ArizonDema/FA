@@ -99,6 +99,11 @@ function parseTemplateConfig(rawText) {
   }
 }
 
+function getFileSignature(file) {
+  if (!file) return null
+  return `${file.name || ""}::${file.size || 0}::${file.lastModified || 0}`
+}
+
 function BucketGrid({ config, onChange }) {
   const buckets = config.bucket_bindings || []
 
@@ -265,6 +270,10 @@ function BucketGrid({ config, onChange }) {
 
 export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote }) {
   const [loading, setLoading] = useState(false)
+  const [analyzing, setAnalyzing] = useState(false)
+  const [savingUpload, setSavingUpload] = useState(false)
+  const [savingEditor, setSavingEditor] = useState(false)
+  const [reanalyzingTemplateId, setReanalyzingTemplateId] = useState(null)
   const [templates, setTemplates] = useState([])
   const [uploadForm, setUploadForm] = useState({
     name: "",
@@ -281,6 +290,12 @@ export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote 
     () => templates.find((template) => template.is_active) || null,
     [templates],
   )
+  const currentUploadSignature = useMemo(() => getFileSignature(uploadForm.template_file), [uploadForm.template_file])
+  const hasMatchingUploadAnalysis =
+    analysis?.analysis_scope === "upload" &&
+    Boolean(analysis?.id) &&
+    Boolean(currentUploadSignature) &&
+    analysis.file_signature === currentUploadSignature
 
   const loadTemplates = useCallback(async () => {
     if (!selectedFundId) return
@@ -324,6 +339,7 @@ export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote 
     }
 
     try {
+      setAnalyzing(true)
       const formData = new FormData()
       formData.append("portfolio_id", selectedFundId)
       formData.append("template_file", uploadForm.template_file)
@@ -335,15 +351,31 @@ export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote 
       const suggestedConfig = response.data.suggested_config_json || createEmptyV3Config()
       setAnalysis({
         ...nextAnalysis,
+        analysis_scope: "upload",
+        file_signature: getFileSignature(uploadForm.template_file),
         detected_layout: response.data.detected_layout,
         confidence: response.data.confidence,
         issues: response.data.issues || [],
         required_anchors: response.data.required_anchors || [],
+        needs_human_review: Boolean(response.data.needs_human_review),
+        schema_cache_hit: Boolean(response.data.schema_cache_hit),
+        analysis_source: response.data.analysis_source || "llm",
       })
       applyDraftConfig(suggestedConfig)
-      onNote("Template analyzed. Review bindings and save.")
+      if (response.data.needs_human_review) {
+        onNote("Template analyzed but flagged for human review. Fix required anchors before saving.")
+      } else {
+        const sourceLabel = response.data.schema_cache_hit
+          ? "cache hit"
+          : response.data.analysis_source === "llm"
+            ? "LLM analyzed"
+            : `analysis source: ${response.data.analysis_source || "unknown"}`
+        onNote(`Template analyzed (${sourceLabel}). Review bindings and save.`)
+      }
     } catch (error) {
       onError(error.message)
+    } finally {
+      setAnalyzing(false)
     }
   }
 
@@ -357,6 +389,14 @@ export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote 
       onError("Select an .xlsx template file.")
       return
     }
+    if (!hasMatchingUploadAnalysis) {
+      if (!analysis?.id) {
+        onError("Run Analyze Template before saving so schema extraction and validation are confirmed.")
+      } else {
+        onError("Template file changed after analysis. Run Analyze Template again before saving.")
+      }
+      return
+    }
 
     let parsedConfig
     try {
@@ -367,6 +407,7 @@ export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote 
     }
 
     try {
+      setSavingUpload(true)
       const formData = new FormData()
       formData.append("template_file", uploadForm.template_file)
       formData.append("portfolio_id", selectedFundId)
@@ -388,11 +429,14 @@ export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote 
       await loadTemplates()
     } catch (error) {
       onError(error.message)
+    } finally {
+      setSavingUpload(false)
     }
   }
 
   const handleReanalyzeTemplate = async (templateId) => {
     try {
+      setReanalyzingTemplateId(templateId)
       const response = await apiRequest(`/cash-flow/templates/${templateId}/reanalyze`, {
         method: "POST",
         token,
@@ -400,15 +444,22 @@ export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote 
       const suggestedConfig = response.data.suggested_config_json || createEmptyV3Config()
       setAnalysis({
         ...response.data.analysis,
+        analysis_scope: "template",
+        file_signature: null,
         detected_layout: response.data.detected_layout,
         confidence: response.data.confidence,
         issues: response.data.issues || [],
         required_anchors: response.data.required_anchors || [],
+        needs_human_review: Boolean(response.data.needs_human_review),
+        schema_cache_hit: Boolean(response.data.schema_cache_hit),
+        analysis_source: response.data.analysis_source || "llm",
       })
       applyDraftConfig(suggestedConfig)
       onNote("Template reanalyzed. Review updated bindings.")
     } catch (error) {
       onError(error.message)
+    } finally {
+      setReanalyzingTemplateId(null)
     }
   }
 
@@ -435,6 +486,7 @@ export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote 
     }
 
     try {
+      setSavingEditor(true)
       await apiRequest(`/cash-flow/templates/${editingTemplate.id}`, {
         method: "PUT",
         token,
@@ -449,6 +501,8 @@ export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote 
       await loadTemplates()
     } catch (error) {
       onError(error.message)
+    } finally {
+      setSavingEditor(false)
     }
   }
 
@@ -524,31 +578,51 @@ export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote 
             <input
               type="file"
               accept=".xlsx"
-              onChange={(event) =>
+              onChange={(event) => {
+                const nextFile = event.target.files?.[0] || null
                 setUploadForm({
                   ...uploadForm,
-                  template_file: event.target.files?.[0] || null,
+                  template_file: nextFile,
                 })
-              }
+                setAnalysis(null)
+              }}
               required
             />
           </label>
         </div>
 
         <div className="inline-actions">
-          <button type="button" onClick={handleAnalyzeTemplate}>
-            Analyze Template
+          <button type="button" onClick={handleAnalyzeTemplate} disabled={analyzing || savingUpload}>
+            {analyzing ? "Analyzing..." : "Analyze Template"}
           </button>
-          <button className="primary" type="submit">
-            Save Template
+          <button className="primary" type="submit" disabled={savingUpload || analyzing || !hasMatchingUploadAnalysis}>
+            {savingUpload ? "Saving..." : "Save Template"}
           </button>
         </div>
+        <p className="muted small">
+          Analysis status:{" "}
+          {hasMatchingUploadAnalysis
+            ? "Ready for save"
+            : uploadForm.template_file
+              ? "Run Analyze Template for this file before saving"
+              : "Select a template file to begin"}
+        </p>
 
         {analysis && (
           <div className="mini-card stack">
             <p className="muted small">
               Layout: <strong>{analysis.detected_layout || "unknown"}</strong> | Confidence: <strong>{analysis.confidence}</strong>
             </p>
+            <p className="muted small">
+              Source: <strong>{analysis.analysis_source || "llm"}</strong> | Cache hit:{" "}
+              <strong>{analysis.schema_cache_hit ? "yes" : "no"}</strong> | Needs human review:{" "}
+              <strong>{analysis.needs_human_review ? "yes" : "no"}</strong>
+            </p>
+            {analysis.analysis_scope === "upload" && analysis.file_signature !== currentUploadSignature && (
+              <div className="alert warn">
+                Analyzed file no longer matches the selected upload. Re-run Analyze Template before saving.
+              </div>
+            )}
             {(analysis.issues || []).length > 0 && (
               <div className="alert warn">
                 <strong>Analysis Notes</strong>
@@ -682,8 +756,12 @@ export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote 
                     <button type="button" onClick={() => loadTemplateIntoEditor(template)}>
                       Edit
                     </button>
-                    <button type="button" onClick={() => handleReanalyzeTemplate(template.id)}>
-                      Reanalyze
+                    <button
+                      type="button"
+                      onClick={() => handleReanalyzeTemplate(template.id)}
+                      disabled={Boolean(reanalyzingTemplateId)}
+                    >
+                      {reanalyzingTemplateId === template.id ? "Reanalyzing..." : "Reanalyze"}
                     </button>
                     {!template.is_active && (
                       <button type="button" onClick={() => handleActivate(template.id)}>
@@ -739,8 +817,8 @@ export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote 
                 </select>
               </label>
             </div>
-            <button className="primary" type="submit">
-              Save Template Changes
+            <button className="primary" type="submit" disabled={savingEditor}>
+              {savingEditor ? "Saving..." : "Save Template Changes"}
             </button>
           </>
         )}

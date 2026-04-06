@@ -34,6 +34,7 @@ const mockReportRunModel = {
 
 const mockTemplateAnalysisModel = {
   findByPk: jest.fn(),
+  findAll: jest.fn(),
   update: jest.fn(),
   create: jest.fn(),
 }
@@ -73,6 +74,7 @@ class MockCashFlowValidationError extends Error {
 const mockCashFlowService = {
   CashFlowValidationError: MockCashFlowValidationError,
   validateTemplateConfig: jest.fn((config) => config),
+  ensureV3TemplateConfig: jest.fn(async ({ templateConfig }) => templateConfig),
   resolveRunDateRange: jest.fn(({ dateStart, dateEnd, fiscalYear }) => {
     if (dateStart && dateEnd) {
       return { start: new Date(dateStart), end: new Date(dateEnd) }
@@ -88,6 +90,16 @@ const mockCashFlowService = {
 }
 
 jest.mock("../src/services/cashFlow.service", () => mockCashFlowService)
+
+const TEST_PIPELINE_VERSION = "test-pipeline-v1"
+
+const mockTemplateIngestionService = {
+  computeTemplateHash: jest.fn(),
+  ingestTemplateSchema: jest.fn(),
+  PIPELINE_VERSION: TEST_PIPELINE_VERSION,
+}
+
+jest.mock("../src/services/cashFlowTemplateIngestion.service", () => mockTemplateIngestionService)
 
 const cashFlowRoutes = require("../src/routes/cash-flow.routes")
 
@@ -171,6 +183,7 @@ describe("cash-flow API", () => {
     mockTemplateModel.update.mockResolvedValue([1])
     mockTemplateModel.create.mockResolvedValue(createTemplateRecord())
     mockTemplateAnalysisModel.findByPk.mockResolvedValue(null)
+    mockTemplateAnalysisModel.findAll.mockResolvedValue([])
     mockTemplateAnalysisModel.create.mockResolvedValue({
       id: "analysis-1",
       portfolio_id: "fund-1",
@@ -209,11 +222,17 @@ describe("cash-flow API", () => {
         },
       },
     })
-    mockCashFlowService.analyzeTemplateWorkbook.mockResolvedValue({
+    mockTemplateIngestionService.computeTemplateHash.mockReturnValue("sha256-template")
+    mockTemplateIngestionService.ingestTemplateSchema.mockResolvedValue({
+      source_file_sha256: "sha256-template",
       detected_layout_type: "rows",
       confidence: 0.82,
-      issues: [],
+      issues: ["Looks good"],
       required_anchors: [],
+      needs_human_review: false,
+      analysis_source: "llm",
+      llm_meta_json: { provider: "ollama", model: "qwen3:14b" },
+      raw_structure_json: { worksheet_count: 1 },
       suggested_config_json: {
         version: "v3",
         sheet_name: "Cash Flow",
@@ -302,7 +321,227 @@ describe("cash-flow API", () => {
     expect(response.status).toBe(200)
     expect(response.body.data.analysis.id).toBeDefined()
     expect(response.body.data.detected_layout).toBe("rows")
-    expect(mockCashFlowService.analyzeTemplateWorkbook).toHaveBeenCalled()
+    expect(response.body.data.needs_human_review).toBe(false)
+    expect(mockTemplateIngestionService.ingestTemplateSchema).toHaveBeenCalled()
+  })
+
+  test("reanalyzes identical template hash instead of reusing cached schema", async () => {
+    const templateFile = path.join(tempDir, "template_cached.xlsx")
+    await writeTinyWorkbook(templateFile)
+
+    mockTemplateAnalysisModel.findAll.mockResolvedValue([
+      {
+        id: "analysis-cached",
+        portfolio_id: "fund-1",
+        source_file_sha256: "sha256-template",
+        detected_layout_type: "rows",
+        confidence: 0.91,
+        suggested_config_json: {
+          version: "v3",
+          sheet_name: "Cash Flow",
+          layout_type: "rows",
+          period_granularity: "monthly",
+          period_axis: {
+            orientation: "row",
+            labels: [{ period_key: "m01", label: "Jan", period_type: "monthly", month: 1 }],
+            period_bindings: [{ period_key: "m01", label: "Jan", cell: "A2" }],
+          },
+          opening_binding: null,
+          closing_binding: null,
+          period_resolution_rules: { custom_periods: [] },
+          bucket_bindings: [],
+        },
+        issues_json: { issues: ["from-cache"], required_anchors: [] },
+        llm_meta_json: { pipeline_version: TEST_PIPELINE_VERSION },
+        needs_human_review: false,
+      },
+    ])
+
+    const response = await request(app)
+      .post("/api/v1/cash-flow/templates/analyze")
+      .field("portfolio_id", "fund-1")
+      .attach("template_file", templateFile)
+
+    expect(response.status).toBe(200)
+    expect(response.body.data.schema_cache_hit).toBe(false)
+    expect(response.body.data.analysis_source).toBe("llm")
+    expect(mockTemplateIngestionService.ingestTemplateSchema).toHaveBeenCalledTimes(1)
+  })
+
+  test("returns review flag when llm output is malformed after retries", async () => {
+    const templateFile = path.join(tempDir, "template_review.xlsx")
+    await writeTinyWorkbook(templateFile)
+
+    mockTemplateIngestionService.ingestTemplateSchema.mockResolvedValueOnce({
+      source_file_sha256: "sha256-template",
+      detected_layout_type: "freeform",
+      confidence: 0.2,
+      issues: ["LLM output malformed"],
+      required_anchors: ["period_axis", "bucket_targets"],
+      needs_human_review: true,
+      analysis_source: "fallback",
+      llm_meta_json: { attempts: [{ attempt: 1, status: "failed" }, { attempt: 2, status: "failed" }] },
+      raw_structure_json: { worksheet_count: 1 },
+      suggested_config_json: {
+        version: "v3",
+        sheet_name: "Cash Flow",
+        layout_type: "freeform",
+        period_granularity: "custom",
+        period_axis: {
+          orientation: "row",
+          labels: [{ period_key: "period_1", label: "Period 1", period_type: "custom" }],
+          period_bindings: [{ period_key: "period_1", label: "Period 1", cell: "A1" }],
+        },
+        period_resolution_rules: {
+          custom_periods: [{ period_key: "period_1", date_start: "2025-01-01", date_end: "2025-01-01" }],
+        },
+        opening_binding: null,
+        closing_binding: null,
+        bucket_bindings: [
+          {
+            bucket_key: "inflow_bucket",
+            label: "Inflow Bucket",
+            direction: "inflow",
+            fallback: true,
+            rules: [],
+            cells: [{ period_key: "period_1", label: "Period 1", cell: "B1" }],
+          },
+          {
+            bucket_key: "outflow_bucket",
+            label: "Outflow Bucket",
+            direction: "outflow",
+            fallback: true,
+            rules: [],
+            cells: [{ period_key: "period_1", label: "Period 1", cell: "C1" }],
+          },
+        ],
+        writer_policy: { preserve_formulas: true, full_recalc_on_open: true },
+        mapping_policy: { auto_create: true, high_confidence_threshold: 0.7, low_confidence_threshold: 0.35 },
+      },
+    })
+
+    const response = await request(app)
+      .post("/api/v1/cash-flow/templates/analyze")
+      .field("portfolio_id", "fund-1")
+      .attach("template_file", templateFile)
+
+    expect(response.status).toBe(200)
+    expect(response.body.data.needs_human_review).toBe(true)
+    expect(response.body.data.analysis_source).toBe("fallback")
+  })
+
+  test("reanalyzes flagged template on repeated uploads instead of reusing cached analysis", async () => {
+    const templateFile = path.join(tempDir, "template_review_cached.xlsx")
+    await writeTinyWorkbook(templateFile)
+
+    mockTemplateIngestionService.ingestTemplateSchema.mockResolvedValue({
+      source_file_sha256: "sha256-template",
+      detected_layout_type: "freeform",
+      confidence: 0.2,
+      issues: ["LLM malformed"],
+      required_anchors: ["period_axis"],
+      needs_human_review: true,
+      analysis_source: "fallback",
+      llm_meta_json: { attempts: [{ attempt: 1, status: "failed" }, { attempt: 2, status: "failed" }] },
+      raw_structure_json: { worksheet_count: 1 },
+      suggested_config_json: {
+        version: "v3",
+        sheet_name: "Cash Flow",
+        layout_type: "freeform",
+        period_granularity: "custom",
+        period_axis: {
+          orientation: "row",
+          labels: [{ period_key: "period_1", label: "Period 1", period_type: "custom" }],
+          period_bindings: [{ period_key: "period_1", label: "Period 1", cell: "A1" }],
+        },
+        period_resolution_rules: {
+          custom_periods: [{ period_key: "period_1", date_start: "2025-01-01", date_end: "2025-01-01" }],
+        },
+        opening_binding: null,
+        closing_binding: null,
+        bucket_bindings: [
+          {
+            bucket_key: "inflow_bucket",
+            label: "Inflow Bucket",
+            direction: "inflow",
+            fallback: true,
+            rules: [],
+            cells: [{ period_key: "period_1", label: "Period 1", cell: "B1" }],
+          },
+          {
+            bucket_key: "outflow_bucket",
+            label: "Outflow Bucket",
+            direction: "outflow",
+            fallback: true,
+            rules: [],
+            cells: [{ period_key: "period_1", label: "Period 1", cell: "C1" }],
+          },
+        ],
+        writer_policy: { preserve_formulas: true, full_recalc_on_open: true },
+        mapping_policy: { auto_create: true, high_confidence_threshold: 0.7, low_confidence_threshold: 0.35 },
+      },
+    })
+
+    const first = await request(app)
+      .post("/api/v1/cash-flow/templates/analyze")
+      .field("portfolio_id", "fund-1")
+      .attach("template_file", templateFile)
+
+    expect(first.status).toBe(200)
+    expect(first.body.data.schema_cache_hit).toBe(false)
+    expect(first.body.data.needs_human_review).toBe(true)
+
+    const second = await request(app)
+      .post("/api/v1/cash-flow/templates/analyze")
+      .field("portfolio_id", "fund-1")
+      .attach("template_file", templateFile)
+
+    expect(second.status).toBe(200)
+    expect(second.body.data.schema_cache_hit).toBe(false)
+    expect(second.body.data.analysis_source).toBe("fallback")
+    expect(second.body.data.needs_human_review).toBe(true)
+    expect(mockTemplateIngestionService.ingestTemplateSchema).toHaveBeenCalledTimes(2)
+  })
+
+  test("ignores stored cache candidates and always performs fresh ingestion", async () => {
+    const templateFile = path.join(tempDir, "template_stale_cache.xlsx")
+    await writeTinyWorkbook(templateFile)
+
+    mockTemplateAnalysisModel.findAll.mockResolvedValueOnce([
+      {
+        id: "analysis-stale-cache",
+        portfolio_id: "fund-1",
+        source_file_sha256: "sha256-template",
+        detected_layout_type: "rows",
+        confidence: 0.8,
+        suggested_config_json: {
+          version: "v3",
+          sheet_name: "Cash Flow",
+          layout_type: "rows",
+          period_granularity: "monthly",
+          period_axis: {
+            orientation: "row",
+            labels: [{ period_key: "m01", label: "Jan", period_type: "monthly", month: 1 }],
+            period_bindings: [{ period_key: "m01", label: "Jan", cell: "A2" }],
+          },
+          opening_binding: null,
+          closing_binding: null,
+          period_resolution_rules: { custom_periods: [] },
+          bucket_bindings: [],
+        },
+        issues_json: { issues: [], required_anchors: [] },
+        llm_meta_json: { pipeline_version: "stale-version" },
+      },
+    ])
+
+    const response = await request(app)
+      .post("/api/v1/cash-flow/templates/analyze")
+      .field("portfolio_id", "fund-1")
+      .attach("template_file", templateFile)
+
+    expect(response.status).toBe(200)
+    expect(response.body.data.schema_cache_hit).toBe(false)
+    expect(mockTemplateIngestionService.ingestTemplateSchema).toHaveBeenCalled()
   })
 
   test("reanalyzes existing template", async () => {
@@ -320,7 +559,126 @@ describe("cash-flow API", () => {
 
     expect(response.status).toBe(200)
     expect(response.body.data.analysis.id).toBeDefined()
-    expect(mockCashFlowService.analyzeTemplateWorkbook).toHaveBeenCalled()
+    expect(mockTemplateIngestionService.ingestTemplateSchema).toHaveBeenCalled()
+  })
+
+  test("blocks template creation when ingestion result requires human review", async () => {
+    const templateFile = path.join(tempDir, "template_create_review.xlsx")
+    await writeTinyWorkbook(templateFile)
+
+    mockTemplateIngestionService.ingestTemplateSchema.mockResolvedValueOnce({
+      source_file_sha256: "sha256-template",
+      detected_layout_type: "freeform",
+      confidence: 0.1,
+      issues: ["Invalid json from llm"],
+      required_anchors: ["period_axis"],
+      needs_human_review: true,
+      analysis_source: "fallback",
+      llm_meta_json: {},
+      raw_structure_json: { worksheet_count: 1 },
+      suggested_config_json: {
+        version: "v3",
+        sheet_name: "Cash Flow",
+        layout_type: "freeform",
+        period_granularity: "custom",
+        period_axis: {
+          orientation: "row",
+          labels: [{ period_key: "period_1", label: "Period 1", period_type: "custom" }],
+          period_bindings: [{ period_key: "period_1", label: "Period 1", cell: "A1" }],
+        },
+        period_resolution_rules: {
+          custom_periods: [{ period_key: "period_1", date_start: "2025-01-01", date_end: "2025-01-01" }],
+        },
+        opening_binding: null,
+        closing_binding: null,
+        bucket_bindings: [
+          {
+            bucket_key: "inflow_bucket",
+            label: "Inflow Bucket",
+            direction: "inflow",
+            fallback: true,
+            rules: [],
+            cells: [{ period_key: "period_1", label: "Period 1", cell: "B1" }],
+          },
+          {
+            bucket_key: "outflow_bucket",
+            label: "Outflow Bucket",
+            direction: "outflow",
+            fallback: true,
+            rules: [],
+            cells: [{ period_key: "period_1", label: "Period 1", cell: "C1" }],
+          },
+        ],
+        writer_policy: { preserve_formulas: true, full_recalc_on_open: true },
+        mapping_policy: { auto_create: true, high_confidence_threshold: 0.7, low_confidence_threshold: 0.35 },
+      },
+    })
+
+    const response = await request(app)
+      .post("/api/v1/cash-flow/templates")
+      .field("portfolio_id", "fund-1")
+      .field("name", "Review Required Template")
+      .attach("template_file", templateFile)
+
+    expect(response.status).toBe(400)
+    expect(String(response.body.message || "").toLowerCase()).toContain("needs human review")
+  })
+
+  test("blocks template creation when flagged analysis is submitted without meaningful config changes", async () => {
+    const templateFile = path.join(tempDir, "template_flagged_analysis.xlsx")
+    await writeTinyWorkbook(templateFile)
+
+    const flaggedSuggestedConfig = {
+      version: "v3",
+      sheet_name: "Cash Flow",
+      layout_type: "freeform",
+      period_granularity: "custom",
+      period_axis: {
+        orientation: "row",
+        labels: [{ period_key: "period_1", label: "Period 1", period_type: "custom" }],
+        period_bindings: [{ period_key: "period_1", label: "Period 1", cell: "A1" }],
+      },
+      period_resolution_rules: {
+        custom_periods: [{ period_key: "period_1", date_start: "2025-01-01", date_end: "2025-01-01" }],
+      },
+      opening_binding: null,
+      closing_binding: null,
+      bucket_bindings: [
+        {
+          bucket_key: "inflow_bucket",
+          label: "Inflow Bucket",
+          direction: "inflow",
+          fallback: true,
+          rules: [],
+          cells: [{ period_key: "period_1", label: "Period 1", cell: "B1" }],
+        },
+      ],
+      writer_policy: { preserve_formulas: true, full_recalc_on_open: true },
+      mapping_policy: { auto_create: true, high_confidence_threshold: 0.7, low_confidence_threshold: 0.35 },
+    }
+
+    mockTemplateAnalysisModel.findByPk.mockResolvedValueOnce({
+      id: "analysis-flagged",
+      portfolio_id: "fund-1",
+      expires_at: null,
+      needs_human_review: true,
+      suggested_config_json: flaggedSuggestedConfig,
+      issues_json: {
+        issues: ["LLM output malformed"],
+        required_anchors: ["period_axis", "bucket_targets"],
+      },
+    })
+
+    const response = await request(app)
+      .post("/api/v1/cash-flow/templates")
+      .field("portfolio_id", "fund-1")
+      .field("name", "Flagged Analysis Template")
+      .field("analysis_id", "analysis-flagged")
+      .field("config_json", JSON.stringify(flaggedSuggestedConfig))
+      .attach("template_file", templateFile)
+
+    expect(response.status).toBe(400)
+    expect(String(response.body.message || "").toLowerCase()).toContain("resolve required anchors")
   })
 
   test("runs cash flow report from TB + GL uploads", async () => {
@@ -352,6 +710,69 @@ describe("cash-flow API", () => {
     expect(response.body.data.outputs.xlsx).toBe(true)
     expect(response.body.data.preview.monthly).toHaveLength(1)
     expect(mockCashFlowService.generateCashFlowReport).toHaveBeenCalled()
+  })
+
+  test("auto-corrects template sheet mapping on report run when workbook sheet differs", async () => {
+    const tbFile = path.join(tempDir, "tb_autocorrect.xlsx")
+    const glFile = path.join(tempDir, "gl_autocorrect.xlsx")
+    const outputFile = path.join(tempDir, "report_autocorrect.xlsx")
+    await writeTinyWorkbook(tbFile)
+    await writeTinyWorkbook(glFile)
+    await writeTinyWorkbook(outputFile)
+
+    const correctedConfig = {
+      version: "v3",
+      sheet_name: "Template Layout",
+      layout_type: "rows",
+      period_granularity: "monthly",
+      period_axis: {
+        orientation: "row",
+        labels: [{ period_key: "m01", label: "Jan", period_type: "monthly", month: 1 }],
+        period_bindings: [{ period_key: "m01", label: "Jan", cell: "A2" }],
+      },
+      opening_binding: null,
+      closing_binding: null,
+      period_resolution_rules: { custom_periods: [] },
+      bucket_bindings: [],
+      writer_policy: { preserve_formulas: true, full_recalc_on_open: true },
+      mapping_policy: { auto_create: true, high_confidence_threshold: 0.7, low_confidence_threshold: 0.35 },
+    }
+
+    mockCashFlowService.generateCashFlowReport
+      .mockRejectedValueOnce(
+        new MockCashFlowValidationError('Template sheet "Cash Flow" not found', {
+          available_sheets: ["Template Layout"],
+        }),
+      )
+      .mockResolvedValueOnce({
+        outputFilePath: outputFile,
+        normalizedConfig: correctedConfig,
+        warnings: [],
+        preview: {
+          monthly: [{ month: "Jan", opening_balance: 0, net_cash_flow: 50, closing_balance: 50, buckets: {} }],
+          totals: { closing_balance_december: 50 },
+        },
+        mapping: {
+          auto_mappings_created: [],
+          low_confidence_mappings: [],
+          final_bucket_assignments: [],
+        },
+      })
+
+    mockCashFlowService.ensureV3TemplateConfig.mockResolvedValueOnce(correctedConfig)
+
+    const response = await request(app)
+      .post("/api/v1/cash-flow/reports/run")
+      .field("portfolio_id", "fund-1")
+      .field("date_start", "2025-01-01")
+      .field("date_end", "2025-12-31")
+      .attach("tb_file", tbFile)
+      .attach("gl_file", glFile)
+
+    expect(response.status).toBe(200)
+    expect(mockCashFlowService.generateCashFlowReport).toHaveBeenCalledTimes(2)
+    expect(mockCashFlowService.ensureV3TemplateConfig).toHaveBeenCalledTimes(1)
+    expect((response.body.data.warnings || []).some((warning) => String(warning).includes("auto-corrected"))).toBe(true)
   })
 
   test("blocks report run when no active template exists", async () => {
