@@ -13,6 +13,11 @@ module.exports = (sequelize, DataTypes) => {
         as: "template",
       })
 
+      CashFlowTemplateAnalysis.belongsTo(models.TemplateVersion, {
+        foreignKey: "template_version_id",
+        as: "templateVersion",
+      })
+
       CashFlowTemplateAnalysis.belongsTo(models.User, {
         foreignKey: "created_by",
         as: "createdBy",
@@ -32,6 +37,10 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
       },
       template_id: {
+        type: DataTypes.UUID,
+        allowNull: true,
+      },
+      template_version_id: {
         type: DataTypes.UUID,
         allowNull: true,
       },

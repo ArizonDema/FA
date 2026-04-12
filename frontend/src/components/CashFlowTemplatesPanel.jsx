@@ -434,7 +434,13 @@ export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote 
     }
   }
 
-  const handleReanalyzeTemplate = async (templateId) => {
+  const handleReanalyzeTemplate = async (template) => {
+    if (!template?.reanalyze_available) {
+      onError(template?.reanalyze_block_reason || "Template source file is missing. Re-upload template first.")
+      return
+    }
+
+    const templateId = template.id
     try {
       setReanalyzingTemplateId(templateId)
       const response = await apiRequest(`/cash-flow/templates/${templateId}/reanalyze`, {
@@ -758,11 +764,17 @@ export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote 
                     </button>
                     <button
                       type="button"
-                      onClick={() => handleReanalyzeTemplate(template.id)}
-                      disabled={Boolean(reanalyzingTemplateId)}
+                      onClick={() => handleReanalyzeTemplate(template)}
+                      disabled={Boolean(reanalyzingTemplateId) || template.reanalyze_available === false}
+                      title={template.reanalyze_block_reason || ""}
                     >
                       {reanalyzingTemplateId === template.id ? "Reanalyzing..." : "Reanalyze"}
                     </button>
+                    {template.reanalyze_available === false && (
+                      <span className="muted small" title={template.reanalyze_block_reason || ""}>
+                        Source missing
+                      </span>
+                    )}
                     {!template.is_active && (
                       <button type="button" onClick={() => handleActivate(template.id)}>
                         Activate

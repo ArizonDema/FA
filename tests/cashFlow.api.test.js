@@ -6,6 +6,9 @@ const express = require("express")
 const ExcelJS = require("exceljs")
 const errorHandler = require("../src/middlewares/errorHandler")
 
+const TEST_UPLOAD_ROOT = fs.mkdtempSync(path.join(os.tmpdir(), "cashflow-api-uploads-"))
+process.env.UPLOAD_ROOT_DIR = TEST_UPLOAD_ROOT
+
 jest.mock("../src/middlewares/auth", () => ({
   authenticate: (req, res, next) => {
     req.user = { id: "admin-user-1", role: "admin" }
@@ -24,6 +27,20 @@ const mockTemplateModel = {
   findByPk: jest.fn(),
   create: jest.fn(),
   update: jest.fn(),
+}
+
+const mockTemplateVersionModel = {
+  max: jest.fn(),
+  create: jest.fn(),
+  findByPk: jest.fn(),
+  findOne: jest.fn(),
+  update: jest.fn(),
+}
+
+const mockTemplateRowModel = {
+  destroy: jest.fn(),
+  bulkCreate: jest.fn(),
+  findAll: jest.fn(),
 }
 
 const mockReportRunModel = {
@@ -52,11 +69,20 @@ const mockModels = {
   Portfolio: {
     findByPk: jest.fn(),
   },
+  Fund: {
+    findByPk: jest.fn(),
+  },
   CashFlowTemplate: mockTemplateModel,
+  Template: mockTemplateModel,
+  TemplateVersion: mockTemplateVersionModel,
+  TemplateRow: mockTemplateRowModel,
   CashFlowTemplateAnalysis: mockTemplateAnalysisModel,
   CashFlowAccountMapping: mockAccountMappingModel,
   ReportRun: mockReportRunModel,
   AuditLog: {
+    create: jest.fn(),
+  },
+  AuditEvent: {
     create: jest.fn(),
   },
 }
@@ -92,6 +118,12 @@ const mockCashFlowService = {
 jest.mock("../src/services/cashFlow.service", () => mockCashFlowService)
 
 const TEST_PIPELINE_VERSION = "test-pipeline-v1"
+const mockTemplateParsingService = {
+  persistVersionStructure: jest.fn(),
+  parseTemplateVersion: jest.fn(),
+  getParsedStructure: jest.fn(),
+  getTemplateRows: jest.fn(),
+}
 
 const mockTemplateIngestionService = {
   computeTemplateHash: jest.fn(),
@@ -101,18 +133,25 @@ const mockTemplateIngestionService = {
 
 jest.mock("../src/services/cashFlowTemplateIngestion.service", () => mockTemplateIngestionService)
 
+jest.mock("../src/modules/templates/services/templateParsing.service", () => mockTemplateParsingService)
+
 const cashFlowRoutes = require("../src/routes/cash-flow.routes")
 
 function createTemplateRecord(overrides = {}) {
+  const activeVersion = createTemplateVersionRecord()
   return {
     id: "template-1",
     portfolio_id: "fund-1",
     name: "Template A",
     version: "v1",
+    template_kind: "cash_flow",
+    status: "active",
     template_file_name: "template.xlsx",
     template_file_path: "C:\\temp\\template.xlsx",
     config_json: { sheet_name: "Cash Flow", buckets: [] },
     is_active: true,
+    active_version_id: activeVersion.id,
+    activeVersion,
     update: jest.fn(async function update(values) {
       Object.assign(this, values)
       return this
@@ -127,6 +166,37 @@ function createTemplateRecord(overrides = {}) {
         template_file_path: this.template_file_path,
         config_json: this.config_json,
         is_active: this.is_active,
+        active_version_id: this.active_version_id,
+      }
+    },
+    ...overrides,
+  }
+}
+
+function createTemplateVersionRecord(overrides = {}) {
+  return {
+    id: "template-version-1",
+    template_id: "template-1",
+    portfolio_id: "fund-1",
+    version_number: 1,
+    version_label: "v1",
+    source_file_name: "template.xlsx",
+    source_file_path: "C:\\temp\\template.xlsx",
+    source_file_sha256: "sha256-template",
+    config_json: { sheet_name: "Cash Flow", buckets: [] },
+    raw_structure_json: { worksheet_count: 1 },
+    llm_meta_json: { provider: "ollama" },
+    update: jest.fn(async function update(values) {
+      Object.assign(this, values)
+      return this
+    }),
+    toJSON() {
+      return {
+        id: this.id,
+        template_id: this.template_id,
+        portfolio_id: this.portfolio_id,
+        version_number: this.version_number,
+        version_label: this.version_label,
       }
     },
     ...overrides,
@@ -168,7 +238,7 @@ async function writeTinyWorkbook(filePath) {
 describe("cash-flow API", () => {
   const app = express()
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "cashflow-api-test-"))
-  const repoCashFlowUploadDir = path.join(process.cwd(), "uploads", "cash-flow")
+  const testCashFlowUploadDir = path.join(TEST_UPLOAD_ROOT, "cash-flow")
 
   app.use(express.json())
   app.use("/api/v1/cash-flow", cashFlowRoutes)
@@ -177,11 +247,20 @@ describe("cash-flow API", () => {
   beforeEach(() => {
     jest.clearAllMocks()
     mockModels.Portfolio.findByPk.mockResolvedValue({ id: "fund-1", name: "Fund One" })
+    mockModels.Fund.findByPk.mockResolvedValue({ id: "fund-1", name: "Fund One" })
     mockTemplateModel.findOne.mockResolvedValue(createTemplateRecord())
     mockTemplateModel.findByPk.mockResolvedValue(createTemplateRecord())
     mockTemplateModel.findAll.mockResolvedValue([createTemplateRecord()])
     mockTemplateModel.update.mockResolvedValue([1])
     mockTemplateModel.create.mockResolvedValue(createTemplateRecord())
+    mockTemplateVersionModel.max.mockResolvedValue(0)
+    mockTemplateVersionModel.create.mockResolvedValue(createTemplateVersionRecord())
+    mockTemplateVersionModel.findByPk.mockResolvedValue(createTemplateVersionRecord())
+    mockTemplateVersionModel.findOne.mockResolvedValue(createTemplateVersionRecord())
+    mockTemplateVersionModel.update.mockResolvedValue([1])
+    mockTemplateRowModel.destroy.mockResolvedValue(0)
+    mockTemplateRowModel.bulkCreate.mockResolvedValue([])
+    mockTemplateRowModel.findAll.mockResolvedValue([])
     mockTemplateAnalysisModel.findByPk.mockResolvedValue(null)
     mockTemplateAnalysisModel.findAll.mockResolvedValue([])
     mockTemplateAnalysisModel.create.mockResolvedValue({
@@ -212,6 +291,49 @@ describe("cash-flow API", () => {
     mockReportRunModel.findAll.mockResolvedValue([createRunRecord()])
     mockReportRunModel.findByPk.mockResolvedValue(createRunRecord())
     mockReportRunModel.create.mockResolvedValue(createRunRecord())
+    mockModels.AuditLog.create.mockResolvedValue({ id: "audit-1" })
+    mockModels.AuditEvent.create.mockResolvedValue({ id: "audit-1" })
+    mockTemplateParsingService.persistVersionStructure.mockResolvedValue({
+      normalizedStructure: { templateVersionId: "template-version-1", sheets: [] },
+      parseMetadata: { parser_version: "test-parser" },
+      persistedRowCount: 0,
+    })
+    mockTemplateParsingService.parseTemplateVersion.mockResolvedValue({
+      template: createTemplateRecord(),
+      version: createTemplateVersionRecord(),
+      normalizedStructure: {
+        templateVersionId: "template-version-1",
+        sheets: [{ name: "Cash Flow", rows: [] }],
+      },
+      parseMetadata: { parser_version: "test-parser" },
+      persistedRowCount: 0,
+    })
+    mockTemplateParsingService.getParsedStructure.mockResolvedValue({
+      template: createTemplateRecord(),
+      version: createTemplateVersionRecord({
+        parsed_structure_json: {
+          templateVersionId: "template-version-1",
+          sheets: [{ name: "Cash Flow", rows: [] }],
+        },
+        parse_metadata_json: { parser_version: "test-parser" },
+      }),
+      structure: {
+        templateVersionId: "template-version-1",
+        sheets: [{ name: "Cash Flow", rows: [] }],
+      },
+      parseMetadata: { parser_version: "test-parser" },
+    })
+    mockTemplateParsingService.getTemplateRows.mockResolvedValue({
+      template: createTemplateRecord(),
+      version: createTemplateVersionRecord(),
+      rows: [
+        {
+          id: "row-1",
+          rowLabel: "Subscriptions",
+          rowType: "data_row",
+        },
+      ],
+    })
     mockCashFlowService.generateCashFlowReport.mockResolvedValue({
       outputFilePath: path.join(tempDir, "output.xlsx"),
       warnings: [],
@@ -220,6 +342,11 @@ describe("cash-flow API", () => {
         totals: {
           closing_balance_december: 100,
         },
+      },
+      mapping: {
+        auto_mappings_created: [],
+        low_confidence_mappings: [],
+        final_bucket_assignments: [],
       },
     })
     mockTemplateIngestionService.computeTemplateHash.mockReturnValue("sha256-template")
@@ -231,6 +358,7 @@ describe("cash-flow API", () => {
       required_anchors: [],
       needs_human_review: false,
       analysis_source: "llm",
+      llm_failure_reason: null,
       llm_meta_json: { provider: "ollama", model: "qwen3:14b" },
       raw_structure_json: { worksheet_count: 1 },
       suggested_config_json: {
@@ -252,14 +380,16 @@ describe("cash-flow API", () => {
   })
 
   afterEach(() => {
-    fs.rmSync(path.join(repoCashFlowUploadDir, "runs"), { recursive: true, force: true })
-    fs.rmSync(path.join(repoCashFlowUploadDir, "templates"), { recursive: true, force: true })
-    fs.rmSync(path.join(repoCashFlowUploadDir, "tmp"), { recursive: true, force: true })
-    fs.mkdirSync(path.join(repoCashFlowUploadDir, "tmp"), { recursive: true })
+    fs.rmSync(path.join(testCashFlowUploadDir, "runs"), { recursive: true, force: true })
+    fs.rmSync(path.join(testCashFlowUploadDir, "templates"), { recursive: true, force: true })
+    fs.rmSync(path.join(testCashFlowUploadDir, "tmp"), { recursive: true, force: true })
+    fs.mkdirSync(path.join(testCashFlowUploadDir, "tmp"), { recursive: true })
   })
 
   afterAll(() => {
     fs.rmSync(tempDir, { recursive: true, force: true })
+    fs.rmSync(TEST_UPLOAD_ROOT, { recursive: true, force: true })
+    delete process.env.UPLOAD_ROOT_DIR
   })
 
   test("lists templates by fund", async () => {
@@ -322,6 +452,7 @@ describe("cash-flow API", () => {
     expect(response.body.data.analysis.id).toBeDefined()
     expect(response.body.data.detected_layout).toBe("rows")
     expect(response.body.data.needs_human_review).toBe(false)
+    expect(response.body.data.llm_fallback_reason).toBeNull()
     expect(mockTemplateIngestionService.ingestTemplateSchema).toHaveBeenCalled()
   })
 
@@ -380,6 +511,7 @@ describe("cash-flow API", () => {
       required_anchors: ["period_axis", "bucket_targets"],
       needs_human_review: true,
       analysis_source: "fallback",
+      llm_failure_reason: "Ollama timed out after 2 attempt(s) at 90000ms timeout. Human review is required.",
       llm_meta_json: { attempts: [{ attempt: 1, status: "failed" }, { attempt: 2, status: "failed" }] },
       raw_structure_json: { worksheet_count: 1 },
       suggested_config_json: {
@@ -428,6 +560,7 @@ describe("cash-flow API", () => {
     expect(response.status).toBe(200)
     expect(response.body.data.needs_human_review).toBe(true)
     expect(response.body.data.analysis_source).toBe("fallback")
+    expect(String(response.body.data.llm_fallback_reason || "")).toContain("timed out")
   })
 
   test("reanalyzes flagged template on repeated uploads instead of reusing cached analysis", async () => {
@@ -559,6 +692,76 @@ describe("cash-flow API", () => {
 
     expect(response.status).toBe(200)
     expect(response.body.data.analysis.id).toBeDefined()
+    expect(mockTemplateIngestionService.ingestTemplateSchema).toHaveBeenCalled()
+  })
+
+  test("reanalyzes template using active version source path when primary file path is missing", async () => {
+    const activeVersionPath = path.join(tempDir, "template_existing_active_version.xlsx")
+    await writeTinyWorkbook(activeVersionPath)
+
+    mockTemplateModel.findByPk.mockResolvedValue(
+      createTemplateRecord({
+        id: "template-existing-fallback",
+        template_file_path: path.join(tempDir, "missing_template.xlsx"),
+        activeVersion: createTemplateVersionRecord({
+          source_file_path: activeVersionPath,
+          source_file_name: "template_existing_active_version.xlsx",
+        }),
+      }),
+    )
+
+    const response = await request(app).post("/api/v1/cash-flow/templates/template-existing-fallback/reanalyze")
+
+    expect(response.status).toBe(200)
+    expect(response.body.data.analysis.id).toBeDefined()
+    expect(mockTemplateIngestionService.ingestTemplateSchema).toHaveBeenCalled()
+  })
+
+  test("returns a clear message when template source file is missing for reanalysis", async () => {
+    mockTemplateModel.findByPk.mockResolvedValue(
+      createTemplateRecord({
+        id: "template-missing-source",
+        template_file_path: path.join(tempDir, "missing_template.xlsx"),
+        activeVersion: createTemplateVersionRecord({
+          source_file_path: path.join(tempDir, "missing_active_source.xlsx"),
+        }),
+      }),
+    )
+
+    const response = await request(app).post("/api/v1/cash-flow/templates/template-missing-source/reanalyze")
+
+    expect(response.status).toBe(400)
+    expect(String(response.body.message || "").toLowerCase()).toContain("re-upload")
+  })
+
+  test("recovers missing template source from template-analyses archive before reanalysis", async () => {
+    const recoveryDir = path.join(TEST_UPLOAD_ROOT, "cash-flow", "template-analyses")
+    const recoveryFile = path.join(recoveryDir, `${Date.now()}_PLC_Cash_Flow_Template_v2.xlsx`)
+    fs.mkdirSync(recoveryDir, { recursive: true })
+    await writeTinyWorkbook(recoveryFile)
+
+    mockTemplateModel.findByPk.mockResolvedValue(
+      createTemplateRecord({
+        id: "template-archive-recover",
+        template_file_name: "PLC_Cash_Flow_Template_v2.xlsx",
+        template_file_path: path.join(tempDir, "missing_template.xlsx"),
+        activeVersion: createTemplateVersionRecord({
+          source_file_name: "PLC_Cash_Flow_Template_v2.xlsx",
+          source_file_path: path.join(tempDir, "missing_active_source.xlsx"),
+        }),
+      }),
+    )
+
+    const response = await request(app).post("/api/v1/cash-flow/templates/template-archive-recover/reanalyze")
+
+    const expectedRestoredPath = path.join(
+      TEST_UPLOAD_ROOT,
+      "cash-flow",
+      "templates",
+      "template-archive-recover_PLC_Cash_Flow_Template_v2.xlsx",
+    )
+    expect(response.status).toBe(200)
+    expect(fs.existsSync(expectedRestoredPath)).toBe(true)
     expect(mockTemplateIngestionService.ingestTemplateSchema).toHaveBeenCalled()
   })
 
@@ -819,5 +1022,27 @@ describe("cash-flow API", () => {
     expect(response.status).toBe(200)
     expect(String(response.headers["content-disposition"] || "").toLowerCase()).toContain("attachment")
     expect(response.body.slice(0, 2).toString()).toBe("PK")
+  })
+
+  test("parses and inspects a template version structure", async () => {
+    const parseResponse = await request(app).post(
+      "/api/v1/cash-flow/templates/template-1/versions/template-version-1/parse",
+    )
+
+    expect(parseResponse.status).toBe(200)
+    expect(parseResponse.body.data.template_version.id).toBe("template-version-1")
+    expect(parseResponse.body.data.structure.templateVersionId).toBe("template-version-1")
+
+    const structureResponse = await request(app).get(
+      "/api/v1/cash-flow/templates/template-1/versions/template-version-1/structure",
+    )
+    expect(structureResponse.status).toBe(200)
+    expect(structureResponse.body.data.structure.sheets).toHaveLength(1)
+
+    const rowsResponse = await request(app).get(
+      "/api/v1/cash-flow/templates/template-1/versions/template-version-1/rows",
+    )
+    expect(rowsResponse.status).toBe(200)
+    expect(rowsResponse.body.data.rows[0].rowLabel).toBe("Subscriptions")
   })
 })

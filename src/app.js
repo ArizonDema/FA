@@ -9,6 +9,7 @@ const config = require("./config/app")
 const logger = require("./config/logger")
 const swaggerSpec = require("./config/swagger")
 const errorHandler = require("./middlewares/errorHandler")
+const HealthService = require("./modules/health/services/health.service")
 
 // Import routes
 const authRoutes = require("./routes/auth.routes")
@@ -17,6 +18,9 @@ const adminRoutes = require("./routes/admin.routes")
 const systemRoutes = require("./routes/system.routes")
 const fundAdminRoutes = require("./routes/fund-admin.routes")
 const cashFlowRoutes = require("./routes/cash-flow.routes")
+const semanticRoutes = require("./modules/semantic/routes/semantic.routes")
+const mappingRoutes = require("./modules/mappings/routes/mappings.routes")
+const auditRoutes = require("./modules/audit/routes/audit.routes")
 
 /**
  * Initialize Express Application
@@ -64,17 +68,12 @@ app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec))
 
 // Health check endpoint
 app.get("/health", (req, res) => {
-  const runtimeStatus = app.locals.runtimeStatus || {}
-  const dbConnected = runtimeStatus.database === "connected"
-  res.status(200).json({
-    status: dbConnected ? "success" : "degraded",
-    message: "CSS Invest Backend is running",
-    timestamp: new Date().toISOString(),
-    environment: config.env,
-    database: runtimeStatus.database || "unknown",
-    bgJobsStarted: Boolean(runtimeStatus.bgJobsStarted),
-    lastDbError: runtimeStatus.lastDbError || null,
-  })
+  return res.status(200).json(
+    HealthService.getRuntimeHealth({
+      runtimeStatus: app.locals.runtimeStatus || {},
+      environment: config.env,
+    }),
+  )
 })
 
 // Graceful startup guard while database is still connecting
@@ -99,6 +98,9 @@ app.use(`${config.apiPrefix}/investor`, investorRoutes)
 app.use(`${config.apiPrefix}/admin`, adminRoutes)
 app.use(`${config.apiPrefix}`, fundAdminRoutes)
 app.use(`${config.apiPrefix}/cash-flow`, cashFlowRoutes)
+app.use(`${config.apiPrefix}/semantic-concepts`, semanticRoutes)
+app.use(`${config.apiPrefix}/mappings`, mappingRoutes)
+app.use(`${config.apiPrefix}/audit-events`, auditRoutes)
 app.use(`${config.apiPrefix}/system`, systemRoutes)
 
 const frontendDistPath = path.resolve(__dirname, "..", "frontend", "dist")

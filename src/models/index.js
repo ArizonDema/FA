@@ -6,7 +6,6 @@ const Sequelize = require("sequelize")
 const basename = path.basename(__filename)
 const env = process.env.NODE_ENV || "development"
 const config = require(__dirname + "/../config/database.js")[env]
-const logger = require("../config/logger")
 const db = {}
 
 let sequelize
@@ -16,18 +15,7 @@ if (config.use_env_variable) {
   sequelize = new Sequelize(config.database, config.username, config.password, config)
 }
 
-// Test database connection
-sequelize
-  .authenticate()
-  .then(() => {
-    logger.info("Database connection has been established successfully.")
-  })
-  .catch((err) => {
-    logger.error("Unable to connect to the database:", err)
-  })
-
-// Load all models and log them for test and debug purposes
-
+// Load models without side effects. Bootstrap and health services own DB probing.
 fs.readdirSync(__dirname)
   .filter((file) => {
     return file.indexOf(".") !== 0 && file !== basename && file.slice(-3) === ".js"
@@ -37,29 +25,28 @@ fs.readdirSync(__dirname)
     db[model.name] = model
   })
 
-  console.log("Loaded models:", Object.keys(db))
-
-  // Loaded models: [
-  //   'CashLedger',
-  //   'FeeRecord',
-  //   'InvestmentContract',
-  //   'Portfolio',
-  //   'PortfolioNavHistory',
-  //   'PortfolioRound',
-  //   'StockAsset',
-  //   'StockPosition',
-  //   'TradeTransaction',
-  //   'UnitLedger',
-  //   'User',
-  //   'WithdrawalRequest'
-  // ]
-
 // Set up associations
 Object.keys(db).forEach((modelName) => {
   if (db[modelName].associate) {
     db[modelName].associate(db)
   }
 })
+
+if (db.Portfolio && !db.Fund) {
+  db.Fund = db.Portfolio
+}
+
+if (db.CashFlowTemplate && !db.Template) {
+  db.Template = db.CashFlowTemplate
+}
+
+if (db.ReportTemplate && !db.ReportDefinition) {
+  db.ReportDefinition = db.ReportTemplate
+}
+
+if (db.AuditLog && !db.AuditEvent) {
+  db.AuditEvent = db.AuditLog
+}
 
 db.sequelize = sequelize
 db.Sequelize = Sequelize

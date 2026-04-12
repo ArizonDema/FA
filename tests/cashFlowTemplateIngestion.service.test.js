@@ -1,6 +1,7 @@
 const fs = require("fs")
 const os = require("os")
 const path = require("path")
+const http = require("http")
 const ExcelJS = require("exceljs")
 
 const mockCashFlowService = {
@@ -46,14 +47,44 @@ async function writeWorkbook(filePath) {
 
 describe("cashFlowTemplateIngestion.service", () => {
   let tempDir
+  let httpRequestSpy
 
   beforeEach(() => {
     jest.clearAllMocks()
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "cf-ingestion-test-"))
-    global.fetch = jest.fn().mockRejectedValue(new Error("This operation was aborted"))
+    httpRequestSpy = jest.spyOn(http, "request").mockImplementation((options, callback) => {
+      const handlers = {}
+      let timeoutHandler = null
+      const request = {
+        setTimeout(ms, handler) {
+          timeoutHandler = handler
+          return request
+        },
+        on(event, handler) {
+          handlers[event] = handler
+          return request
+        },
+        write: jest.fn(),
+        end: jest.fn(() => {
+          if (typeof callback === "function") {
+            void callback
+          }
+          if (typeof timeoutHandler === "function") {
+            timeoutHandler()
+          }
+        }),
+        destroy(error) {
+          if (typeof handlers.error === "function") {
+            handlers.error(error)
+          }
+        },
+      }
+      return request
+    })
   })
 
   afterEach(() => {
+    httpRequestSpy?.mockRestore()
     fs.rmSync(tempDir, { recursive: true, force: true })
   })
 
@@ -171,6 +202,6 @@ describe("cashFlowTemplateIngestion.service", () => {
     expect(result.analysis_source).toBe("deterministic_bypass")
     expect(result.needs_human_review).toBe(false)
     expect(result.llm_meta_json?.skipped).toBe(true)
-    expect(global.fetch).not.toHaveBeenCalled()
+    expect(httpRequestSpy).not.toHaveBeenCalled()
   })
 })

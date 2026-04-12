@@ -11,6 +11,11 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: "created_by",
         as: "createdBy",
       })
+
+      ReportRun.belongsTo(models.TemplateVersion, {
+        foreignKey: "template_version_id",
+        as: "templateVersion",
+      })
     }
   }
 
@@ -33,6 +38,10 @@ module.exports = (sequelize, DataTypes) => {
       period_end: DataTypes.DATEONLY,
       inputs_json: DataTypes.JSON,
       output_paths: DataTypes.JSON,
+      template_version_id: DataTypes.UUID,
+      mapping_snapshot_json: DataTypes.JSON,
+      input_artifacts_json: DataTypes.JSON,
+      output_artifacts_json: DataTypes.JSON,
       created_by: DataTypes.UUID,
     },
     {

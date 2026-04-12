@@ -1,6 +1,7 @@
 const express = require("express")
-const { Portfolio, User, InvestmentContract, PortfolioRound } = require("../models")
 const ResponseHandler = require("../utils/responseHandler")
+const HealthService = require("../modules/health/services/health.service")
+const LlmOrchestratorService = require("../modules/llm/services/llmOrchestrator.service")
 
 const router = express.Router()
 
@@ -16,21 +17,39 @@ const router = express.Router()
  */
 router.get("/health", async (req, res) => {
   try {
-    // Test database connection
-    await Portfolio.findOne()
-
-    ResponseHandler.success(
-      res,
-      {
-        status: "healthy",
-        timestamp: new Date().toISOString(),
-        uptime: process.uptime(),
-        memory: process.memoryUsage(),
-      },
-      "System is healthy",
-    )
+    const payload = await HealthService.getSystemHealth()
+    ResponseHandler.success(res, payload, "System is healthy")
   } catch (error) {
     ResponseHandler.serverError(res, "System health check failed")
+  }
+})
+
+/**
+ * @swagger
+ * /system/llm/health:
+ *   get:
+ *     summary: LLM/Ollama health check
+ *     tags: [System]
+ *     responses:
+ *       200:
+ *         description: Ollama reachable and configured model is available
+ *       503:
+ *         description: Ollama unreachable or configured model missing
+ */
+router.get("/llm/health", async (req, res, next) => {
+  try {
+    const payload = await LlmOrchestratorService.getHealth()
+    const healthy = payload.status === "ok"
+    const statusCode = healthy ? 200 : 503
+
+    return res.status(statusCode).json({
+      status: healthy ? "success" : "error",
+      message: healthy ? "LLM connectivity is healthy" : "LLM connectivity issue detected",
+      data: payload,
+      timestamp: new Date().toISOString(),
+    })
+  } catch (error) {
+    return next(error)
   }
 })
 
@@ -46,23 +65,8 @@ router.get("/health", async (req, res) => {
  */
 router.get("/stats", async (req, res, next) => {
   try {
-    const [totalUsers, totalInvestments, totalPortfolios, activeRounds] = await Promise.all([
-      User.count(),
-      InvestmentContract.count(),
-      Portfolio.count(),
-      PortfolioRound.count({ where: { status: "open" } }),
-    ])
-
-    ResponseHandler.success(
-      res,
-      {
-        totalUsers,
-        totalInvestments,
-        totalPortfolios,
-        activeRounds,
-      },
-      "Statistics retrieved",
-    )
+    const stats = await HealthService.getStats()
+    ResponseHandler.success(res, stats, "Statistics retrieved")
   } catch (error) {
     next(error)
   }

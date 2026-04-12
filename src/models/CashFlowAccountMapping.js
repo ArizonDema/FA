@@ -57,6 +57,23 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
         defaultValue: "auto_semantic",
       },
+      status: {
+        type: DataTypes.ENUM("suggested", "approved", "rejected"),
+        allowNull: false,
+        defaultValue: "suggested",
+      },
+      effective_start: {
+        type: DataTypes.DATEONLY,
+        allowNull: true,
+      },
+      effective_end: {
+        type: DataTypes.DATEONLY,
+        allowNull: true,
+      },
+      metadata_json: {
+        type: DataTypes.JSON,
+        allowNull: true,
+      },
       usage_count: {
         type: DataTypes.INTEGER,
         allowNull: false,

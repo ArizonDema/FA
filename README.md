@@ -213,6 +213,20 @@ EARLY_WITHDRAWAL_PENALTY=5.0
 
 # Lock-up
 DEFAULT_LOCKUP_MONTHS=12
+
+# Ollama (template analysis)
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=qwen3:14b
+OLLAMA_CHAT_PATH=/api/chat
+OLLAMA_HEALTH_PATH=/api/tags
+OLLAMA_TIMEOUT_MS=600000
+OLLAMA_HEALTH_TIMEOUT_MS=10000
+OLLAMA_MAX_ATTEMPTS=2
+OLLAMA_NUM_PREDICT=800
+OLLAMA_THINK=false
+OLLAMA_FORCE_JSON_OUTPUT=true
+OLLAMA_COMPACT_PROMPT_FIRST=true
+OLLAMA_COMPACT_PROMPT_THRESHOLD_CHARS=22000
 \`\`\`
 
 ## Running the Application
@@ -333,6 +347,10 @@ http://localhost:8000/api/docs
 - `POST /api/v1/admin/nav/calculate/:roundId` - Calculate NAV
 - `PUT /api/v1/admin/withdrawals/:id/approve` - Approve withdrawal
 - `GET /api/v1/admin/aum` - View AUM
+
+#### System
+- `GET /api/v1/system/health` - System health
+- `GET /api/v1/system/llm/health` - Ollama connectivity/model health for template analysis
 
 ### Sample API Requests
 

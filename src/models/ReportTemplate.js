@@ -26,7 +26,14 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
       },
       template_body: DataTypes.TEXT,
+      definition_json: DataTypes.JSON,
       version: DataTypes.STRING(50),
+      status: {
+        type: DataTypes.ENUM("draft", "active", "archived"),
+        allowNull: false,
+        defaultValue: "draft",
+      },
+      published_at: DataTypes.DATE,
       assigned_share_class_id: DataTypes.UUID,
     },
     {

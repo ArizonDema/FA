@@ -23,12 +23,15 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
       },
       entity_id: DataTypes.STRING(120),
+      event_type: DataTypes.STRING(120),
       action: {
         type: DataTypes.STRING(120),
         allowNull: false,
       },
+      metadata_json: DataTypes.JSON,
       before_json: DataTypes.JSON,
       after_json: DataTypes.JSON,
+      occurred_at: DataTypes.DATE,
       created_at: {
         type: DataTypes.DATE,
         allowNull: false,

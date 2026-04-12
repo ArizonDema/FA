@@ -12,6 +12,16 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: "uploaded_by",
         as: "uploadedBy",
       })
+
+      CashFlowTemplate.hasMany(models.TemplateVersion, {
+        foreignKey: "template_id",
+        as: "versions",
+      })
+
+      CashFlowTemplate.belongsTo(models.TemplateVersion, {
+        foreignKey: "active_version_id",
+        as: "activeVersion",
+      })
     }
   }
 
@@ -34,6 +44,16 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING(50),
         allowNull: true,
       },
+      template_kind: {
+        type: DataTypes.STRING(50),
+        allowNull: false,
+        defaultValue: "cash_flow",
+      },
+      status: {
+        type: DataTypes.ENUM("draft", "active", "archived"),
+        allowNull: false,
+        defaultValue: "active",
+      },
       template_file_name: {
         type: DataTypes.STRING(255),
         allowNull: false,
@@ -50,6 +70,10 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.BOOLEAN,
         allowNull: false,
         defaultValue: false,
+      },
+      active_version_id: {
+        type: DataTypes.UUID,
+        allowNull: true,
       },
       uploaded_by: {
         type: DataTypes.UUID,

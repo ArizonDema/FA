@@ -1,6 +1,8 @@
 const fs = require("fs")
 const path = require("path")
 const crypto = require("crypto")
+const http = require("http")
+const https = require("https")
 const ExcelJS = require("exceljs")
 const config = require("../config/app")
 const logger = require("../config/logger")
@@ -15,6 +17,9 @@ const MAX_HEADER_CANDIDATES = 10
 const MAX_TABLE_CANDIDATES = 8
 const MAX_ISSUES = 12
 const INGESTION_PIPELINE_VERSION = "2026-04-06.v4"
+const DEFAULT_OLLAMA_TIMEOUT_MS = 600000
+const DEFAULT_OLLAMA_HEALTH_TIMEOUT_MS = 10000
+const MAX_ERROR_DETAILS_LENGTH = 400
 
 function computeTemplateHash(templatePath) {
   const content = fs.readFileSync(templatePath)
@@ -249,9 +254,13 @@ function buildSystemPrompt() {
     '  "confidence": number_between_0_and_1,',
     '  "issues": ["..."],',
     '  "required_anchors": ["..."],',
-    '  "config_json": { ... }',
+    '  "config_overrides": { ... }',
     "}",
-    "config_json MUST be a cash-flow template v3 config compatible with the validator constraints:",
+    "config_overrides is OPTIONAL and should be partial JSON patches applied on top of deterministic baseline config.",
+    "Only include fields that must change. Keep it compact.",
+    "Allowed config_overrides keys: sheet_name, layout_type, period_axis.orientation.",
+    "Do NOT include long arrays or cell matrices (no period_bindings, bucket_bindings, opening_binding, closing_binding).",
+    "The final merged config must stay compatible with cash-flow template v3 validator constraints:",
     'version="v3"; sheet_name; layout_type; period_axis{orientation,row labels + period_bindings with same period_key set};',
     "bucket_bindings each include bucket_key,label,direction(inflow/outflow),fallback,rules,cells for every period_key;",
     "opening_binding/closing_binding optional but if present must include cells for every period_key;",
@@ -262,6 +271,7 @@ function buildSystemPrompt() {
 }
 
 function buildUserPrompt({ rawStructure, deterministicSuggestion, attempt, previousErrors = [] }) {
+  const deterministicHint = buildDeterministicHint(deterministicSuggestion)
   const correctionNote =
     attempt > 1
       ? `Previous output failed validation. Fix these exact issues: ${previousErrors.join(" | ")}`
@@ -270,19 +280,55 @@ function buildUserPrompt({ rawStructure, deterministicSuggestion, attempt, previ
   return [
     "Create an engine-ready v3 cash-flow template config from this extracted workbook structure.",
     correctionNote,
-    "Prior deterministic suggestion (reference, improve if needed):",
-    JSON.stringify(deterministicSuggestion, null, 2),
+    "Deterministic baseline summary (use this as starting point, then improve):",
+    JSON.stringify(deterministicHint),
     "Extracted workbook structure:",
-    JSON.stringify(rawStructure, null, 2),
+    JSON.stringify(rawStructure),
     "Hard requirements:",
     "1) JSON object only.",
-    "2) config_json must pass strict schema validation for v3.",
-    "3) Keep issues and required_anchors concise.",
-    "4) Confidence should reflect extraction certainty.",
+    "2) Keep config_overrides minimal; if deterministic baseline already looks right, return config_overrides: {}.",
+    "3) Only override sheet_name/layout_type/period_axis.orientation. Never emit long arrays.",
+    "4) Keep issues and required_anchors concise.",
+    "5) Confidence should reflect extraction certainty.",
   ].join("\n")
 }
 
+function buildDeterministicHint(deterministicSuggestion) {
+  const configHint = deterministicSuggestion?.suggested_config_json || {}
+  const periodLabels = Array.isArray(configHint?.period_axis?.labels)
+    ? configHint.period_axis.labels
+        .map((item) => normalizeText(item?.label || item?.period_key))
+        .filter(Boolean)
+        .slice(0, 8)
+    : []
+
+  const bucketBindings = Array.isArray(configHint?.bucket_bindings)
+    ? configHint.bucket_bindings.slice(0, 8).map((bucket) => ({
+        bucket_key: normalizeText(bucket?.bucket_key || null) || null,
+        label: normalizeText(bucket?.label || null) || null,
+        direction: normalizeText(bucket?.direction || null) || null,
+      }))
+    : []
+
+  return {
+    detected_layout_type: normalizeText(deterministicSuggestion?.detected_layout_type || null) || null,
+    confidence: Number(deterministicSuggestion?.confidence || 0),
+    issues: normalizeIssues(deterministicSuggestion?.issues).slice(0, 6),
+    required_anchors: normalizeRequiredAnchors(deterministicSuggestion?.required_anchors).slice(0, 6),
+    config_hint: {
+      sheet_name: normalizeText(configHint?.sheet_name || null) || null,
+      layout_type: normalizeText(configHint?.layout_type || null) || null,
+      period_orientation: normalizeText(configHint?.period_axis?.orientation || null) || null,
+      period_labels: periodLabels,
+      bucket_bindings: bucketBindings,
+      has_opening_binding: Boolean(configHint?.opening_binding),
+      has_closing_binding: Boolean(configHint?.closing_binding),
+    },
+  }
+}
+
 function summarizeRawStructureForCompactPrompt(rawStructure) {
+  const periodTokenPattern = /(^|[^a-z])(q[1-4]|fy|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|20\d{2})([^a-z]|$)/i
   const worksheets = Array.isArray(rawStructure?.worksheets) ? rawStructure.worksheets : []
   return {
     source_file_name: rawStructure?.source_file_name || null,
@@ -294,13 +340,11 @@ function summarizeRawStructureForCompactPrompt(rawStructure) {
           const cells = Array.isArray(row?.cells) ? row.cells : []
           const firstTextCell = cells.find((cell) => typeof cell?.value === "string" && normalizeText(cell.value))
           if (!firstTextCell) return null
-          return {
-            row: row.row,
-            label: normalizeText(firstTextCell.value).slice(0, 120),
-          }
+          return normalizeText(firstTextCell.value).slice(0, 80)
         })
         .filter(Boolean)
-        .slice(0, 30)
+
+      const uniqueRowLabels = Array.from(new Set(rowLabelSamples)).slice(0, 16)
 
       const periodHeaderRows = sampledRows
         .map((row) => {
@@ -308,23 +352,28 @@ function summarizeRawStructureForCompactPrompt(rawStructure) {
           const labels = cells
             .map((cell) => (typeof cell?.value === "string" ? normalizeText(cell.value) : ""))
             .filter(Boolean)
-          if (labels.length < 4) return null
+          if (labels.length < 2 || !labels.some((label) => periodTokenPattern.test(label))) return null
           return {
             row: row.row,
-            labels: labels.slice(0, 16),
+            labels: labels.slice(0, 8),
           }
         })
         .filter(Boolean)
-        .slice(0, 8)
+        .slice(0, 4)
 
       return {
         name: worksheet?.name || null,
         row_count: Number(worksheet?.row_count || 0),
         column_count: Number(worksheet?.column_count || 0),
-        header_candidates: Array.isArray(worksheet?.header_candidates) ? worksheet.header_candidates.slice(0, 8) : [],
-        table_candidates: Array.isArray(worksheet?.table_candidates) ? worksheet.table_candidates.slice(0, 6) : [],
-        formula_cells: Array.isArray(worksheet?.formula_cells) ? worksheet.formula_cells.slice(0, 24) : [],
-        row_label_samples: rowLabelSamples,
+        header_candidates: Array.isArray(worksheet?.header_candidates)
+          ? worksheet.header_candidates.slice(0, 4).map((candidate) => ({
+              row: candidate?.row || null,
+              labels: Array.isArray(candidate?.labels) ? candidate.labels.slice(0, 8) : [],
+            }))
+          : [],
+        table_candidates: Array.isArray(worksheet?.table_candidates) ? worksheet.table_candidates.slice(0, 4) : [],
+        formula_examples: Array.isArray(worksheet?.formula_cells) ? worksheet.formula_cells.slice(0, 8) : [],
+        row_label_samples: uniqueRowLabels,
         period_header_rows: periodHeaderRows,
       }
     }),
@@ -333,6 +382,7 @@ function summarizeRawStructureForCompactPrompt(rawStructure) {
 
 function buildCompactUserPrompt({ rawStructure, deterministicSuggestion, attempt, previousErrors = [] }) {
   const compactSummary = summarizeRawStructureForCompactPrompt(rawStructure)
+  const deterministicHint = buildDeterministicHint(deterministicSuggestion)
   const correctionNote =
     attempt > 1
       ? `Previous output failed validation. Fix these exact issues: ${previousErrors.join(" | ")}`
@@ -341,15 +391,16 @@ function buildCompactUserPrompt({ rawStructure, deterministicSuggestion, attempt
   return [
     "Create an engine-ready v3 cash-flow template config from this compact workbook summary.",
     correctionNote,
-    "Prior deterministic suggestion (reference, improve if needed):",
-    JSON.stringify(deterministicSuggestion, null, 2),
+    "Deterministic baseline summary (starting point):",
+    JSON.stringify(deterministicHint),
     "Compact workbook summary:",
-    JSON.stringify(compactSummary, null, 2),
+    JSON.stringify(compactSummary),
     "Hard requirements:",
     "1) JSON object only.",
-    "2) config_json must pass strict schema validation for v3.",
-    "3) Detect opening/closing labels using business synonyms (cash at beginning/end, beginning cash, ending cash).",
-    "4) Keep issues and required_anchors concise.",
+    "2) Keep config_overrides minimal; if baseline looks right, return config_overrides: {}.",
+    "3) Only override sheet_name/layout_type/period_axis.orientation. Never emit long arrays.",
+    "4) Detect opening/closing labels using business synonyms (cash at beginning/end, beginning cash, ending cash).",
+    "5) Keep issues and required_anchors concise.",
   ].join("\n")
 }
 
@@ -373,6 +424,28 @@ function parseJsonObject(text) {
     }
     throw error
   }
+}
+
+function deepMergeConfig(base, patch) {
+  if (!patch || typeof patch !== "object") return Array.isArray(base) ? [...base] : { ...(base || {}) }
+  if (Array.isArray(base) || Array.isArray(patch)) {
+    return Array.isArray(patch) ? [...patch] : patch
+  }
+
+  const merged = { ...(base || {}) }
+  Object.entries(patch).forEach(([key, value]) => {
+    if (Array.isArray(value)) {
+      merged[key] = [...value]
+      return
+    }
+    if (value && typeof value === "object") {
+      merged[key] = deepMergeConfig(merged[key] && typeof merged[key] === "object" ? merged[key] : {}, value)
+      return
+    }
+    merged[key] = value
+  })
+
+  return merged
 }
 
 function normalizeIssues(value) {
@@ -443,42 +516,345 @@ function buildMinimalFallbackConfig(sheetName = "Cash Flow") {
   }
 }
 
-async function callOllamaChat({ messages }) {
-  const timeoutMs = Number(config.ollama?.timeoutMs || 90000)
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), timeoutMs)
-  const numPredict = Number(config.ollama?.numPredict)
-  const temperature = Number(config.ollama?.temperature)
+function trimTrailingSlash(value) {
+  return String(value || "").replace(/\/+$/g, "")
+}
 
-  try {
-    const response = await fetch(`${config.ollama.baseUrl}${config.ollama.chatPath}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
+function trimLeadingSlash(value) {
+  return String(value || "").replace(/^\/+/g, "")
+}
+
+function buildOllamaEndpoint(baseUrl, endpointPath = "/api/chat") {
+  const normalizedBase = trimTrailingSlash(baseUrl || "http://localhost:11434")
+  const normalizedPath = trimLeadingSlash(endpointPath || "/api/chat")
+  return `${normalizedBase}/${normalizedPath}`
+}
+
+function resolveOllamaTimeoutMs() {
+  const parsed = Number(config.ollama?.timeoutMs)
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return Math.round(parsed)
+  }
+  return DEFAULT_OLLAMA_TIMEOUT_MS
+}
+
+function resolveOllamaHealthTimeoutMs() {
+  const parsed = Number(config.ollama?.healthTimeoutMs)
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return Math.round(parsed)
+  }
+  return DEFAULT_OLLAMA_HEALTH_TIMEOUT_MS
+}
+
+function estimatePromptChars(messages) {
+  if (!Array.isArray(messages)) return 0
+  return messages.reduce((total, message) => total + String(message?.content || "").length, 0)
+}
+
+function truncateForLog(value, maxLength = MAX_ERROR_DETAILS_LENGTH) {
+  const text = normalizeText(value)
+  if (!text) return ""
+  if (text.length <= maxLength) return text
+  return `${text.slice(0, maxLength)}...`
+}
+
+function normalizeFailureCode(value, fallback = "llm_error") {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+  return normalized || fallback
+}
+
+function resolveCompactPromptThresholdChars() {
+  const parsed = Number(config.ollama?.compactPromptThresholdChars)
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return Math.round(parsed)
+  }
+  return 22000
+}
+
+function resolveCompactPromptFirst() {
+  return Boolean(config.ollama?.compactPromptFirst)
+}
+
+function shouldUseCompactPromptInitially({ rawStructure, deterministicSuggestion }) {
+  if (resolveCompactPromptFirst()) return true
+  const threshold = resolveCompactPromptThresholdChars()
+  const rawSize = JSON.stringify(rawStructure || {}).length
+  const deterministicSize = JSON.stringify(deterministicSuggestion || {}).length
+  return rawSize + deterministicSize >= threshold
+}
+
+function requestJsonOverHttp({ endpoint, method = "GET", body = null, timeoutMs }) {
+  return new Promise((resolve, reject) => {
+    let targetUrl = null
+    try {
+      targetUrl = new URL(endpoint)
+    } catch (error) {
+      const urlError = new Error(`Invalid Ollama endpoint URL: ${endpoint}`)
+      urlError.name = "InvalidUrlError"
+      reject(urlError)
+      return
+    }
+
+    const transport = targetUrl.protocol === "https:" ? https : http
+    const serializedBody = body === null || body === undefined ? null : JSON.stringify(body)
+    const headers = {
+      Accept: "application/json",
+      ...(serializedBody !== null ? { "Content-Type": "application/json" } : {}),
+      ...(serializedBody !== null ? { "Content-Length": Buffer.byteLength(serializedBody) } : {}),
+    }
+
+    let settled = false
+    let hardTimeout = null
+    const settle = (handler, value) => {
+      if (settled) return
+      settled = true
+      if (hardTimeout) clearTimeout(hardTimeout)
+      handler(value)
+    }
+
+    const request = transport.request(
+      {
+        protocol: targetUrl.protocol,
+        hostname: targetUrl.hostname,
+        port: targetUrl.port || (targetUrl.protocol === "https:" ? 443 : 80),
+        path: `${targetUrl.pathname}${targetUrl.search}`,
+        method,
+        headers,
       },
-      body: JSON.stringify({
-        model: config.ollama.model,
-        stream: false,
-        messages,
-        keep_alive: config.ollama?.keepAlive || "10m",
-        options: {
-          ...(Number.isFinite(numPredict) && numPredict > 0 ? { num_predict: Math.round(numPredict) } : {}),
-          ...(Number.isFinite(temperature) ? { temperature: Math.max(0, temperature) } : {}),
-        },
-      }),
-      signal: controller.signal,
+      (response) => {
+        const chunks = []
+        response.on("data", (chunk) => chunks.push(chunk))
+        response.on("end", () => {
+          const bodyText = Buffer.concat(chunks).toString("utf8")
+          settle(resolve, {
+            statusCode: Number(response.statusCode || 0),
+            headers: response.headers || {},
+            bodyText,
+          })
+        })
+      },
+    )
+
+    request.setTimeout(timeoutMs, () => {
+      const timeoutError = new Error(`Ollama request timed out after ${timeoutMs}ms`)
+      timeoutError.name = "AbortError"
+      timeoutError.code = "ETIMEDOUT"
+      request.destroy(timeoutError)
     })
 
-    if (!response.ok) {
-      const body = await response.text()
-      throw new Error(`Ollama request failed (${response.status}): ${body}`)
+    hardTimeout = setTimeout(() => {
+      const timeoutError = new Error(`Ollama request timed out after ${timeoutMs}ms`)
+      timeoutError.name = "AbortError"
+      timeoutError.code = "ETIMEDOUT"
+      request.destroy(timeoutError)
+    }, timeoutMs)
+
+    request.on("error", (error) => settle(reject, error))
+
+    if (serializedBody !== null) {
+      request.write(serializedBody)
+    }
+    request.end()
+  })
+}
+
+function classifyOllamaError(error, { timeoutMs }) {
+  const rawMessage = normalizeText(error?.failure_reason || error?.message || "Unknown Ollama error")
+  const lowerMessage = rawMessage.toLowerCase()
+  const causeCode = String(error?.cause?.code || "").trim().toUpperCase()
+  const statusCode = Number(error?.statusCode || error?.status || NaN)
+
+  if (error?.name === "AbortError" || isTimeoutLikeError(rawMessage)) {
+    return {
+      code: "timeout",
+      reason: `Ollama request timed out after ${timeoutMs}ms`,
+      details: rawMessage,
+      isTimeout: true,
+    }
+  }
+
+  if (causeCode === "ECONNREFUSED" || lowerMessage.includes("econnrefused")) {
+    return {
+      code: "connection_refused",
+      reason: "Cannot connect to Ollama. Ensure Ollama is running and OLLAMA_BASE_URL is correct.",
+      details: rawMessage,
+      isTimeout: false,
+    }
+  }
+
+  if (causeCode === "ETIMEDOUT" || causeCode === "EHOSTUNREACH") {
+    return {
+      code: "network_timeout",
+      reason: "Network timeout while connecting to Ollama.",
+      details: rawMessage,
+      isTimeout: true,
+    }
+  }
+
+  if (
+    lowerMessage.includes("model") &&
+    (lowerMessage.includes("not found") || lowerMessage.includes("no such model"))
+  ) {
+    return {
+      code: "model_not_found",
+      reason: `Configured Ollama model "${config.ollama.model}" is not installed.`,
+      details: truncateForLog(rawMessage),
+      isTimeout: false,
+    }
+  }
+
+  if (Number.isFinite(statusCode)) {
+    return {
+      code: `http_${statusCode}`,
+      reason: `Ollama returned HTTP ${statusCode}.`,
+      details: truncateForLog(rawMessage),
+      isTimeout: false,
+    }
+  }
+
+  if (lowerMessage.includes("empty message")) {
+    return {
+      code: "empty_response",
+      reason: "Ollama returned an empty message payload.",
+      details: rawMessage,
+      isTimeout: false,
+    }
+  }
+
+  if (lowerMessage.includes("json") || lowerMessage.includes("unexpected token")) {
+    return {
+      code: "bad_response_json",
+      reason: "Failed to parse Ollama JSON response.",
+      details: truncateForLog(rawMessage),
+      isTimeout: false,
+    }
+  }
+
+  return {
+    code: normalizeFailureCode(error?.failure_code, "llm_error"),
+    reason: rawMessage || "Unknown Ollama error",
+    details: truncateForLog(rawMessage),
+    isTimeout: false,
+  }
+}
+
+function buildFallbackFailureReason({ attempts, errors, autoApproveDeterministicFallback }) {
+  const failedAttempts = Array.isArray(attempts)
+    ? attempts.filter((attempt) => String(attempt?.status || "").toLowerCase() === "failed")
+    : []
+
+  if (!failedAttempts.length) return null
+
+  const allTimeouts = failedAttempts.every((attempt) => String(attempt?.error_code || "") === "timeout")
+  const timeoutMs = Number(failedAttempts[failedAttempts.length - 1]?.timeout_ms || resolveOllamaTimeoutMs())
+  if (allTimeouts) {
+    const baseReason = `Ollama timed out after ${failedAttempts.length} attempt(s) at ${timeoutMs}ms timeout.`
+    return autoApproveDeterministicFallback
+      ? `${baseReason} Deterministic fallback was auto-approved.`
+      : `${baseReason} Human review is required.`
+  }
+
+  const lastAttempt = failedAttempts[failedAttempts.length - 1]
+  const lastReason =
+    normalizeText(lastAttempt?.error_reason) ||
+    normalizeText(errors?.[errors.length - 1]) ||
+    "Unknown LLM failure"
+  const lastCode = normalizeFailureCode(lastAttempt?.error_code, "llm_error")
+  return `LLM analysis failed after ${failedAttempts.length} attempt(s). Last failure [${lastCode}]: ${lastReason}`
+}
+
+async function callOllamaChat({ messages }) {
+  const endpoint = buildOllamaEndpoint(config.ollama?.baseUrl, config.ollama?.chatPath || "/api/chat")
+  const timeoutMs = resolveOllamaTimeoutMs()
+  const numPredict = Number(config.ollama?.numPredict)
+  const temperature = Number(config.ollama?.temperature)
+  const options = {
+    ...(Number.isFinite(numPredict) && numPredict > 0 ? { num_predict: Math.round(numPredict) } : {}),
+    ...(Number.isFinite(temperature) ? { temperature: Math.max(0, temperature) } : {}),
+  }
+  const requestPayload = {
+    model: config.ollama.model,
+    stream: false,
+    think: config.ollama?.think,
+    ...(config.ollama?.forceJsonOutput ? { format: "json" } : {}),
+    messages,
+    keep_alive: config.ollama?.keepAlive || "10m",
+    options,
+  }
+  const startedAt = Date.now()
+  const promptChars = estimatePromptChars(messages)
+  const requestBytes = Buffer.byteLength(JSON.stringify(requestPayload), "utf8")
+
+  logger.info("[v0] Ollama chat request started", {
+    ollama_base_url: config.ollama?.baseUrl || null,
+    ollama_endpoint: endpoint,
+    ollama_model: config.ollama?.model || null,
+    ollama_timeout_ms: timeoutMs,
+    ollama_num_predict: options.num_predict || null,
+    ollama_temperature: Number.isFinite(options.temperature) ? options.temperature : null,
+    ollama_think: requestPayload.think,
+    ollama_force_json_output: Boolean(config.ollama?.forceJsonOutput),
+    prompt_chars: promptChars,
+    request_bytes: requestBytes,
+    message_count: Array.isArray(messages) ? messages.length : 0,
+  })
+
+  try {
+    const response = await requestJsonOverHttp({
+      endpoint,
+      method: "POST",
+      body: requestPayload,
+      timeoutMs,
+    })
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      const error = new Error(`Ollama request failed (${response.statusCode}): ${truncateForLog(response.bodyText)}`)
+      error.name = "OllamaHttpError"
+      error.statusCode = response.statusCode
+      error.responseBody = response.bodyText
+      throw error
     }
 
-    const payload = await response.json()
+    let payload = null
+    try {
+      payload = JSON.parse(response.bodyText)
+    } catch (parseError) {
+      const error = new Error(`Ollama returned malformed JSON: ${truncateForLog(parseError.message)}`)
+      error.name = "OllamaParseError"
+      error.failure_code = "bad_response_json"
+      throw error
+    }
+
     const content = payload?.message?.content || ""
     if (!content) {
+      const thinking = normalizeText(payload?.message?.thinking || "")
+      if (thinking) {
+        const error = new Error(
+          "Ollama returned thinking trace without final answer. Set OLLAMA_THINK=false or raise OLLAMA_NUM_PREDICT.",
+        )
+        error.failure_code = "thinking_only_response"
+        throw error
+      }
       throw new Error("Ollama returned an empty message")
     }
+
+    const durationMs = Date.now() - startedAt
+    logger.info("[v0] Ollama chat request completed", {
+      ollama_base_url: config.ollama?.baseUrl || null,
+      ollama_endpoint: endpoint,
+      ollama_model: payload?.model || config.ollama?.model || null,
+      ollama_timeout_ms: timeoutMs,
+      ollama_think: requestPayload.think,
+      ollama_force_json_output: Boolean(config.ollama?.forceJsonOutput),
+      request_duration_ms: durationMs,
+      prompt_chars: promptChars,
+      request_bytes: requestBytes,
+    })
+
     return {
       content,
       meta: {
@@ -486,10 +862,121 @@ async function callOllamaChat({ messages }) {
         done: payload?.done ?? true,
         eval_count: payload?.eval_count ?? null,
         total_duration: payload?.total_duration ?? null,
+        endpoint,
+        timeout_ms: timeoutMs,
+        request_duration_ms: durationMs,
+        prompt_chars: promptChars,
+        request_bytes: requestBytes,
+        think: requestPayload.think,
       },
     }
-  } finally {
-    clearTimeout(timeout)
+  } catch (error) {
+    const durationMs = Date.now() - startedAt
+    const failure = classifyOllamaError(error, { timeoutMs })
+    logger.warn("[v0] Ollama chat request failed", {
+      ollama_base_url: config.ollama?.baseUrl || null,
+      ollama_endpoint: endpoint,
+      ollama_model: config.ollama?.model || null,
+      ollama_timeout_ms: timeoutMs,
+      ollama_think: requestPayload.think,
+      ollama_force_json_output: Boolean(config.ollama?.forceJsonOutput),
+      request_duration_ms: durationMs,
+      prompt_chars: promptChars,
+      request_bytes: requestBytes,
+      failure_code: failure.code,
+      failure_reason: failure.reason,
+      failure_details: failure.details || null,
+    })
+
+    const wrappedError = new Error(failure.reason)
+    wrappedError.name = "OllamaRequestError"
+    wrappedError.failure_code = failure.code
+    wrappedError.failure_reason = failure.reason
+    wrappedError.failure_details = failure.details || null
+    wrappedError.request_duration_ms = durationMs
+    wrappedError.timeout_ms = timeoutMs
+    wrappedError.endpoint = endpoint
+    wrappedError.model = config.ollama?.model || null
+    wrappedError.prompt_chars = promptChars
+    wrappedError.request_bytes = requestBytes
+    wrappedError.is_timeout = Boolean(failure.isTimeout)
+    throw wrappedError
+  }
+}
+
+async function checkOllamaHealth() {
+  const endpoint = buildOllamaEndpoint(config.ollama?.baseUrl, config.ollama?.healthPath || "/api/tags")
+  const timeoutMs = resolveOllamaHealthTimeoutMs()
+  const startedAt = Date.now()
+
+  try {
+    const response = await requestJsonOverHttp({
+      endpoint,
+      method: "GET",
+      timeoutMs,
+    })
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      const error = new Error(`Ollama health check failed (${response.statusCode}): ${truncateForLog(response.bodyText)}`)
+      error.name = "OllamaHttpError"
+      error.statusCode = response.statusCode
+      throw error
+    }
+
+    let payload = null
+    try {
+      payload = JSON.parse(response.bodyText || "{}")
+    } catch (parseError) {
+      const error = new Error(`Ollama health payload is not valid JSON: ${truncateForLog(parseError.message)}`)
+      error.name = "OllamaParseError"
+      error.failure_code = "bad_response_json"
+      throw error
+    }
+
+    const availableModels = Array.isArray(payload?.models)
+      ? payload.models
+          .map((item) => normalizeText(item?.name || item?.model).toLowerCase())
+          .filter(Boolean)
+      : []
+    const configuredModel = normalizeText(config.ollama?.model).toLowerCase()
+    const modelAvailable = availableModels.includes(configuredModel)
+    const durationMs = Date.now() - startedAt
+
+    return {
+      provider: "ollama",
+      status: modelAvailable ? "ok" : "degraded",
+      reachable: true,
+      model_available: modelAvailable,
+      model: config.ollama?.model || null,
+      think: config.ollama?.think,
+      force_json_output: Boolean(config.ollama?.forceJsonOutput),
+      base_url: config.ollama?.baseUrl || null,
+      chat_path: config.ollama?.chatPath || null,
+      health_path: config.ollama?.healthPath || null,
+      timeout_ms: timeoutMs,
+      request_duration_ms: durationMs,
+      available_models: availableModels.slice(0, 20),
+      failure_reason: modelAvailable ? null : `Configured model "${config.ollama?.model}" was not found in local Ollama`,
+    }
+  } catch (error) {
+    const failure = classifyOllamaError(error, { timeoutMs })
+    return {
+      provider: "ollama",
+      status: "unhealthy",
+      reachable: false,
+      model_available: false,
+      model: config.ollama?.model || null,
+      think: config.ollama?.think,
+      force_json_output: Boolean(config.ollama?.forceJsonOutput),
+      base_url: config.ollama?.baseUrl || null,
+      chat_path: config.ollama?.chatPath || null,
+      health_path: config.ollama?.healthPath || null,
+      timeout_ms: timeoutMs,
+      request_duration_ms: Date.now() - startedAt,
+      available_models: [],
+      failure_code: failure.code,
+      failure_reason: failure.reason,
+      failure_details: failure.details || null,
+    }
   }
 }
 
@@ -513,6 +1000,7 @@ function isTimeoutLikeError(message) {
 }
 
 async function ingestTemplateSchema({ templatePath, sourceFileName }) {
+  const ollamaEndpoint = buildOllamaEndpoint(config.ollama?.baseUrl, config.ollama?.chatPath || "/api/chat")
   const sourceHash = computeTemplateHash(templatePath)
   const deterministicSuggestion = await CashFlowService.analyzeTemplateWorkbook({ templatePath })
   const rawStructure = await extractTemplateRawStructure({ templatePath, sourceFileName })
@@ -540,20 +1028,23 @@ async function ingestTemplateSchema({ templatePath, sourceFileName }) {
         needs_human_review: false,
         llm_meta_json: {
           provider: "ollama",
-          endpoint: `${config.ollama.baseUrl}${config.ollama.chatPath}`,
+          endpoint: ollamaEndpoint,
           model: config.ollama.model,
+          timeout_ms: resolveOllamaTimeoutMs(),
           pipeline_version: INGESTION_PIPELINE_VERSION,
           skipped: true,
           skip_reason: "high_confidence_deterministic",
           attempts: [],
           raw_errors: [],
+          failure_reason: null,
         },
+        llm_failure_reason: null,
         analysis_source: "deterministic_bypass",
       }
     } catch (bypassError) {
       logger.warn("[v0] Deterministic bypass normalization failed; falling back to LLM", {
         template_path: templatePath,
-        message: bypassError.message,
+        error_reason: bypassError.message,
       })
     }
   }
@@ -561,7 +1052,22 @@ async function ingestTemplateSchema({ templatePath, sourceFileName }) {
   const errors = []
   const attempts = []
   const maxAttempts = Math.max(1, Number(config.ollama?.maxAttempts || 2))
-  let useCompactPrompt = false
+  const compactPromptThresholdChars = resolveCompactPromptThresholdChars()
+  let useCompactPrompt = shouldUseCompactPromptInitially({
+    rawStructure,
+    deterministicSuggestion,
+  })
+
+  logger.info("[v0] Template LLM prompt strategy selected", {
+    template_path: templatePath,
+    ollama_model: config.ollama?.model || null,
+    ollama_think: config.ollama?.think,
+    compact_prompt_first_config: resolveCompactPromptFirst(),
+    compact_prompt_threshold_chars: compactPromptThresholdChars,
+    use_compact_prompt_initially: useCompactPrompt,
+    raw_structure_chars: JSON.stringify(rawStructure || {}).length,
+    deterministic_hint_chars: JSON.stringify(deterministicSuggestion || {}).length,
+  })
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
@@ -586,12 +1092,48 @@ async function ingestTemplateSchema({ templatePath, sourceFileName }) {
           { role: "user", content: userPrompt },
         ],
       })
-      const parsed = parseJsonObject(llmResponse.content)
+      let parsed = null
+      try {
+        parsed = parseJsonObject(llmResponse.content)
+      } catch (parseError) {
+        parseError.failure_code = "bad_response_json"
+        parseError.failure_reason = `Failed to parse LLM JSON output: ${truncateForLog(parseError.message)}`
+        parseError.failure_details = truncateForLog(llmResponse.content, 800)
+        parseError.request_duration_ms = Number(llmResponse?.meta?.request_duration_ms || null)
+        parseError.timeout_ms = Number(llmResponse?.meta?.timeout_ms || resolveOllamaTimeoutMs())
+        parseError.endpoint = llmResponse?.meta?.endpoint || ollamaEndpoint
+        parseError.model = llmResponse?.meta?.model || config.ollama.model
+        parseError.prompt_chars = Number(llmResponse?.meta?.prompt_chars || null)
+        parseError.request_bytes = Number(llmResponse?.meta?.request_bytes || null)
+        throw parseError
+      }
       if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
         throw new Error("LLM output must be a JSON object")
       }
 
-      const configCandidate = parsed.config_json || parsed
+      const deterministicBaseConfig =
+        deterministicSuggestion.suggested_config_json ||
+        buildMinimalFallbackConfig(rawStructure.worksheets?.[0]?.name || "Cash Flow")
+
+      let configCandidate = deterministicBaseConfig
+      if (parsed.config_json && typeof parsed.config_json === "object" && !Array.isArray(parsed.config_json)) {
+        configCandidate = parsed.config_json
+      } else if (
+        parsed.config_overrides &&
+        typeof parsed.config_overrides === "object" &&
+        !Array.isArray(parsed.config_overrides)
+      ) {
+        configCandidate = deepMergeConfig(deterministicBaseConfig, parsed.config_overrides)
+      } else if (
+        parsed.version ||
+        parsed.layout_type ||
+        parsed.sheet_name ||
+        parsed.period_axis ||
+        parsed.bucket_bindings
+      ) {
+        configCandidate = deepMergeConfig(deterministicBaseConfig, parsed)
+      }
+
       const normalizedConfig = await normalizeConfigCandidate({
         configCandidate,
         templatePath,
@@ -628,27 +1170,45 @@ async function ingestTemplateSchema({ templatePath, sourceFileName }) {
         needs_human_review: false,
         llm_meta_json: {
           provider: "ollama",
-          endpoint: `${config.ollama.baseUrl}${config.ollama.chatPath}`,
+          endpoint: ollamaEndpoint,
           model: config.ollama.model,
+          timeout_ms: resolveOllamaTimeoutMs(),
           pipeline_version: INGESTION_PIPELINE_VERSION,
           attempts,
           raw_errors: errors,
+          failure_reason: null,
         },
+        llm_failure_reason: null,
         analysis_source: "llm",
       }
     } catch (error) {
-      const message = normalizeText(error.message || "Unknown LLM ingestion error")
-      errors.push(message)
+      const failureCode = normalizeFailureCode(error?.failure_code, "llm_error")
+      const failureReason = normalizeText(error?.failure_reason || error?.message || "Unknown LLM ingestion error")
+      errors.push(failureReason)
       attempts.push({
         attempt,
         status: "failed",
-        error: message,
+        error_code: failureCode,
+        error_reason: failureReason,
+        error_details: normalizeText(error?.failure_details || null) || null,
+        timeout_ms: Number(error?.timeout_ms || resolveOllamaTimeoutMs()),
+        request_duration_ms: Number(error?.request_duration_ms || null),
+        request_bytes: Number(error?.request_bytes || null),
+        endpoint: error?.endpoint || ollamaEndpoint,
+        model: error?.model || config.ollama.model,
       })
       logger.warn(`[v0] Template LLM analysis attempt ${attempt} failed`, {
         template_path: templatePath,
-        message,
+        failure_code: failureCode,
+        failure_reason: failureReason,
+        ollama_endpoint: error?.endpoint || ollamaEndpoint,
+        ollama_model: error?.model || config.ollama.model,
+        ollama_timeout_ms: Number(error?.timeout_ms || resolveOllamaTimeoutMs()),
+        request_duration_ms: Number(error?.request_duration_ms || null),
+        request_bytes: Number(error?.request_bytes || null),
+        failure_details: normalizeText(error?.failure_details || null) || null,
       })
-      if (isTimeoutLikeError(message) && attempt < maxAttempts) {
+      if ((Boolean(error?.is_timeout) || isTimeoutLikeError(failureReason)) && attempt < maxAttempts) {
         useCompactPrompt = true
       }
     }
@@ -664,7 +1224,7 @@ async function ingestTemplateSchema({ templatePath, sourceFileName }) {
     })
   } catch (fallbackError) {
     logger.warn("[v0] Fallback template config normalization failed, using minimal fallback", {
-      message: fallbackError.message,
+      error_reason: fallbackError.message,
     })
     normalizedFallback = buildMinimalFallbackConfig(rawStructure.worksheets?.[0]?.name || "Cash Flow")
   }
@@ -676,6 +1236,11 @@ async function ingestTemplateSchema({ templatePath, sourceFileName }) {
     timeoutOnlyFailure &&
     deterministicRequiredAnchors.length === 0 &&
     Number(deterministicSuggestion.confidence || 0) >= 0.65
+  const fallbackFailureReason = buildFallbackFailureReason({
+    attempts,
+    errors: normalizedErrors,
+    autoApproveDeterministicFallback: autoApproveDeterministicFallback,
+  })
   const fallbackIssues = autoApproveDeterministicFallback
     ? normalizeIssues([
         "LLM step timed out, so deterministic template analysis was used.",
@@ -698,12 +1263,15 @@ async function ingestTemplateSchema({ templatePath, sourceFileName }) {
     needs_human_review: !autoApproveDeterministicFallback,
     llm_meta_json: {
       provider: "ollama",
-      endpoint: `${config.ollama.baseUrl}${config.ollama.chatPath}`,
+      endpoint: ollamaEndpoint,
       model: config.ollama.model,
+      timeout_ms: resolveOllamaTimeoutMs(),
       pipeline_version: INGESTION_PIPELINE_VERSION,
       attempts,
       raw_errors: errors,
+      failure_reason: fallbackFailureReason,
     },
+    llm_failure_reason: fallbackFailureReason,
     analysis_source: autoApproveDeterministicFallback ? "deterministic_fallback" : "fallback",
   }
 }
@@ -713,7 +1281,10 @@ module.exports = {
   computeTemplateHash,
   extractTemplateRawStructure,
   ingestTemplateSchema,
+  checkOllamaHealth,
   __test: {
+    buildOllamaEndpoint,
+    classifyOllamaError,
     parseJsonObject,
     buildSystemPrompt,
     buildUserPrompt,

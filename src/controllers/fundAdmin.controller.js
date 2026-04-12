@@ -23,12 +23,12 @@ const {
   ReportTemplate,
   ReportRun,
   FundDocument,
-  AuditLog,
   CashLedger,
 } = require("../models")
 const ResponseHandler = require("../utils/responseHandler")
 const logger = require("../config/logger")
 const ReportService = require("../services/report.service")
+const AuditService = require("../modules/audit/services/audit.service")
 
 const DOCUMENT_DIR = path.join(__dirname, "..", "..", "uploads", "documents")
 
@@ -61,19 +61,13 @@ async function resolveRoundId(portfolioId, requestedRoundId) {
 }
 
 async function recordAudit(req, entityType, entityId, action, before, after) {
-  try {
-    await AuditLog.create({
-      actor_id: req.user?.id || null,
-      entity_type: entityType,
-      entity_id: entityId,
-      action,
-      before_json: before || null,
-      after_json: after || null,
-      created_at: new Date(),
-    })
-  } catch (error) {
-    logger.warn(`[v0] Audit log failed for ${entityType}:${entityId}`, error)
-  }
+  await AuditService.logRequestEvent(req, {
+    eventType: action,
+    entityType,
+    entityId,
+    before,
+    after,
+  })
 }
 
 class FundAdminController {

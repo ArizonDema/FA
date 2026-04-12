@@ -1,5 +1,21 @@
 require("dotenv").config()
 
+function parseBoolean(value, fallback = false) {
+  if (value === undefined || value === null || value === "") return fallback
+  if (typeof value === "boolean") return value
+  const normalized = String(value).trim().toLowerCase()
+  if (["true", "1", "yes", "y", "on"].includes(normalized)) return true
+  if (["false", "0", "no", "n", "off"].includes(normalized)) return false
+  return fallback
+}
+
+function parseOllamaThink(value, fallback = false) {
+  if (value === undefined || value === null || value === "") return fallback
+  const normalized = String(value).trim().toLowerCase()
+  if (["low", "medium", "high"].includes(normalized)) return normalized
+  return parseBoolean(value, fallback)
+}
+
 module.exports = {
   // Server Configuration
   env: process.env.NODE_ENV || "development",
@@ -51,11 +67,20 @@ module.exports = {
     baseUrl: process.env.OLLAMA_BASE_URL || "http://localhost:11434",
     model: process.env.OLLAMA_MODEL || "qwen3:14b",
     chatPath: process.env.OLLAMA_CHAT_PATH || "/api/chat",
-    timeoutMs: Number.parseInt(process.env.OLLAMA_TIMEOUT_MS || "90000", 10),
+    healthPath: process.env.OLLAMA_HEALTH_PATH || "/api/tags",
+    timeoutMs: Number.parseInt(
+      process.env.OLLAMA_TIMEOUT_MS || process.env.OLLAMA_CHAT_TIMEOUT_MS || "600000",
+      10,
+    ),
+    healthTimeoutMs: Number.parseInt(process.env.OLLAMA_HEALTH_TIMEOUT_MS || "10000", 10),
     maxAttempts: Number.parseInt(process.env.OLLAMA_MAX_ATTEMPTS || "2", 10),
     keepAlive: process.env.OLLAMA_KEEP_ALIVE || "10m",
     temperature: Number.parseFloat(process.env.OLLAMA_TEMPERATURE || "0.1"),
-    numPredict: Number.parseInt(process.env.OLLAMA_NUM_PREDICT || "1200", 10),
+    numPredict: Number.parseInt(process.env.OLLAMA_NUM_PREDICT || "800", 10),
+    think: parseOllamaThink(process.env.OLLAMA_THINK, false),
+    forceJsonOutput: parseBoolean(process.env.OLLAMA_FORCE_JSON_OUTPUT, true),
+    compactPromptFirst: parseBoolean(process.env.OLLAMA_COMPACT_PROMPT_FIRST, true),
+    compactPromptThresholdChars: Number.parseInt(process.env.OLLAMA_COMPACT_PROMPT_THRESHOLD_CHARS || "22000", 10),
     deterministicBypassConfidence: Number.parseFloat(process.env.OLLAMA_DETERMINISTIC_BYPASS_CONFIDENCE || "0.995"),
   },
 }
