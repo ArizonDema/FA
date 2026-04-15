@@ -21,6 +21,7 @@ const cashFlowRoutes = require("./routes/cash-flow.routes")
 const semanticRoutes = require("./modules/semantic/routes/semantic.routes")
 const mappingRoutes = require("./modules/mappings/routes/mappings.routes")
 const auditRoutes = require("./modules/audit/routes/audit.routes")
+const reviewRoutes = require("./modules/reviews/routes/review.routes")
 
 /**
  * Initialize Express Application
@@ -101,6 +102,7 @@ app.use(`${config.apiPrefix}/cash-flow`, cashFlowRoutes)
 app.use(`${config.apiPrefix}/semantic-concepts`, semanticRoutes)
 app.use(`${config.apiPrefix}/mappings`, mappingRoutes)
 app.use(`${config.apiPrefix}/audit-events`, auditRoutes)
+app.use(`${config.apiPrefix}/review-tasks`, reviewRoutes)
 app.use(`${config.apiPrefix}/system`, systemRoutes)
 
 const frontendDistPath = path.resolve(__dirname, "..", "frontend", "dist")

@@ -2,6 +2,9 @@ const { Fund, Portfolio } = require("../../../models")
 const ResponseHandler = require("../../../utils/responseHandler")
 const CashFlowService = require("../../../services/cashFlow.service")
 const StorageService = require("../../storage/services/storage.service")
+const MappingSuggestionService = require("../../mappings/services/mappingSuggestion.service")
+const LlmMappingAssistantService = require("../../mappings/services/llmMappingAssistant.service")
+const ReviewTaskService = require("../../reviews/services/reviewTask.service")
 const TemplateAnalysisService = require("../services/templateAnalysis.service")
 const TemplateService = require("../services/template.service")
 const TemplateParsingService = require("../services/templateParsing.service")
@@ -9,6 +12,13 @@ const { resolveFundId } = require("../../shared/fund")
 const { buildAnalysisConfigPayload } = require("../utils/templateAnalysis.util")
 
 const FundModel = Fund || Portfolio
+
+function isTruthy(value) {
+  if (typeof value === "boolean") return value
+  return String(value || "")
+    .trim()
+    .toLowerCase() === "true"
+}
 
 class CashFlowTemplateController {
   static async getTemplates(req, res, next) {
@@ -309,6 +319,143 @@ class CashFlowTemplateController {
           rows: result.rows,
         },
         "Template version rows retrieved",
+      )
+    } catch (error) {
+      return next(error)
+    }
+  }
+
+  static async suggestTemplateVersionMappings(req, res, next) {
+    try {
+      const result = await MappingSuggestionService.suggestTemplateVersionMappings({
+        templateId: req.params.id,
+        versionId: req.params.versionId,
+        actorId: req.user?.id || null,
+        limit: Number(req.body?.limit || req.query?.limit || 5),
+        minConfidence: Number(req.body?.min_confidence || req.query?.min_confidence || 0.18),
+        includeApproved: isTruthy(req.body?.include_approved) || isTruthy(req.query?.include_approved),
+      })
+
+      if (!result) {
+        return ResponseHandler.notFound(res, "Template version not found")
+      }
+
+      return ResponseHandler.success(
+        res,
+        {
+          template_version: result.version,
+          summary: result.summary,
+          suggestions: result.suggestions,
+        },
+        "Template mapping suggestions generated",
+      )
+    } catch (error) {
+      return next(error)
+    }
+  }
+
+  static async getTemplateVersionMappingSuggestions(req, res, next) {
+    try {
+      const result = await MappingSuggestionService.getTemplateVersionSuggestions({
+        templateId: req.params.id,
+        versionId: req.params.versionId,
+        status: req.query.status || "suggested",
+      })
+
+      if (!result) {
+        return ResponseHandler.notFound(res, "Template version not found")
+      }
+
+      return ResponseHandler.success(
+        res,
+        {
+          template_version: result.version,
+          suggestions: result.suggestions,
+        },
+        "Template mapping suggestions retrieved",
+      )
+    } catch (error) {
+      return next(error)
+    }
+  }
+
+  static async assistTemplateVersionMappings(req, res, next) {
+    try {
+      const result = await LlmMappingAssistantService.assistTemplateVersionMappings({
+        templateId: req.params.id,
+        versionId: req.params.versionId,
+        actorId: req.user?.id || null,
+      })
+
+      if (!result) {
+        return ResponseHandler.notFound(res, "Template version not found")
+      }
+
+      return ResponseHandler.success(
+        res,
+        {
+          template_version: result.version,
+          summary: result.summary,
+          deterministic_summary: result.deterministicSummary,
+          suggestions: result.suggestions,
+        },
+        result.summary?.llmEnabled
+          ? "LLM-assisted mapping suggestions generated"
+          : "LLM-assisted mapping is disabled; deterministic suggestions remain available",
+      )
+    } catch (error) {
+      return next(error)
+    }
+  }
+
+  static async getTemplateVersionLlmMappingSuggestions(req, res, next) {
+    try {
+      const result = await LlmMappingAssistantService.getTemplateVersionAssistedSuggestions({
+        templateId: req.params.id,
+        versionId: req.params.versionId,
+        status: req.query.status || "suggested",
+      })
+
+      if (!result) {
+        return ResponseHandler.notFound(res, "Template version not found")
+      }
+
+      return ResponseHandler.success(
+        res,
+        {
+          template_version: result.version,
+          suggestions: result.suggestions,
+        },
+        "LLM-assisted mapping suggestions retrieved",
+      )
+    } catch (error) {
+      return next(error)
+    }
+  }
+
+  static async createTemplateVersionReviewTasks(req, res, next) {
+    try {
+      const result = await ReviewTaskService.generateTemplateVersionReviewTasks({
+        templateId: req.params.id,
+        versionId: req.params.versionId,
+        actorId: req.user?.id || null,
+        force: isTruthy(req.body?.force) || isTruthy(req.query?.force),
+        allowDuplicateActive:
+          isTruthy(req.body?.allow_duplicate_active) || isTruthy(req.query?.allow_duplicate_active),
+      })
+
+      if (!result) {
+        return ResponseHandler.notFound(res, "Template version not found")
+      }
+
+      return ResponseHandler.success(
+        res,
+        {
+          template_version: result.version,
+          summary: result.summary,
+          review_tasks: result.reviewTasks,
+        },
+        "Review tasks generated for template version",
       )
     } catch (error) {
       return next(error)

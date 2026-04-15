@@ -17,6 +17,16 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: "template_row_id",
         as: "semanticMappings",
       })
+
+      TemplateRow.hasMany(models.TemplateRowMappingSuggestion, {
+        foreignKey: "template_row_id",
+        as: "mappingSuggestions",
+      })
+
+      TemplateRow.hasMany(models.LlmMappingTrace, {
+        foreignKey: "template_row_id",
+        as: "llmMappingTraces",
+      })
     }
   }
 

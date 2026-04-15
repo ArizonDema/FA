@@ -83,4 +83,30 @@ module.exports = {
     compactPromptThresholdChars: Number.parseInt(process.env.OLLAMA_COMPACT_PROMPT_THRESHOLD_CHARS || "22000", 10),
     deterministicBypassConfidence: Number.parseFloat(process.env.OLLAMA_DETERMINISTIC_BYPASS_CONFIDENCE || "0.995"),
   },
+
+  mappingAssistance: {
+    enabled: parseBoolean(process.env.MAPPING_LLM_ENABLED, true),
+    provider: process.env.MAPPING_LLM_PROVIDER || "ollama",
+    model: process.env.MAPPING_LLM_MODEL || process.env.OLLAMA_MODEL || "qwen3:14b",
+    baseUrl: process.env.MAPPING_LLM_BASE_URL || process.env.OLLAMA_BASE_URL || "http://localhost:11434",
+    chatPath: process.env.MAPPING_LLM_CHAT_PATH || process.env.OLLAMA_CHAT_PATH || "/api/chat",
+    timeoutMs: Number.parseInt(
+      process.env.MAPPING_LLM_TIMEOUT_MS || process.env.OLLAMA_TIMEOUT_MS || "120000",
+      10,
+    ),
+    maxAttempts: Number.parseInt(
+      process.env.MAPPING_LLM_MAX_ATTEMPTS || process.env.OLLAMA_MAX_ATTEMPTS || "1",
+      10,
+    ),
+    keepAlive: process.env.MAPPING_LLM_KEEP_ALIVE || process.env.OLLAMA_KEEP_ALIVE || "10m",
+    temperature: Number.parseFloat(process.env.MAPPING_LLM_TEMPERATURE || "0"),
+    numPredict: Number.parseInt(process.env.MAPPING_LLM_NUM_PREDICT || "600", 10),
+    think: parseOllamaThink(process.env.MAPPING_LLM_THINK, false),
+    forceJsonOutput: parseBoolean(process.env.MAPPING_LLM_FORCE_JSON_OUTPUT, true),
+    maxCandidates: Number.parseInt(process.env.MAPPING_LLM_MAX_CANDIDATES || "5", 10),
+    maxAdditionalCandidates: Number.parseInt(process.env.MAPPING_LLM_MAX_ADDITIONAL_CANDIDATES || "2", 10),
+    maxRowsPerRun: Number.parseInt(process.env.MAPPING_LLM_MAX_ROWS_PER_RUN || "25", 10),
+    minDeterministicConfidence: Number.parseFloat(process.env.MAPPING_LLM_MIN_DETERMINISTIC_CONFIDENCE || "0.18"),
+    promptVersion: process.env.MAPPING_LLM_PROMPT_VERSION || "phase5.v1",
+  },
 }

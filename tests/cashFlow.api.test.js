@@ -125,6 +125,20 @@ const mockTemplateParsingService = {
   getTemplateRows: jest.fn(),
 }
 
+const mockMappingSuggestionService = {
+  suggestTemplateVersionMappings: jest.fn(),
+  getTemplateVersionSuggestions: jest.fn(),
+}
+
+const mockLlmMappingAssistantService = {
+  assistTemplateVersionMappings: jest.fn(),
+  getTemplateVersionAssistedSuggestions: jest.fn(),
+}
+
+const mockReviewTaskService = {
+  generateTemplateVersionReviewTasks: jest.fn(),
+}
+
 const mockTemplateIngestionService = {
   computeTemplateHash: jest.fn(),
   ingestTemplateSchema: jest.fn(),
@@ -134,6 +148,9 @@ const mockTemplateIngestionService = {
 jest.mock("../src/services/cashFlowTemplateIngestion.service", () => mockTemplateIngestionService)
 
 jest.mock("../src/modules/templates/services/templateParsing.service", () => mockTemplateParsingService)
+jest.mock("../src/modules/mappings/services/mappingSuggestion.service", () => mockMappingSuggestionService)
+jest.mock("../src/modules/mappings/services/llmMappingAssistant.service", () => mockLlmMappingAssistantService)
+jest.mock("../src/modules/reviews/services/reviewTask.service", () => mockReviewTaskService)
 
 const cashFlowRoutes = require("../src/routes/cash-flow.routes")
 
@@ -334,6 +351,135 @@ describe("cash-flow API", () => {
         },
       ],
     })
+    mockMappingSuggestionService.suggestTemplateVersionMappings.mockResolvedValue({
+      template: createTemplateRecord(),
+      version: createTemplateVersionRecord(),
+      summary: {
+        rowsProcessed: 3,
+        rowsSkipped: 1,
+        suggestionsGenerated: 6,
+        averageCandidateCount: 8.33,
+        durationMs: 12,
+      },
+      suggestions: [
+        {
+          templateRow: {
+            id: "row-1",
+            label: "Subscriptions",
+            rowType: "data_row",
+          },
+          suggestions: [
+            {
+              semanticConceptKey: "subscriptions",
+              confidenceScore: 0.92,
+              rank: 1,
+            },
+          ],
+        },
+      ],
+    })
+    mockMappingSuggestionService.getTemplateVersionSuggestions.mockResolvedValue({
+      template: createTemplateRecord(),
+      version: createTemplateVersionRecord(),
+      suggestions: [
+        {
+          templateRow: {
+            id: "row-1",
+            label: "Subscriptions",
+            rowType: "data_row",
+          },
+          suggestions: [
+            {
+              semanticConceptKey: "subscriptions",
+              confidenceScore: 0.92,
+              rank: 1,
+            },
+          ],
+        },
+      ],
+    })
+    mockLlmMappingAssistantService.assistTemplateVersionMappings.mockResolvedValue({
+      template: createTemplateRecord(),
+      version: createTemplateVersionRecord(),
+      summary: {
+        rowsProcessed: 2,
+        rowsSkipped: 1,
+        rowsSucceeded: 2,
+        rowsFailed: 0,
+        disagreementRate: 0.5,
+        llmEnabled: true,
+        fallbackUsed: false,
+      },
+      deterministicSummary: {
+        rowsProcessed: 3,
+      },
+      suggestions: [
+        {
+          templateRow: {
+            id: "row-1",
+            label: "Subscriptions",
+            rowType: "data_row",
+          },
+          assessment: {
+            needsHumanReview: true,
+            disagreementFlag: true,
+          },
+          suggestions: [
+            {
+              semanticConceptKey: "subscriptions",
+              confidenceScore: 0.84,
+              llmScore: 0.9,
+              rank: 1,
+            },
+          ],
+        },
+      ],
+    })
+    mockLlmMappingAssistantService.getTemplateVersionAssistedSuggestions.mockResolvedValue({
+      template: createTemplateRecord(),
+      version: createTemplateVersionRecord(),
+      suggestions: [
+        {
+          templateRow: {
+            id: "row-1",
+            label: "Subscriptions",
+            rowType: "data_row",
+          },
+          assessment: {
+            needsHumanReview: false,
+            disagreementFlag: false,
+          },
+          suggestions: [
+            {
+              semanticConceptKey: "subscriptions",
+              confidenceScore: 0.84,
+              llmScore: 0.9,
+              rank: 1,
+            },
+          ],
+        },
+      ],
+    })
+    mockReviewTaskService.generateTemplateVersionReviewTasks.mockResolvedValue({
+      template: createTemplateRecord(),
+      version: createTemplateVersionRecord(),
+      summary: {
+        rowsConsidered: 3,
+        tasksCreated: 2,
+        rowsSkippedApproved: 1,
+      },
+      reviewTasks: [
+        {
+          id: "task-1",
+          status: "open",
+          reviewReason: "llm_disagreement",
+          target: {
+            id: "row-1",
+            label: "Subscriptions",
+          },
+        },
+      ],
+    })
     mockCashFlowService.generateCashFlowReport.mockResolvedValue({
       outputFilePath: path.join(tempDir, "output.xlsx"),
       warnings: [],
@@ -342,11 +488,32 @@ describe("cash-flow API", () => {
         totals: {
           closing_balance_december: 100,
         },
+        mapping_summary: {
+          total_cash_movements: 2,
+          mapped_cash_movements: 2,
+        },
       },
       mapping: {
         auto_mappings_created: [],
         low_confidence_mappings: [],
-        final_bucket_assignments: [],
+        final_bucket_assignments: [
+          {
+            normalized_account: "management_fee_expense",
+            bucket_key: "ops_outflow",
+            confidence: 0.92,
+            source: "template_rule",
+            grounding_status: "template_rule",
+            abs_amount: 100,
+          },
+          {
+            normalized_account: "custody_fee_expense",
+            bucket_key: "ops_outflow",
+            confidence: 0.88,
+            source: "manual_rule",
+            grounding_status: "approved",
+            abs_amount: 50,
+          },
+        ],
       },
     })
     mockTemplateIngestionService.computeTemplateHash.mockReturnValue("sha256-template")
@@ -898,6 +1065,32 @@ describe("cash-flow API", () => {
       preview: {
         monthly: [{ month: "Jan", opening_balance: 0, net_cash_flow: 50, closing_balance: 50, buckets: {} }],
         totals: { closing_balance_december: 50 },
+        mapping_summary: {
+          total_cash_movements: 2,
+          mapped_cash_movements: 2,
+        },
+      },
+      mapping: {
+        auto_mappings_created: [],
+        low_confidence_mappings: [],
+        final_bucket_assignments: [
+          {
+            normalized_account: "subscriptions",
+            bucket_key: "financing_inflow",
+            confidence: 0.95,
+            source: "template_rule",
+            grounding_status: "template_rule",
+            abs_amount: 100,
+          },
+          {
+            normalized_account: "management_fees",
+            bucket_key: "ops_outflow",
+            confidence: 0.9,
+            source: "manual_rule",
+            grounding_status: "approved",
+            abs_amount: 50,
+          },
+        ],
       },
     })
 
@@ -912,6 +1105,8 @@ describe("cash-flow API", () => {
     expect(response.status).toBe(200)
     expect(response.body.data.outputs.xlsx).toBe(true)
     expect(response.body.data.preview.monthly).toHaveLength(1)
+    expect(response.body.data.report_reliability.reportReliabilityStatus).toBe("grounded")
+    expect(response.body.data.report_reliability.humanReviewRequired).toBe(false)
     expect(mockCashFlowService.generateCashFlowReport).toHaveBeenCalled()
   })
 
@@ -1044,5 +1239,60 @@ describe("cash-flow API", () => {
     )
     expect(rowsResponse.status).toBe(200)
     expect(rowsResponse.body.data.rows[0].rowLabel).toBe("Subscriptions")
+  })
+
+  test("generates and retrieves deterministic mapping suggestions for a template version", async () => {
+    const generateResponse = await request(app).post(
+      "/api/v1/cash-flow/templates/template-1/versions/template-version-1/suggest-mappings",
+    )
+
+    expect(generateResponse.status).toBe(200)
+    expect(generateResponse.body.data.summary.rowsProcessed).toBe(3)
+    expect(generateResponse.body.data.suggestions[0].suggestions[0].semanticConceptKey).toBe("subscriptions")
+
+    const listResponse = await request(app).get(
+      "/api/v1/cash-flow/templates/template-1/versions/template-version-1/mapping-suggestions",
+    )
+
+    expect(listResponse.status).toBe(200)
+    expect(listResponse.body.data.suggestions[0].templateRow.label).toBe("Subscriptions")
+    expect(mockMappingSuggestionService.suggestTemplateVersionMappings).toHaveBeenCalled()
+    expect(mockMappingSuggestionService.getTemplateVersionSuggestions).toHaveBeenCalled()
+  })
+
+  test("generates and retrieves llm-assisted mapping suggestions for a template version", async () => {
+    const assistResponse = await request(app).post(
+      "/api/v1/cash-flow/templates/template-1/versions/template-version-1/assist-mappings",
+    )
+
+    expect(assistResponse.status).toBe(200)
+    expect(assistResponse.body.data.summary.rowsSucceeded).toBe(2)
+    expect(assistResponse.body.data.suggestions[0].suggestions[0].llmScore).toBe(0.9)
+
+    const listResponse = await request(app).get(
+      "/api/v1/cash-flow/templates/template-1/versions/template-version-1/llm-mapping-suggestions",
+    )
+
+    expect(listResponse.status).toBe(200)
+    expect(listResponse.body.data.suggestions[0].templateRow.label).toBe("Subscriptions")
+    expect(mockLlmMappingAssistantService.assistTemplateVersionMappings).toHaveBeenCalled()
+    expect(mockLlmMappingAssistantService.getTemplateVersionAssistedSuggestions).toHaveBeenCalled()
+  })
+
+  test("generates review tasks for a template version", async () => {
+    const response = await request(app).post(
+      "/api/v1/cash-flow/templates/template-1/versions/template-version-1/review-tasks",
+    )
+
+    expect(response.status).toBe(200)
+    expect(response.body.data.summary.tasksCreated).toBe(2)
+    expect(response.body.data.review_tasks[0].reviewReason).toBe("llm_disagreement")
+    expect(mockReviewTaskService.generateTemplateVersionReviewTasks).toHaveBeenCalledWith({
+      templateId: "template-1",
+      versionId: "template-version-1",
+      actorId: "admin-user-1",
+      force: false,
+      allowDuplicateActive: false,
+    })
   })
 })

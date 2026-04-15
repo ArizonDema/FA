@@ -1840,6 +1840,7 @@ function mapMovementsToBuckets(movements, buckets, options = {}) {
       bucket_key: mapping.bucket_key,
       confidence: Number(mapping.confidence || 1),
       source: mapping.source || "auto_semantic",
+      status: mapping.status || "suggested",
     })
   })
 
@@ -1858,6 +1859,7 @@ function mapMovementsToBuckets(movements, buckets, options = {}) {
     let selectedBucket = null
     let selectedSource = "template_rule"
     let selectedConfidence = 1
+    let selectedGroundingStatus = "template_rule"
 
     let bestRuleMatch = null
     directionBuckets.forEach(({ bucket, bucketIndex }) => {
@@ -1886,6 +1888,7 @@ function mapMovementsToBuckets(movements, buckets, options = {}) {
       selectedBucket = bestRuleMatch.bucket
       selectedSource = "template_rule"
       selectedConfidence = 1
+      selectedGroundingStatus = "template_rule"
     }
 
     if (!selectedBucket) {
@@ -1895,6 +1898,7 @@ function mapMovementsToBuckets(movements, buckets, options = {}) {
         if (selectedBucket) {
           selectedSource = learned.source || "auto_semantic"
           selectedConfidence = Number(learned.confidence || 1)
+          selectedGroundingStatus = learned.status === "approved" ? "approved" : "suggested"
         }
       }
     }
@@ -1915,6 +1919,7 @@ function mapMovementsToBuckets(movements, buckets, options = {}) {
         selectedBucket = bestSemantic.bucket
         selectedSource = "auto_semantic"
         selectedConfidence = bestSemantic.score
+        selectedGroundingStatus = "auto_semantic"
       }
     }
 
@@ -1923,6 +1928,7 @@ function mapMovementsToBuckets(movements, buckets, options = {}) {
       selectedBucket = fallbackByDirection[direction] || directionBuckets[0] || null
       selectedSource = fallbackByDirection[direction] ? "fallback" : "auto_semantic"
       selectedConfidence = fallbackByDirection[direction] ? 0.4 : 0.25
+      selectedGroundingStatus = fallbackByDirection[direction] ? "fallback" : "auto_semantic"
     }
 
     if (!selectedBucket) {
@@ -1942,6 +1948,7 @@ function mapMovementsToBuckets(movements, buckets, options = {}) {
       abs_amount: roundCurrency(Math.abs(movement.amount)),
       mapping_source: selectedSource,
       mapping_confidence: Number(selectedConfidence || 0),
+      grounding_status: selectedGroundingStatus,
     })
 
     const existingLearned = learnedLookup.get(`${normalizedAccount}:${direction}`)
@@ -1987,6 +1994,8 @@ function mapMovementsToBuckets(movements, buckets, options = {}) {
         bucket_key: row.bucket_key,
         confidence: Number(row.mapping_confidence || 0),
         source: row.mapping_source,
+        grounding_status: row.grounding_status || null,
+        abs_amount: Number(row.abs_amount || 0),
       })
     }
   })

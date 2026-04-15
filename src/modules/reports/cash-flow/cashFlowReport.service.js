@@ -10,6 +10,7 @@ const CashFlowService = require("../../../services/cashFlow.service")
 const StorageService = require("../../storage/services/storage.service")
 const AuditService = require("../../audit/services/audit.service")
 const TemplateService = require("../../templates/services/template.service")
+const ReportReliabilityService = require("./reportReliability.service")
 
 class CashFlowReportService {
   static async runReport({
@@ -170,6 +171,29 @@ class CashFlowReportService {
       }
     }
 
+    const reliabilitySummary = ReportReliabilityService.assess({
+      assignments: result.mapping?.final_bucket_assignments || [],
+      totalMovementCount: result.preview?.mapping_summary?.total_cash_movements || 0,
+      lowConfidenceMappings: result.mapping?.low_confidence_mappings || [],
+      unmappedMovementCount:
+        Number(result.preview?.mapping_summary?.total_cash_movements || 0) -
+        Number(result.preview?.mapping_summary?.mapped_cash_movements || 0),
+    })
+    result = {
+      ...result,
+      mapping: {
+        ...(result.mapping || {}),
+        reliability_summary: reliabilitySummary,
+      },
+      preview: {
+        ...(result.preview || {}),
+        mapping_summary: {
+          ...(result.preview?.mapping_summary || {}),
+          reliability: reliabilitySummary,
+        },
+      },
+    }
+
     await sequelize.transaction(async (transaction) => {
       const autoMappings = Array.isArray(result.mapping?.auto_mappings_created)
         ? result.mapping.auto_mappings_created
@@ -251,6 +275,7 @@ class CashFlowReportService {
         auto_mappings_created: result.mapping?.auto_mappings_created || [],
         low_confidence_mappings: result.mapping?.low_confidence_mappings || [],
         final_bucket_assignments: result.mapping?.final_bucket_assignments || [],
+        reliability_summary: result.mapping?.reliability_summary || null,
       },
       output_paths: {
         xlsx: result.outputFilePath,
@@ -259,6 +284,7 @@ class CashFlowReportService {
         auto_mappings_created: result.mapping?.auto_mappings_created || [],
         low_confidence_mappings: result.mapping?.low_confidence_mappings || [],
         final_bucket_assignments: result.mapping?.final_bucket_assignments || [],
+        reliability_summary: result.mapping?.reliability_summary || null,
       },
       input_artifacts_json: {
         tb_file_path: tbFilePath,
@@ -293,9 +319,11 @@ class CashFlowReportService {
       outputs: { xlsx: true },
       preview: result.preview,
       warnings: result.warnings,
+      report_reliability: result.mapping?.reliability_summary || null,
       auto_mappings_created: result.mapping?.auto_mappings_created || [],
       low_confidence_mappings: result.mapping?.low_confidence_mappings || [],
       final_bucket_assignments: result.mapping?.final_bucket_assignments || [],
+      reliability_summary: result.mapping?.reliability_summary || null,
     }
   }
 

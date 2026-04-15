@@ -21,6 +21,26 @@ router.post("/templates", upload.single("template_file"), CashFlowTemplateContro
 router.post("/templates/:id/versions/:versionId/parse", CashFlowTemplateController.parseTemplateVersion)
 router.get("/templates/:id/versions/:versionId/structure", CashFlowTemplateController.getTemplateVersionStructure)
 router.get("/templates/:id/versions/:versionId/rows", CashFlowTemplateController.getTemplateVersionRows)
+router.post(
+  "/templates/:id/versions/:versionId/suggest-mappings",
+  CashFlowTemplateController.suggestTemplateVersionMappings,
+)
+router.post(
+  "/templates/:id/versions/:versionId/review-tasks",
+  CashFlowTemplateController.createTemplateVersionReviewTasks,
+)
+router.post(
+  "/templates/:id/versions/:versionId/assist-mappings",
+  CashFlowTemplateController.assistTemplateVersionMappings,
+)
+router.get(
+  "/templates/:id/versions/:versionId/mapping-suggestions",
+  CashFlowTemplateController.getTemplateVersionMappingSuggestions,
+)
+router.get(
+  "/templates/:id/versions/:versionId/llm-mapping-suggestions",
+  CashFlowTemplateController.getTemplateVersionLlmMappingSuggestions,
+)
 router.put("/templates/:id", CashFlowTemplateController.updateTemplate)
 router.put("/templates/:id/activate", CashFlowTemplateController.activateTemplate)
 router.post("/templates/:id/reanalyze", CashFlowTemplateController.reanalyzeTemplate)

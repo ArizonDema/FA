@@ -32,6 +32,21 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: "template_version_id",
         as: "reportRuns",
       })
+
+      TemplateVersion.hasMany(models.TemplateRowMappingSuggestion, {
+        foreignKey: "template_version_id",
+        as: "mappingSuggestions",
+      })
+
+      TemplateVersion.hasMany(models.LlmMappingTrace, {
+        foreignKey: "template_version_id",
+        as: "llmMappingTraces",
+      })
+
+      TemplateVersion.hasMany(models.ReviewTask, {
+        foreignKey: "template_version_id",
+        as: "reviewTasks",
+      })
     }
   }
 

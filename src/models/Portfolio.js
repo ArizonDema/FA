@@ -95,6 +95,26 @@ module.exports = (sequelize, DataTypes) => {
         as: "templateRowSemanticMappings",
       })
 
+      Portfolio.hasMany(models.TemplateRowMappingSuggestion, {
+        foreignKey: "portfolio_id",
+        as: "templateRowMappingSuggestions",
+      })
+
+      Portfolio.hasMany(models.AccountMappingSuggestion, {
+        foreignKey: "portfolio_id",
+        as: "accountMappingSuggestions",
+      })
+
+      Portfolio.hasMany(models.LlmMappingTrace, {
+        foreignKey: "portfolio_id",
+        as: "llmMappingTraces",
+      })
+
+      Portfolio.hasMany(models.ReviewTask, {
+        foreignKey: "portfolio_id",
+        as: "reviewTasks",
+      })
+
       // Portfolio has many stock positions
       Portfolio.hasMany(models.StockPosition, {
         foreignKey: "portfolio_id",

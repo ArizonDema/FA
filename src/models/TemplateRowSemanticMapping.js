@@ -23,6 +23,16 @@ module.exports = (sequelize, DataTypes) => {
         as: "semanticConcept",
       })
 
+      TemplateRowSemanticMapping.belongsTo(models.ReviewTask, {
+        foreignKey: "review_task_id",
+        as: "reviewTask",
+      })
+
+      TemplateRowSemanticMapping.belongsTo(models.ReviewDecision, {
+        foreignKey: "review_decision_id",
+        as: "reviewDecision",
+      })
+
       TemplateRowSemanticMapping.belongsTo(models.User, {
         foreignKey: "suggested_by",
         as: "suggestedBy",
@@ -83,6 +93,14 @@ module.exports = (sequelize, DataTypes) => {
       },
       metadata_json: {
         type: DataTypes.JSON,
+        allowNull: true,
+      },
+      review_task_id: {
+        type: DataTypes.UUID,
+        allowNull: true,
+      },
+      review_decision_id: {
+        type: DataTypes.UUID,
         allowNull: true,
       },
       suggested_by: {

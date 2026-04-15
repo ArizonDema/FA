@@ -17,6 +17,11 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: "account_id",
         as: "semanticMappings",
       })
+
+      Account.hasMany(models.AccountMappingSuggestion, {
+        foreignKey: "account_id",
+        as: "mappingSuggestions",
+      })
     }
   }
 
