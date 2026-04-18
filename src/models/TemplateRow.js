@@ -27,6 +27,11 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: "template_row_id",
         as: "llmMappingTraces",
       })
+
+      TemplateRow.hasMany(models.ReportRunRow, {
+        foreignKey: "template_row_id",
+        as: "reportRunRows",
+      })
     }
   }
 

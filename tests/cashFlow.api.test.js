@@ -139,6 +139,21 @@ const mockReviewTaskService = {
   generateTemplateVersionReviewTasks: jest.fn(),
 }
 
+const mockReportGenerationService = {
+  generateReport: jest.fn(),
+  getReportRun: jest.fn(),
+  getReportRunRows: jest.fn(),
+}
+
+const mockValidationEngineService = {
+  validateReportRun: jest.fn(),
+}
+
+const mockValidationResultService = {
+  getLatestForRun: jest.fn(),
+  getReadiness: jest.fn(),
+}
+
 const mockTemplateIngestionService = {
   computeTemplateHash: jest.fn(),
   ingestTemplateSchema: jest.fn(),
@@ -151,6 +166,13 @@ jest.mock("../src/modules/templates/services/templateParsing.service", () => moc
 jest.mock("../src/modules/mappings/services/mappingSuggestion.service", () => mockMappingSuggestionService)
 jest.mock("../src/modules/mappings/services/llmMappingAssistant.service", () => mockLlmMappingAssistantService)
 jest.mock("../src/modules/reviews/services/reviewTask.service", () => mockReviewTaskService)
+jest.mock("../src/modules/reports/services/reportGeneration.service", () => ({
+  ReportGenerationService: mockReportGenerationService,
+}))
+jest.mock("../src/modules/reports/services/validationEngine.service", () => ({
+  ValidationEngineService: mockValidationEngineService,
+}))
+jest.mock("../src/modules/reports/services/validationResult.service", () => mockValidationResultService)
 
 const cashFlowRoutes = require("../src/routes/cash-flow.routes")
 
@@ -479,6 +501,192 @@ describe("cash-flow API", () => {
           },
         },
       ],
+    })
+    mockReportGenerationService.generateReport.mockResolvedValue({
+      reportRun: {
+        id: "generated-run-1",
+        templateVersionId: "template-version-1",
+        fundId: "fund-1",
+        periodStart: "2026-01-01",
+        periodEnd: "2026-03-31",
+        status: "completed_with_unresolved_rows",
+        readinessStatus: "not_ready",
+      },
+      templateVersion: {
+        id: "template-version-1",
+        templateId: "template-1",
+        fundId: "fund-1",
+        versionLabel: "v1",
+      },
+      rows: [
+        {
+          templateRowId: "row-1",
+          rowLabel: "Management Fees",
+          rowType: "data_row",
+          sectionName: "Operating Activities",
+          semanticConceptKey: "management_fees",
+          value: 12345.67,
+          currency: "USD",
+          resolutionStatus: "resolved",
+          valueSource: "approved_mapping",
+          metadata: {
+            reviewRequired: false,
+          },
+        },
+        {
+          templateRowId: "row-2",
+          rowLabel: "Other Expenses",
+          rowType: "data_row",
+          sectionName: "Operating Activities",
+          semanticConceptKey: null,
+          value: null,
+          currency: null,
+          resolutionStatus: "unresolved_no_approved_mapping",
+          valueSource: "none",
+          metadata: {
+            reviewRequired: true,
+          },
+        },
+      ],
+      summary: {
+        totalRows: 2,
+        resolvedRows: 1,
+        unresolvedRows: 1,
+      },
+      validationResult: {
+        id: "validation-1",
+        overallStatus: "fail",
+        readinessStatus: "not_ready",
+      },
+      validationChecks: [
+        {
+          checkType: "missing_approved_mappings",
+          severity: "error",
+          status: "fail",
+        },
+      ],
+      validationError: null,
+    })
+    mockReportGenerationService.getReportRun.mockResolvedValue({
+      reportRun: {
+        id: "generated-run-1",
+        templateVersionId: "template-version-1",
+        fundId: "fund-1",
+        periodStart: "2026-01-01",
+        periodEnd: "2026-03-31",
+        status: "completed_with_unresolved_rows",
+        readinessStatus: "not_ready",
+        summary: {
+          totalRows: 2,
+          resolvedRows: 1,
+          unresolvedRows: 1,
+        },
+      },
+      templateVersion: {
+        id: "template-version-1",
+        versionLabel: "v1",
+      },
+      validationResult: {
+        id: "validation-1",
+        overallStatus: "fail",
+        readinessStatus: "not_ready",
+      },
+    })
+    mockReportGenerationService.getReportRunRows.mockResolvedValue({
+      reportRun: {
+        id: "generated-run-1",
+        templateVersionId: "template-version-1",
+        fundId: "fund-1",
+        periodStart: "2026-01-01",
+        periodEnd: "2026-03-31",
+        status: "completed_with_unresolved_rows",
+        readinessStatus: "not_ready",
+      },
+      rows: [
+        {
+          templateRowId: "row-1",
+          rowLabel: "Management Fees",
+          rowOrder: 1,
+          resolutionStatus: "resolved",
+          value: 12345.67,
+        },
+        {
+          templateRowId: "row-2",
+          rowLabel: "Other Expenses",
+          rowOrder: 2,
+          resolutionStatus: "unresolved_no_approved_mapping",
+          value: null,
+        },
+      ],
+      summary: {
+        totalRows: 2,
+        resolvedRows: 1,
+        unresolvedRows: 1,
+      },
+      validationResult: {
+        id: "validation-1",
+        overallStatus: "fail",
+        readinessStatus: "not_ready",
+      },
+    })
+    mockValidationEngineService.validateReportRun.mockResolvedValue({
+      reportRun: {
+        id: "generated-run-1",
+        status: "completed_with_unresolved_rows",
+        readinessStatus: "not_ready",
+        lastValidatedAt: "2026-04-18T10:00:00.000Z",
+      },
+      validationResult: {
+        id: "validation-1",
+        overallStatus: "fail",
+        readinessStatus: "not_ready",
+        summary: {
+          passedChecks: 4,
+          warningChecks: 1,
+          failedChecks: 2,
+        },
+      },
+      checks: [
+        {
+          checkType: "missing_approved_mappings",
+          severity: "error",
+          status: "fail",
+          message: "1 mapping-eligible row(s) have no approved mapping.",
+        },
+      ],
+    })
+    mockValidationResultService.getLatestForRun.mockResolvedValue({
+      validationResult: {
+        id: "validation-1",
+        overallStatus: "fail",
+        readinessStatus: "not_ready",
+        summary: {
+          passedChecks: 4,
+          warningChecks: 1,
+          failedChecks: 2,
+        },
+      },
+      checks: [
+        {
+          checkType: "missing_approved_mappings",
+          severity: "error",
+          status: "fail",
+          message: "1 mapping-eligible row(s) have no approved mapping.",
+        },
+      ],
+    })
+    mockValidationResultService.getReadiness.mockResolvedValue({
+      reportRun: {
+        id: "generated-run-1",
+        status: "completed_with_unresolved_rows",
+        readinessStatus: "not_ready",
+        lastValidatedAt: "2026-04-18T10:00:00.000Z",
+      },
+      validationResult: {
+        id: "validation-1",
+        overallStatus: "fail",
+        readinessStatus: "not_ready",
+      },
     })
     mockCashFlowService.generateCashFlowReport.mockResolvedValue({
       outputFilePath: path.join(tempDir, "output.xlsx"),
@@ -1108,6 +1316,64 @@ describe("cash-flow API", () => {
     expect(response.body.data.report_reliability.reportReliabilityStatus).toBe("grounded")
     expect(response.body.data.report_reliability.humanReviewRequired).toBe(false)
     expect(mockCashFlowService.generateCashFlowReport).toHaveBeenCalled()
+  })
+
+  test("generates a deterministic approved-mapping report", async () => {
+    const response = await request(app).post("/api/v1/cash-flow/reports/generate").send({
+      portfolio_id: "fund-1",
+      template_version_id: "template-version-1",
+      period_start: "2026-01-01",
+      period_end: "2026-03-31",
+    })
+
+    expect(response.status).toBe(200)
+    expect(response.body.data.reportRun.id).toBe("generated-run-1")
+    expect(response.body.data.reportRun.readinessStatus).toBe("not_ready")
+    expect(response.body.data.rows[0].resolutionStatus).toBe("resolved")
+    expect(response.body.data.rows[1].resolutionStatus).toBe("unresolved_no_approved_mapping")
+    expect(response.body.data.validationResult.overallStatus).toBe("fail")
+    expect(mockReportGenerationService.generateReport).toHaveBeenCalledWith({
+      templateVersionId: "template-version-1",
+      fundId: "fund-1",
+      periodStart: "2026-01-01",
+      periodEnd: "2026-03-31",
+      actorId: "admin-user-1",
+    })
+  })
+
+  test("retrieves a persisted generated report and its rows", async () => {
+    const runResponse = await request(app).get("/api/v1/cash-flow/reports/generated-run-1")
+    expect(runResponse.status).toBe(200)
+    expect(runResponse.body.data.reportRun.status).toBe("completed_with_unresolved_rows")
+    expect(runResponse.body.data.validationResult.readinessStatus).toBe("not_ready")
+
+    const rowsResponse = await request(app).get("/api/v1/cash-flow/reports/generated-run-1/rows")
+    expect(rowsResponse.status).toBe(200)
+    expect(rowsResponse.body.data.rows).toHaveLength(2)
+    expect(rowsResponse.body.data.rows[0].rowOrder).toBe(1)
+    expect(mockReportGenerationService.getReportRun).toHaveBeenCalledWith({ runId: "generated-run-1" })
+    expect(mockReportGenerationService.getReportRunRows).toHaveBeenCalledWith({ runId: "generated-run-1" })
+  })
+
+  test("validates a generated report and exposes readiness", async () => {
+    const validateResponse = await request(app).post("/api/v1/cash-flow/reports/generated-run-1/validate")
+    expect(validateResponse.status).toBe(200)
+    expect(validateResponse.body.data.validationResult.overallStatus).toBe("fail")
+    expect(validateResponse.body.data.reportRun.readinessStatus).toBe("not_ready")
+
+    const validationResponse = await request(app).get("/api/v1/cash-flow/reports/generated-run-1/validation")
+    expect(validationResponse.status).toBe(200)
+    expect(validationResponse.body.data.checks[0].checkType).toBe("missing_approved_mappings")
+
+    const readinessResponse = await request(app).get("/api/v1/cash-flow/reports/generated-run-1/readiness")
+    expect(readinessResponse.status).toBe(200)
+    expect(readinessResponse.body.data.reportRun.readinessStatus).toBe("not_ready")
+    expect(mockValidationEngineService.validateReportRun).toHaveBeenCalledWith({
+      runId: "generated-run-1",
+      actorId: "admin-user-1",
+    })
+    expect(mockValidationResultService.getLatestForRun).toHaveBeenCalledWith({ runId: "generated-run-1" })
+    expect(mockValidationResultService.getReadiness).toHaveBeenCalledWith({ runId: "generated-run-1" })
   })
 
   test("auto-corrects template sheet mapping on report run when workbook sheet differs", async () => {

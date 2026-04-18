@@ -4,6 +4,9 @@ const ResponseHandler = require("../../../utils/responseHandler")
 const CashFlowService = require("../../../services/cashFlow.service")
 const StorageService = require("../../storage/services/storage.service")
 const CashFlowReportService = require("../cash-flow/cashFlowReport.service")
+const { ReportGenerationService } = require("../services/reportGeneration.service")
+const ValidationResultService = require("../services/validationResult.service")
+const { ValidationEngineService } = require("../services/validationEngine.service")
 const { resolveFundId } = require("../../shared/fund")
 
 const FundModel = Fund || Portfolio
@@ -85,6 +88,115 @@ class CashFlowReportController {
 
       const runs = await CashFlowReportService.getHistory({ fundId })
       return ResponseHandler.success(res, { runs }, "Cash flow report history retrieved")
+    } catch (error) {
+      return next(error)
+    }
+  }
+
+  static async generateApprovedMappingReport(req, res, next) {
+    try {
+      const templateVersionId = req.body.template_version_id || req.body.templateVersionId || null
+      const fundId = resolveFundId(req.body)
+      const periodStart = req.body.period_start || req.body.periodStart || null
+      const periodEnd = req.body.period_end || req.body.periodEnd || null
+
+      if (!templateVersionId) {
+        return ResponseHandler.badRequest(res, "template_version_id is required")
+      }
+      if (!periodStart || !periodEnd) {
+        return ResponseHandler.badRequest(res, "period_start and period_end are required")
+      }
+
+      const result = await ReportGenerationService.generateReport({
+        templateVersionId,
+        fundId,
+        periodStart,
+        periodEnd,
+        actorId: req.user?.id || null,
+      })
+
+      if (!result) {
+        return ResponseHandler.notFound(res, "Template version not found")
+      }
+
+      return ResponseHandler.success(res, result, "Deterministic approved-mapping report generated")
+    } catch (error) {
+      if (error instanceof CashFlowService.CashFlowValidationError) {
+        return ResponseHandler.badRequest(res, error.message, error.details || null)
+      }
+      if (error.code === "report_generation_validation" || error.statusCode === 400) {
+        return ResponseHandler.badRequest(res, error.message, error.details || null)
+      }
+      return next(error)
+    }
+  }
+
+  static async getGeneratedReport(req, res, next) {
+    try {
+      const result = await ReportGenerationService.getReportRun({ runId: req.params.run_id })
+      if (!result) {
+        return ResponseHandler.notFound(res, "Report run not found")
+      }
+
+      return ResponseHandler.success(res, result, "Generated report retrieved")
+    } catch (error) {
+      return next(error)
+    }
+  }
+
+  static async getGeneratedReportRows(req, res, next) {
+    try {
+      const result = await ReportGenerationService.getReportRunRows({ runId: req.params.run_id })
+      if (!result) {
+        return ResponseHandler.notFound(res, "Report run not found")
+      }
+
+      return ResponseHandler.success(res, result, "Generated report rows retrieved")
+    } catch (error) {
+      return next(error)
+    }
+  }
+
+  static async validateGeneratedReport(req, res, next) {
+    try {
+      const result = await ValidationEngineService.validateReportRun({
+        runId: req.params.run_id,
+        actorId: req.user?.id || null,
+      })
+      if (!result) {
+        return ResponseHandler.notFound(res, "Report run not found")
+      }
+
+      return ResponseHandler.success(res, result, "Report validation completed")
+    } catch (error) {
+      if (error.code === "report_validation_validation" || error.statusCode === 400) {
+        return ResponseHandler.badRequest(res, error.message, error.details || null)
+      }
+      return next(error)
+    }
+  }
+
+  static async getGeneratedReportValidation(req, res, next) {
+    try {
+      const result = await ValidationResultService.getLatestForRun({ runId: req.params.run_id })
+      if (!result) {
+        return ResponseHandler.notFound(res, "Validation result not found")
+      }
+
+      return ResponseHandler.success(res, result, "Report validation retrieved")
+    } catch (error) {
+      return next(error)
+    }
+  }
+
+  static async getGeneratedReportReadiness(req, res, next) {
+    try {
+      const result = await ValidationResultService.getReadiness({ runId: req.params.run_id })
+      if (!result) {
+        return ResponseHandler.notFound(res, "Report run not found")
+      }
+
+      return ResponseHandler.success(res, result, "Report readiness retrieved")
     } catch (error) {
       return next(error)
     }

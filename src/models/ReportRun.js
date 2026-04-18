@@ -16,6 +16,16 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: "template_version_id",
         as: "templateVersion",
       })
+
+      ReportRun.hasMany(models.ReportRunRow, {
+        foreignKey: "report_run_id",
+        as: "rows",
+      })
+
+      ReportRun.hasMany(models.ValidationResult, {
+        foreignKey: "report_run_id",
+        as: "validationResults",
+      })
     }
   }
 
@@ -39,6 +49,12 @@ module.exports = (sequelize, DataTypes) => {
       inputs_json: DataTypes.JSON,
       output_paths: DataTypes.JSON,
       template_version_id: DataTypes.UUID,
+      status: DataTypes.STRING(80),
+      readiness_status: DataTypes.STRING(40),
+      last_validated_at: DataTypes.DATE,
+      summary_json: DataTypes.JSON,
+      error_json: DataTypes.JSON,
+      completed_at: DataTypes.DATE,
       mapping_snapshot_json: DataTypes.JSON,
       input_artifacts_json: DataTypes.JSON,
       output_artifacts_json: DataTypes.JSON,

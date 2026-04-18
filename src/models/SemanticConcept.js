@@ -31,6 +31,11 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: "semantic_concept_id",
         as: "accountMappingSuggestions",
       })
+
+      SemanticConcept.hasMany(models.ReportRunRow, {
+        foreignKey: "semantic_concept_id",
+        as: "reportRunRows",
+      })
     }
   }
 
