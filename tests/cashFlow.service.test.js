@@ -4,6 +4,16 @@ const path = require("path")
 const ExcelJS = require("exceljs")
 const CashFlowService = require("../src/services/cashFlow.service")
 
+const INDIRECT_TEMPLATE_FIXTURE = path.join(
+  process.cwd(),
+  "uploads",
+  "cash-flow",
+  "templates",
+  "bf126d3e-7a2c-422f-9704-b3ce626d76f1_PLC_Cash_Flow_Template_v2.xlsx",
+)
+const SAMPLE_2026_TB = "C:\\Users\\Mano PC\\OneDrive\\Documents\\Samples;Data\\Trial_Balance_2026.xlsx"
+const SAMPLE_2026_GL = "C:\\Users\\Mano PC\\OneDrive\\Documents\\Samples;Data\\General_Ledger_2026.xlsx"
+
 function makeTempDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "cashflow-service-test-"))
 }
@@ -98,6 +108,10 @@ async function writeTemplateWorkbook(
   })
 
   await workbook.xlsx.writeFile(filePath)
+}
+
+function getRowBinding(config, semanticKey) {
+  return (config?.row_bindings || []).find((binding) => binding.semantic_key === semanticKey) || null
 }
 
 describe("cashFlow.service", () => {
@@ -350,6 +364,79 @@ describe("cashFlow.service", () => {
     expect(analysis.suggested_config_json.bucket_bindings.length).toBeGreaterThan(0)
   })
 
+  test("analyzes PLC_Cash_Flow_Template_v2 as an indirect template with leaf row bindings", async () => {
+    if (!fs.existsSync(INDIRECT_TEMPLATE_FIXTURE)) {
+      expect(true).toBe(true)
+      return
+    }
+
+    const analysis = await CashFlowService.analyzeTemplateWorkbook({
+      templatePath: INDIRECT_TEMPLATE_FIXTURE,
+    })
+
+    expect(analysis.detected_layout_type).toBe("columns")
+    expect(analysis.needs_human_review).toBe(false)
+    expect(analysis.issues).toEqual([])
+    expect(analysis.suggested_config_json.statement_method).toBe("indirect")
+
+    const config = analysis.suggested_config_json
+    expect(getRowBinding(config, "net_income")?.cells?.[0]?.cell).toBe("B4")
+    expect(getRowBinding(config, "capital_expenditures")?.cells?.[0]?.cell).toBe("B12")
+    expect(getRowBinding(config, "asset_sales")?.cells?.[0]?.cell).toBe("B13")
+    expect(getRowBinding(config, "capital_contributions")?.cells?.[0]?.cell).toBe("B15")
+    expect(getRowBinding(config, "interest_paid")?.cells?.[0]?.cell).toBe("B18")
+    expect(getRowBinding(config, "opening_cash")?.cells?.[0]?.cell).toBe("B23")
+
+    expect(getRowBinding(config, "operating_cash_flow")?.role).toBe("summary")
+    expect(getRowBinding(config, "investing_cash_flow")?.role).toBe("summary")
+    expect(getRowBinding(config, "financing_cash_flow")?.role).toBe("summary")
+    expect(getRowBinding(config, "net_change_in_cash")?.role).toBe("summary")
+    expect(getRowBinding(config, "closing_cash")?.role).toBe("summary")
+  })
+
+  test("infers indirect v3 configs from row bindings even when statement_method is missing", () => {
+    const periodLabels = [{ period_key: "m01", label: "M1", period_type: "monthly", month: 1 }]
+
+    const normalized = CashFlowService.validateTemplateConfig({
+      version: "v3",
+      sheet_name: "Cash Flow Statement",
+      layout_type: "columns",
+      period_granularity: "monthly",
+      period_axis: {
+        orientation: "column",
+        labels: periodLabels,
+        period_bindings: [{ period_key: "m01", label: "M1", cell: "B3" }],
+      },
+      period_resolution_rules: { custom_periods: [] },
+      opening_binding: { cells: [{ period_key: "m01", label: "M1", cell: "B23" }] },
+      closing_binding: { cells: [{ period_key: "m01", label: "M1", cell: "B24" }] },
+      bucket_bindings: [],
+      row_bindings: [
+        { semantic_key: "net_income", label: "Net Income", role: "input", cells: [{ period_key: "m01", label: "M1", cell: "B4" }] },
+        { semantic_key: "operating_cash_flow", label: "Cash Flow from Operations", role: "summary", cells: [{ period_key: "m01", label: "M1", cell: "B10" }] },
+        { semantic_key: "capital_contributions", label: "Capital Contributions", role: "input", cells: [{ period_key: "m01", label: "M1", cell: "B15" }] },
+        { semantic_key: "opening_cash", label: "Cash at Beginning", role: "input", cells: [{ period_key: "m01", label: "M1", cell: "B23" }] },
+        { semantic_key: "closing_cash", label: "Cash at End", role: "summary", cells: [{ period_key: "m01", label: "M1", cell: "B24" }] },
+      ],
+      writer_policy: { preserve_formulas: true, full_recalc_on_open: true },
+      mapping_policy: { auto_create: true, high_confidence_threshold: 0.7, low_confidence_threshold: 0.35 },
+    })
+
+    expect(normalized.statement_method).toBe("indirect")
+    expect(normalized.bucket_bindings).toEqual([])
+    expect(normalized.row_bindings.map((binding) => binding.semantic_key)).toContain("capital_contributions")
+  })
+
+  test("treats configs with row bindings as v3 instead of falling back to legacy bucket validation", () => {
+    expect(() =>
+      CashFlowService.validateTemplateConfig({
+        sheet_name: "Cash Flow Statement",
+        layout_type: "columns",
+        row_bindings: [],
+      }),
+    ).toThrow("Template config_json.period_axis.orientation must be row or column")
+  })
+
   test("treats M1..M12 period labels as monthly instead of custom", async () => {
     const templatePath = path.join(tempDir, "analyze_template_m_labels.xlsx")
     await writeTemplateWorkbook(
@@ -464,6 +551,41 @@ describe("cashFlow.service", () => {
     expect(mapped.lowConfidenceMappings.length).toBeGreaterThan(0)
   })
 
+  test("classifies indirect financing semantics and preserves outflows", () => {
+    const { classifyIndirectCashSemanticKey, mapIndirectCashMovementsToRows } = CashFlowService.__test
+
+    expect(classifyIndirectCashSemanticKey("Interest Expense", "outflow")).toBe("interest_paid")
+    expect(classifyIndirectCashSemanticKey("Interest Expense", "inflow")).toBeNull()
+    expect(classifyIndirectCashSemanticKey("Notes Payable", "inflow")).toBe("debt_issued")
+    expect(classifyIndirectCashSemanticKey("Notes Payable", "outflow")).toBe("debt_repaid")
+    expect(classifyIndirectCashSemanticKey("Owner Capital", "inflow")).toBe("capital_contributions")
+    expect(classifyIndirectCashSemanticKey("Owner Drawings", "outflow")).toBe("dividends_paid")
+
+    const mapped = mapIndirectCashMovementsToRows(
+      [
+        { account_name: "Notes Payable", date: new Date("2026-01-10"), amount: -2500 },
+        { account_name: "Interest Expense", date: new Date("2026-01-11"), amount: -150 },
+        { account_name: "Owner Capital", date: new Date("2026-01-12"), amount: 5000 },
+        { account_name: "Owner Drawings", date: new Date("2026-01-13"), amount: -400 },
+      ],
+      [
+        { semantic_key: "debt_repaid", label: "Debt Repaid" },
+        { semantic_key: "interest_paid", label: "Interest Paid" },
+        { semantic_key: "capital_contributions", label: "Capital Contributions" },
+        { semantic_key: "dividends_paid", label: "Dividends Paid" },
+        { semantic_key: "operating_cash_flow", label: "Cash Flow from Operations" },
+      ],
+    )
+
+    expect(mapped.unmapped).toHaveLength(0)
+    expect(mapped.mappedMovements.map((movement) => movement.bucket_key)).toEqual([
+      "debt_repaid",
+      "interest_paid",
+      "capital_contributions",
+      "dividends_paid",
+    ])
+  })
+
   test("deterministic verification against provided sample files", async () => {
     const sampleTB = "C:\\Users\\Mano PC\\OneDrive\\Documents\\Samples;Data\\Trial_Balance_GLC_Services.xlsx"
     const sampleGL = "C:\\Users\\Mano PC\\OneDrive\\Documents\\Samples;Data\\General_Ledger_GLC_Services.xlsx"
@@ -534,6 +656,42 @@ describe("cashFlow.service", () => {
 
     expect(result.preview.monthly[5].closing_balance).toBe(228575)
     expect(result.preview.monthly[11].closing_balance).toBe(228575)
+    expect(result.preview.totals.closing_balance_end).toBe(228575)
+  })
+
+  test("2026 indirect template regression matches TB cash and maps all movements", async () => {
+    if (
+      !fs.existsSync(INDIRECT_TEMPLATE_FIXTURE) ||
+      !fs.existsSync(SAMPLE_2026_TB) ||
+      !fs.existsSync(SAMPLE_2026_GL)
+    ) {
+      expect(true).toBe(true)
+      return
+    }
+
+    const analysis = await CashFlowService.analyzeTemplateWorkbook({
+      templatePath: INDIRECT_TEMPLATE_FIXTURE,
+    })
+    const outputPath = path.join(tempDir, "indirect_2026_output.xlsx")
+
+    const result = await CashFlowService.generateCashFlowReport({
+      templatePath: INDIRECT_TEMPLATE_FIXTURE,
+      templateConfig: analysis.suggested_config_json,
+      tbFilePath: SAMPLE_2026_TB,
+      glFilePath: SAMPLE_2026_GL,
+      dateStart: "2026-01-01",
+      dateEnd: "2026-12-31",
+      outputFilePath: outputPath,
+    })
+
+    expect(result.warnings).toEqual([])
+    expect(result.preview.mapping_summary.total_cash_movements).toBe(68)
+    expect(result.preview.mapping_summary.mapped_cash_movements).toBe(68)
+    expect(result.preview.mapping_summary.low_confidence_mappings).toBe(0)
+    expect(result.preview.monthly[5].closing_balance).toBe(228575)
+    expect(result.preview.monthly[6].closing_balance).toBe(228575)
+    expect(result.preview.monthly[11].closing_balance).toBe(228575)
+    expect(result.preview.monthly.slice(6).every((period) => period.closing_balance === 228575)).toBe(true)
     expect(result.preview.totals.closing_balance_end).toBe(228575)
   })
 })

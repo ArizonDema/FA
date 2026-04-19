@@ -56,6 +56,172 @@ const QUARTER_LOOKUP = {
   q4: 4,
 }
 
+const STATEMENT_METHODS = {
+  DIRECT: "direct",
+  INDIRECT: "indirect",
+}
+
+const INDIRECT_ROW_DEFINITIONS = [
+  {
+    semantic_key: "net_income",
+    label: "Net Income",
+    role: "input",
+    cash_direction: "neutral",
+    required: true,
+    patterns: [/^net income$/i, /\bprofit\b/i],
+  },
+  {
+    semantic_key: "depreciation_amortization",
+    label: "Depreciation & Amortization",
+    role: "input",
+    cash_direction: "neutral",
+    required: true,
+    patterns: [/depreciation/i, /amorti[sz]ation/i],
+  },
+  {
+    semantic_key: "change_in_receivables",
+    label: "Change in Receivables",
+    role: "input",
+    cash_direction: "neutral",
+    required: true,
+    patterns: [/change in receivables?/i, /receivables?/i, /accounts receivable/i],
+  },
+  {
+    semantic_key: "change_in_inventory",
+    label: "Change in Inventory",
+    role: "input",
+    cash_direction: "neutral",
+    required: false,
+    patterns: [/change in inventory/i, /\binventory\b/i],
+  },
+  {
+    semantic_key: "change_in_payables",
+    label: "Change in Payables",
+    role: "input",
+    cash_direction: "neutral",
+    required: true,
+    patterns: [/change in payables?/i, /accounts payable/i],
+  },
+  {
+    semantic_key: "other_working_capital_changes",
+    label: "Other Working Capital Changes",
+    role: "input",
+    cash_direction: "neutral",
+    required: true,
+    patterns: [/other working capital/i, /working capital changes/i],
+  },
+  {
+    semantic_key: "operating_cash_flow",
+    label: "Cash Flow from Operations",
+    role: "summary",
+    cash_direction: "mixed",
+    required: true,
+    patterns: [/cash flow from operations/i, /operating cash flow/i],
+  },
+  {
+    semantic_key: "capital_expenditures",
+    label: "Capital Expenditures",
+    role: "input",
+    cash_direction: "outflow",
+    required: true,
+    patterns: [/capital expenditures?/i, /\bcapex\b/i],
+  },
+  {
+    semantic_key: "asset_sales",
+    label: "Asset Sales",
+    role: "input",
+    cash_direction: "inflow",
+    required: false,
+    patterns: [/asset sales?/i, /sale of assets?/i],
+  },
+  {
+    semantic_key: "investing_cash_flow",
+    label: "Cash Flow from Investing",
+    role: "summary",
+    cash_direction: "mixed",
+    required: true,
+    patterns: [/cash flow from investing/i, /investing cash flow/i],
+  },
+  {
+    semantic_key: "capital_contributions",
+    label: "Capital Contributions",
+    role: "input",
+    cash_direction: "inflow",
+    required: true,
+    patterns: [/capital contributions?/i, /owner capital/i, /capital infusions?/i],
+  },
+  {
+    semantic_key: "debt_issued",
+    label: "Debt Issued",
+    role: "input",
+    cash_direction: "inflow",
+    required: false,
+    patterns: [/debt issued/i, /loan proceeds/i, /borrowings?/i],
+  },
+  {
+    semantic_key: "debt_repaid",
+    label: "Debt Repaid",
+    role: "input",
+    cash_direction: "outflow",
+    required: false,
+    patterns: [/debt repaid/i, /loan repayments?/i, /principal repayments?/i],
+  },
+  {
+    semantic_key: "interest_paid",
+    label: "Interest Paid",
+    role: "input",
+    cash_direction: "outflow",
+    required: false,
+    patterns: [/interest paid/i],
+  },
+  {
+    semantic_key: "dividends_paid",
+    label: "Dividends Paid",
+    role: "input",
+    cash_direction: "outflow",
+    required: false,
+    patterns: [/dividends? paid/i, /owner drawings?/i, /drawings?/i, /distributions?/i],
+  },
+  {
+    semantic_key: "financing_cash_flow",
+    label: "Cash Flow from Financing",
+    role: "summary",
+    cash_direction: "mixed",
+    required: true,
+    patterns: [/cash flow from financing/i, /financing cash flow/i],
+  },
+  {
+    semantic_key: "net_change_in_cash",
+    label: "Net Change in Cash",
+    role: "summary",
+    cash_direction: "mixed",
+    required: true,
+    patterns: [/net change in cash/i, /net increase in cash/i, /net decrease in cash/i],
+  },
+  {
+    semantic_key: "opening_cash",
+    label: "Cash at Beginning",
+    role: "input",
+    cash_direction: "neutral",
+    required: true,
+    patterns: [/cash at beginning/i, /opening cash/i, /cash at start/i],
+  },
+  {
+    semantic_key: "closing_cash",
+    label: "Cash at End",
+    role: "summary",
+    cash_direction: "neutral",
+    required: true,
+    patterns: [/cash at end/i, /closing cash/i, /ending cash/i],
+  },
+]
+
+const INDIRECT_ROW_LOOKUP = new Map(
+  INDIRECT_ROW_DEFINITIONS.map((definition) => [definition.semantic_key, definition]),
+)
+
+const REQUIRED_INDIRECT_FINANCING_KEYS = ["capital_contributions"]
+
 class CashFlowValidationError extends Error {
   constructor(message, details = null) {
     super(message)
@@ -584,6 +750,7 @@ function validateLegacyTemplateConfig(input) {
   const buckets = normalizeBucketCollection(input.buckets)
   return {
     version: "v1",
+    statement_method: STATEMENT_METHODS.DIRECT,
     sheet_name: sheetName,
     header_row: headerRow,
     month_column_header: monthColumnHeader,
@@ -669,9 +836,88 @@ function normalizeWriterPolicy(input = {}) {
   }
 }
 
+function normalizeStatementMethod(input) {
+  const method = String(input || STATEMENT_METHODS.DIRECT)
+    .trim()
+    .toLowerCase()
+  if (!Object.values(STATEMENT_METHODS).includes(method)) {
+    throw new CashFlowValidationError('statement_method must be "direct" or "indirect"')
+  }
+  return method
+}
+
+function inferStatementMethodFromConfigShape(input = {}) {
+  if (input?.statement_method !== undefined && input?.statement_method !== null && String(input.statement_method).trim()) {
+    return normalizeStatementMethod(input.statement_method)
+  }
+
+  const hasRowBindings = Array.isArray(input?.row_bindings) && input.row_bindings.length > 0
+  const hasBucketBindings =
+    (Array.isArray(input?.bucket_bindings) && input.bucket_bindings.length > 0) ||
+    (Array.isArray(input?.buckets) && input.buckets.length > 0)
+
+  if (hasRowBindings && !hasBucketBindings) {
+    return STATEMENT_METHODS.INDIRECT
+  }
+
+  return STATEMENT_METHODS.DIRECT
+}
+
+function looksLikeV3TemplateConfig(input = {}) {
+  return Boolean(
+    String(input?.version || "").toLowerCase() === "v3" ||
+      input?.period_axis ||
+      input?.period_granularity ||
+      input?.period_resolution_rules ||
+      Array.isArray(input?.row_bindings) ||
+      Array.isArray(input?.bucket_bindings) ||
+      input?.opening_binding ||
+      input?.closing_binding ||
+      String(input?.statement_method || "").trim().toLowerCase() === STATEMENT_METHODS.INDIRECT,
+  )
+}
+
+function normalizeIndirectRowBindings(input, labelKeys) {
+  if (!Array.isArray(input) || input.length === 0) {
+    throw new CashFlowValidationError("row_bindings must contain at least one row binding for indirect templates")
+  }
+
+  const seenKeys = new Set()
+  return input.map((binding, index) => {
+    const semanticKey = normalizePeriodKey(binding?.semantic_key, `row_${index + 1}`)
+    if (seenKeys.has(semanticKey)) {
+      throw new CashFlowValidationError(`row_bindings contains duplicate semantic_key "${semanticKey}"`)
+    }
+    seenKeys.add(semanticKey)
+
+    const label = String(binding?.label || INDIRECT_ROW_LOOKUP.get(semanticKey)?.label || semanticKey).trim()
+    const role = String(binding?.role || INDIRECT_ROW_LOOKUP.get(semanticKey)?.role || "input")
+      .trim()
+      .toLowerCase()
+    if (!["input", "summary"].includes(role)) {
+      throw new CashFlowValidationError(`row_bindings[${index}] role must be input or summary`)
+    }
+
+    const cells = normalizePeriodBindingEntries(binding?.cells, `row_bindings[${index}].cells`)
+    const cellKeys = new Set(cells.map((entry) => entry.period_key))
+    if (!Array.from(labelKeys).every((key) => cellKeys.has(key))) {
+      throw new CashFlowValidationError(`row_bindings[${index}] must include cell targets for every detected period`)
+    }
+
+    return {
+      semantic_key: semanticKey,
+      label,
+      role,
+      required: binding?.required !== false,
+      cells,
+    }
+  })
+}
+
 function validateV2TemplateConfig(input) {
   const sheetName = String(input.sheet_name || "").trim()
   if (!sheetName) throw new CashFlowValidationError("Template config_json.sheet_name is required")
+  const statementMethod = inferStatementMethodFromConfigShape(input)
 
   const layoutType = String(input.layout_type || "").trim().toLowerCase()
   if (!["rows", "columns", "sectioned", "freeform"].includes(layoutType)) {
@@ -686,22 +932,26 @@ function validateV2TemplateConfig(input) {
     cells: normalizeCellBindingEntries(input.closing_binding?.cells, "closing_binding.cells"),
   }
 
-  const buckets = normalizeBucketCollection(input.bucket_bindings || input.buckets, {
-    requireColumnHeader: false,
-  }).map((bucket, index) => {
-    const providedBindingCells = input.bucket_bindings?.[index]?.cells || bucket.cells
-    const bindingCells = normalizeCellBindingEntries(
-      providedBindingCells,
-      `bucket_bindings[${index}].cells`,
-    )
-    return {
-      ...bucket,
-      cells: bindingCells,
-    }
-  })
+  const buckets =
+    statementMethod === STATEMENT_METHODS.DIRECT
+      ? normalizeBucketCollection(input.bucket_bindings || input.buckets, {
+          requireColumnHeader: false,
+        }).map((bucket, index) => {
+          const providedBindingCells = input.bucket_bindings?.[index]?.cells || bucket.cells
+          const bindingCells = normalizeCellBindingEntries(
+            providedBindingCells,
+            `bucket_bindings[${index}].cells`,
+          )
+          return {
+            ...bucket,
+            cells: bindingCells,
+          }
+        })
+      : []
 
   return {
     version: "v2",
+    statement_method: statementMethod,
     sheet_name: sheetName,
     layout_type: layoutType,
     month_bindings: monthBindings,
@@ -716,6 +966,7 @@ function validateV2TemplateConfig(input) {
 function validateV3TemplateConfig(input) {
   const sheetName = String(input.sheet_name || "").trim()
   if (!sheetName) throw new CashFlowValidationError("Template config_json.sheet_name is required")
+  const statementMethod = inferStatementMethodFromConfigShape(input)
 
   const layoutType = String(input.layout_type || "freeform").trim().toLowerCase()
   if (!["rows", "columns", "sectioned", "freeform"].includes(layoutType)) {
@@ -757,20 +1008,28 @@ function validateV3TemplateConfig(input) {
     throw new CashFlowValidationError("period_axis.labels and period_axis.period_bindings must reference the same period keys")
   }
 
-  const buckets = normalizeBucketCollection(input.bucket_bindings || input.buckets, {
-    requireColumnHeader: false,
-  }).map((bucket, index) => {
-    const candidate = input.bucket_bindings?.[index] || {}
-    const cells = normalizePeriodBindingEntries(candidate.cells || bucket.cells, `bucket_bindings[${index}].cells`)
-    const cellKeys = new Set(cells.map((item) => item.period_key))
-    if (!Array.from(labelKeys).every((key) => cellKeys.has(key))) {
-      throw new CashFlowValidationError(`bucket_bindings[${index}] must include cell targets for every detected period`)
-    }
-    return {
-      ...bucket,
-      cells,
-    }
-  })
+  const buckets =
+    statementMethod === STATEMENT_METHODS.DIRECT
+      ? normalizeBucketCollection(input.bucket_bindings || input.buckets, {
+          requireColumnHeader: false,
+        }).map((bucket, index) => {
+          const candidate = input.bucket_bindings?.[index] || {}
+          const cells = normalizePeriodBindingEntries(candidate.cells || bucket.cells, `bucket_bindings[${index}].cells`)
+          const cellKeys = new Set(cells.map((item) => item.period_key))
+          if (!Array.from(labelKeys).every((key) => cellKeys.has(key))) {
+            throw new CashFlowValidationError(`bucket_bindings[${index}] must include cell targets for every detected period`)
+          }
+          return {
+            ...bucket,
+            cells,
+          }
+        })
+      : []
+
+  const rowBindings =
+    statementMethod === STATEMENT_METHODS.INDIRECT
+      ? normalizeIndirectRowBindings(input.row_bindings, labelKeys)
+      : []
 
   const openingCells = input.opening_binding?.cells
     ? normalizePeriodBindingEntries(input.opening_binding.cells, "opening_binding.cells")
@@ -822,6 +1081,7 @@ function validateV3TemplateConfig(input) {
 
   return {
     version: "v3",
+    statement_method: statementMethod,
     sheet_name: sheetName,
     layout_type: layoutType,
     period_granularity: periodGranularity,
@@ -837,6 +1097,7 @@ function validateV3TemplateConfig(input) {
     opening_binding: openingCells ? { cells: openingCells } : null,
     closing_binding: closingCells ? { cells: closingCells } : null,
     bucket_bindings: buckets,
+    row_bindings: rowBindings,
     writer_policy: writerPolicy,
     mapping_policy: mappingPolicy,
   }
@@ -847,7 +1108,7 @@ function validateTemplateConfig(input) {
     throw new CashFlowValidationError("Template config_json must be a JSON object")
   }
 
-  if (String(input.version || "").toLowerCase() === "v3" || input.period_axis) {
+  if (looksLikeV3TemplateConfig(input)) {
     return validateV3TemplateConfig(input)
   }
 
@@ -1132,6 +1393,223 @@ function getCellNumericSignal(value) {
     return Number.isFinite(number)
   }
   return false
+}
+
+function getStatementMethodFromConfig(config) {
+  return normalizeStatementMethod(config?.statement_method)
+}
+
+function getIndirectRowBindingsFromConfig(config) {
+  return Array.isArray(config?.row_bindings) ? config.row_bindings : []
+}
+
+function findIndirectRowDefinition(label) {
+  const normalizedLabel = normalizeText(label)
+  if (!normalizedLabel) return null
+  return (
+    INDIRECT_ROW_DEFINITIONS.find((definition) =>
+      definition.patterns.some((pattern) => pattern.test(normalizedLabel)),
+    ) || null
+  )
+}
+
+function isIndirectWorkbookCandidate(worksheet, normalizedSheet) {
+  const title = normalizeText(worksheet?.getCell?.("A1")?.value || normalizedSheet?.rows?.[0]?.rowLabel || "")
+  if (title.includes("indirect method")) return true
+
+  const matchedDefinitions = new Set()
+  ;(normalizedSheet?.rows || []).forEach((row) => {
+    const definition = findIndirectRowDefinition(row.rowLabel)
+    if (definition) matchedDefinitions.add(definition.semantic_key)
+  })
+
+  return matchedDefinitions.size >= 6
+}
+
+function getCellSnapshotForColumn(row, columnIndex) {
+  return (row?.metadata?.cellSnapshots || []).find((cell) => Number(cell.column_index) === Number(columnIndex)) || null
+}
+
+function analyzeIndirectRowTarget(row, periodColumns = []) {
+  const periodCells = periodColumns.map((columnIndex) => {
+    const snapshot = getCellSnapshotForColumn(row, columnIndex)
+    if (snapshot) return snapshot
+    return {
+      column_index: columnIndex,
+      formula_text: null,
+      display_value: null,
+      raw_value: null,
+    }
+  })
+  const formulaCount = periodCells.filter((cell) => Boolean(cell.formula_text)).length
+  const writableCount = periodCells.filter((cell) => !cell.formula_text).length
+  return {
+    periodCells,
+    formulaCount,
+    writableCount,
+    allFormula: periodCells.length > 0 && formulaCount === periodCells.length,
+    hasWritableTargets: writableCount > 0,
+  }
+}
+
+function resolveTemplateStructure(templatePath) {
+  const TemplateFileLoader = require("../modules/templates/parsing/templateFileLoader.service")
+  const WorkbookParser = require("../modules/templates/parsing/workbookParser.service")
+  const TemplateNormalizer = require("../modules/templates/parsing/templateNormalizer.service")
+
+  const filePayload = TemplateFileLoader.load({
+    filePath: templatePath,
+    sourceFileName: path.basename(templatePath),
+  })
+  return WorkbookParser.parse(filePayload).then((workbookStructure) => ({
+    workbookStructure,
+    normalized: TemplateNormalizer.normalize({
+      templateVersionId: "analysis",
+      workbookStructure,
+    }),
+  }))
+}
+
+function buildIndirectV3ConfigFromNormalizedSheet(worksheet, layoutCandidate, normalizedSheet) {
+  const periodLabels = layoutCandidate.periodEntries.map((entry, index) => ({
+    period_key: normalizePeriodKey(entry.period_key, `period_${index + 1}`),
+    label: entry.label || `Period ${index + 1}`,
+    period_type: entry.period_type || "custom",
+    month: entry.month || null,
+    quarter: entry.quarter || null,
+    year: entry.year || null,
+  }))
+  const periodBindings = layoutCandidate.periodEntries.map((entry, index) => ({
+    period_key: periodLabels[index].period_key,
+    label: periodLabels[index].label,
+    cell: cellAddressFromRowCol(layoutCandidate.periodRow, entry.col),
+  }))
+  const periodColumnLookup = new Map(
+    layoutCandidate.periodEntries.map((entry, index) => [periodLabels[index].period_key, entry.col]),
+  )
+
+  const rowBindings = []
+  const matchedKeys = new Set()
+  const issues = []
+
+  ;(normalizedSheet?.rows || []).forEach((row) => {
+    const definition = findIndirectRowDefinition(row.rowLabel)
+    if (!definition || matchedKeys.has(definition.semantic_key)) return
+    const rowTargetState = analyzeIndirectRowTarget(
+      row,
+      layoutCandidate.periodEntries.map((entry) => entry.col),
+    )
+    const role = rowTargetState.allFormula ? "summary" : definition.role
+    const binding = {
+      semantic_key: definition.semantic_key,
+      label: definition.label,
+      role,
+      required: definition.required,
+      cells: periodLabels.map((label) => ({
+        period_key: label.period_key,
+        label: label.label,
+        cell: cellAddressFromRowCol(row.rowIndex, periodColumnLookup.get(label.period_key)),
+      })),
+      metadata: {
+        row_index: row.rowIndex,
+        row_type: row.rowType,
+        formula_count: rowTargetState.formulaCount,
+        writable_target_count: rowTargetState.writableCount,
+      },
+    }
+    if (definition.role === "input" && role !== "input") {
+      issues.push(`Row "${row.rowLabel}" is formula-driven across detected periods and cannot be used as a writable input row.`)
+    }
+    rowBindings.push(binding)
+    matchedKeys.add(definition.semantic_key)
+  })
+
+  const missingRequired = INDIRECT_ROW_DEFINITIONS.filter(
+    (definition) => definition.required && !matchedKeys.has(definition.semantic_key),
+  ).map((definition) => definition.semantic_key)
+
+  if (missingRequired.length) {
+    issues.push(`Missing required indirect row bindings: ${missingRequired.join(", ")}`)
+  }
+
+  const writableLeafInputs = rowBindings.filter(
+    (binding) =>
+      binding.role === "input" &&
+      binding.semantic_key !== "opening_cash" &&
+      Number(binding.metadata?.writable_target_count || 0) > 0,
+  )
+  if (!writableLeafInputs.length) {
+    issues.push("No writable indirect input rows were detected for the template leaf rows.")
+  }
+
+  const directionalCoverage = new Set(
+    writableLeafInputs
+      .map((binding) => INDIRECT_ROW_LOOKUP.get(binding.semantic_key)?.cash_direction || "neutral")
+      .filter((direction) => direction === "inflow" || direction === "outflow"),
+  )
+  const missingDirections = ["inflow", "outflow"].filter((direction) => !directionalCoverage.has(direction))
+  if (missingDirections.length) {
+    issues.push(`Indirect template is missing writable ${missingDirections.join(" and ")} input rows.`)
+  }
+
+  const missingRequiredFinancing = REQUIRED_INDIRECT_FINANCING_KEYS.filter((semanticKey) => !matchedKeys.has(semanticKey))
+  if (missingRequiredFinancing.length) {
+    issues.push(`Missing required financing row bindings: ${missingRequiredFinancing.join(", ")}`)
+  }
+
+  const openingBinding = rowBindings.find((binding) => binding.semantic_key === "opening_cash") || null
+  const closingBinding = rowBindings.find((binding) => binding.semantic_key === "closing_cash") || null
+  const rowBindingsSanitized = rowBindings.map(({ metadata, ...binding }) => binding)
+
+  let confidence = roundCurrency(
+    Math.max(0.22, Math.min(0.92, 0.28 + rowBindingsSanitized.length * 0.03 + matchedKeys.size * 0.015)),
+  )
+  const needsHumanReview =
+    missingRequired.length > 0 ||
+    missingRequiredFinancing.length > 0 ||
+    missingDirections.length > 0 ||
+    !writableLeafInputs.length ||
+    rowBindings.some((binding) => binding.role === "summary" && INDIRECT_ROW_LOOKUP.get(binding.semantic_key)?.role === "input")
+
+  if (needsHumanReview) {
+    confidence = Math.min(confidence, 0.58)
+  }
+
+  return {
+    detected_layout_type: layoutCandidate.layout_type,
+    confidence,
+    needs_human_review: needsHumanReview,
+    issues,
+    required_anchors: needsHumanReview ? ["row_bindings"] : [],
+    suggested_config_json: {
+      version: "v3",
+      statement_method: STATEMENT_METHODS.INDIRECT,
+      sheet_name: worksheet.name,
+      layout_type: layoutCandidate.layout_type,
+      period_granularity: inferGranularityFromLabels(periodLabels),
+      period_axis: {
+        orientation: "column",
+        labels: periodLabels,
+        period_bindings: periodBindings,
+      },
+      period_resolution_rules: {
+        custom_periods: [],
+      },
+      opening_binding: openingBinding ? { cells: openingBinding.cells } : null,
+      closing_binding: closingBinding ? { cells: closingBinding.cells } : null,
+      bucket_bindings: [],
+      row_bindings: rowBindingsSanitized,
+      writer_policy: {
+        preserve_formulas: true,
+        full_recalc_on_open: true,
+      },
+      mapping_policy: {
+        auto_create: true,
+        high_confidence_threshold: 0.7,
+        low_confidence_threshold: 0.35,
+      },
+    },
+  }
 }
 
 function dedupePeriodEntries(entries) {
@@ -1482,6 +1960,7 @@ function buildV3ConfigFromLayoutDetection(worksheet, layoutCandidate) {
 
   return {
     version: "v3",
+    statement_method: STATEMENT_METHODS.DIRECT,
     sheet_name: worksheet.name,
     layout_type: layoutCandidate.layout_type,
     period_granularity: inferGranularityFromLabels(periodLabels),
@@ -1496,6 +1975,7 @@ function buildV3ConfigFromLayoutDetection(worksheet, layoutCandidate) {
     opening_binding: openingCells.length ? { cells: openingCells } : null,
     closing_binding: closingCells.length ? { cells: closingCells } : null,
     bucket_bindings: bucketBindings,
+    row_bindings: [],
     writer_policy: {
       preserve_formulas: true,
       full_recalc_on_open: true,
@@ -1511,6 +1991,7 @@ function buildV3ConfigFromLayoutDetection(worksheet, layoutCandidate) {
 function buildMinimalSuggestedV3Config(sheetName = "Cash Flow") {
   return {
     version: "v3",
+    statement_method: STATEMENT_METHODS.DIRECT,
     sheet_name: sheetName,
     layout_type: "freeform",
     period_granularity: "custom",
@@ -1560,6 +2041,7 @@ function buildMinimalSuggestedV3Config(sheetName = "Cash Flow") {
         cells: [{ period_key: "period_1", label: "Period 1", cell: "C1" }],
       },
     ],
+    row_bindings: [],
     writer_policy: {
       preserve_formulas: true,
       full_recalc_on_open: true,
@@ -1592,6 +2074,20 @@ async function analyzeTemplateWorkbook({ templatePath }) {
       bestCandidate = candidate
     }
   })
+
+  if (bestCandidate && bestWorksheet && bestCandidate.layout_type !== "rows") {
+    try {
+      const { normalized } = await resolveTemplateStructure(templatePath)
+      const normalizedSheet = normalized.sheets.find((sheet) => sheet.name === bestWorksheet.name) || null
+      if (normalizedSheet && isIndirectWorkbookCandidate(bestWorksheet, normalizedSheet)) {
+        return buildIndirectV3ConfigFromNormalizedSheet(bestWorksheet, bestCandidate, normalizedSheet)
+      }
+    } catch (error) {
+      if (!(error instanceof CashFlowValidationError)) {
+        throw error
+      }
+    }
+  }
 
   if (!bestCandidate || !bestWorksheet) {
     const fallbackConfig = buildMinimalSuggestedV3Config(workbook.worksheets[0]?.name || "Cash Flow")
@@ -1647,6 +2143,7 @@ async function analyzeTemplateWorkbook({ templatePath }) {
     confidence,
     issues,
     required_anchors: Array.from(new Set(requiredAnchors)),
+    needs_human_review: confidence < 0.55 || requiredAnchors.length > 0,
     suggested_config_json: suggestedConfig,
   }
 }
@@ -1762,6 +2259,7 @@ function migrateV2TemplateConfigToV3(v2Config) {
 
   const v3 = {
     version: "v3",
+    statement_method: normalizedV2.statement_method || STATEMENT_METHODS.DIRECT,
     sheet_name: normalizedV2.sheet_name,
     layout_type: normalizedV2.layout_type,
     period_granularity: "monthly",
@@ -1798,6 +2296,7 @@ function migrateV2TemplateConfigToV3(v2Config) {
         cell: cell.cell,
       })),
     })),
+    row_bindings: [],
     writer_policy: normalizeWriterPolicy(normalizedV2.writer_policy),
     mapping_policy: normalizeMappingPolicy(normalizedV2.mapping_policy),
   }
@@ -2212,6 +2711,342 @@ function computeOpeningBalanceAtDate({ openingDate, tbAsOfDate, tbCashEndingBala
   return roundCurrency(tbCashEndingBalance + netForward)
 }
 
+function initializePeriodRowValueMap(rowBindings = []) {
+  return rowBindings.reduce((accumulator, binding) => {
+    accumulator[binding.semantic_key] = 0
+    return accumulator
+  }, {})
+}
+
+function inferProfitAndLossAccount(accountName) {
+  const normalized = normalizeText(accountName)
+  if (!normalized || normalized.includes("cash")) return null
+  if (normalized.includes("revenue") || normalized.includes("income") || normalized.includes("sales")) {
+    if (normalized.includes("unearned revenue")) return null
+    return "revenue"
+  }
+  if (
+    normalized.includes("expense") ||
+    normalized.includes("fees") ||
+    normalized.includes("salary") ||
+    normalized.includes("rent") ||
+    normalized.includes("utility") ||
+    normalized.includes("marketing") ||
+    normalized.includes("travel") ||
+    normalized.includes("insurance") ||
+    normalized.includes("supplies")
+  ) {
+    return "expense"
+  }
+  return null
+}
+
+function classifyWorkingCapitalAccount(accountName) {
+  const normalized = normalizeText(accountName)
+  if (!normalized) return null
+  if (normalized.includes("accounts receivable") || normalized === "accounts receivable") return "receivable"
+  if (normalized.includes("inventory")) return "inventory"
+  if (normalized.includes("accounts payable") || normalized === "accounts payable") return "payable"
+  if (normalized.includes("prepaid")) return "other_wc_asset"
+  if (normalized.includes("unearned revenue")) return "other_wc_liability"
+  return null
+}
+
+function classifyIndirectCashSemanticKey(accountName, direction) {
+  const normalized = normalizeText(accountName)
+  if (!normalized) return null
+
+  if (normalized.includes("office equipment") || normalized.includes("capital expenditure") || normalized.includes("fixed asset")) {
+    return direction === "outflow" ? "capital_expenditures" : "asset_sales"
+  }
+  if (normalized.includes("owner capital") || normalized.includes("capital contribution")) {
+    return direction === "inflow" ? "capital_contributions" : null
+  }
+  if (normalized.includes("owner drawings") || normalized.includes("drawings") || normalized.includes("dividend")) {
+    return direction === "outflow" ? "dividends_paid" : null
+  }
+  if (normalized.includes("notes payable") || normalized.includes("loan payable") || normalized.includes("debt")) {
+    return direction === "inflow" ? "debt_issued" : "debt_repaid"
+  }
+  if (normalized.includes("interest expense") || normalized.includes("interest payable")) {
+    return direction === "outflow" ? "interest_paid" : null
+  }
+
+  return null
+}
+
+function summarizeIndirectAssignments(assignments = []) {
+  const deduped = new Map()
+  assignments.forEach((assignment) => {
+    const key = `${normalizeText(assignment.account_name)}:${assignment.direction}:${assignment.bucket_key}`
+    if (!deduped.has(key)) {
+      deduped.set(key, {
+        account_name: assignment.account_name,
+        normalized_account: normalizeText(assignment.account_name),
+        direction: assignment.direction,
+        bucket_key: assignment.bucket_key,
+        confidence: Number(assignment.mapping_confidence || 0),
+        source: assignment.mapping_source,
+        grounding_status: assignment.grounding_status || null,
+        abs_amount: Number(assignment.abs_amount || 0),
+      })
+    } else {
+      deduped.get(key).abs_amount = roundCurrency(
+        Number(deduped.get(key).abs_amount || 0) + Number(assignment.abs_amount || 0),
+      )
+    }
+  })
+  return Array.from(deduped.values())
+}
+
+function mapIndirectCashMovementsToRows(movements, rowBindings) {
+  const bindingLookup = new Map((rowBindings || []).map((binding) => [binding.semantic_key, binding]))
+  const mappedMovements = []
+  const lowConfidenceMappings = []
+  const unmapped = []
+  const warnings = []
+
+  movements.forEach((movement) => {
+    const direction = movement.amount >= 0 ? "inflow" : "outflow"
+    const explicitSemanticKey = classifyIndirectCashSemanticKey(movement.account_name, direction)
+    const fallbackSemanticKey = "operating_cash_flow"
+    let selectedSemanticKey = explicitSemanticKey || fallbackSemanticKey
+    let mappingSource = explicitSemanticKey ? "template_rule" : "derived_operating"
+    let confidence = explicitSemanticKey ? 1 : 0.82
+    let groundingStatus = explicitSemanticKey ? "template_rule" : "suggested"
+
+    if (selectedSemanticKey !== fallbackSemanticKey && !bindingLookup.has(selectedSemanticKey)) {
+      warnings.push(
+        `Template is missing an indirect row binding for "${selectedSemanticKey}" while processing account "${movement.account_name}".`,
+      )
+      unmapped.push({
+        ...movement,
+        direction,
+        abs_amount: roundCurrency(Math.abs(movement.amount)),
+      })
+      return
+    }
+
+    if (!bindingLookup.has(selectedSemanticKey)) {
+      selectedSemanticKey = fallbackSemanticKey
+      mappingSource = "derived_operating"
+      confidence = 0.82
+      groundingStatus = "suggested"
+    }
+
+    mappedMovements.push({
+      ...movement,
+      direction,
+      bucket_key: selectedSemanticKey,
+      bucket_label: bindingLookup.get(selectedSemanticKey)?.label || selectedSemanticKey,
+      abs_amount: roundCurrency(Math.abs(movement.amount)),
+      mapping_source: mappingSource,
+      mapping_confidence: confidence,
+      grounding_status: groundingStatus,
+    })
+
+    if (confidence < 0.75) {
+      lowConfidenceMappings.push({
+        account_name: movement.account_name,
+        normalized_account: normalizeText(movement.account_name),
+        direction,
+        bucket_key: selectedSemanticKey,
+        confidence,
+      })
+    }
+  })
+
+  return {
+    mappedMovements,
+    unmapped,
+    warnings: Array.from(new Set(warnings)),
+    autoCreatedMappings: [],
+    lowConfidenceMappings,
+    finalBucketAssignments: summarizeIndirectAssignments(mappedMovements),
+  }
+}
+
+function buildIndirectTemplatePeriodData({
+  config,
+  dateRange,
+  tbAsOfDate,
+  tbCashEndingBalance,
+  generalLedgerRows,
+  cashMovements,
+  movementMapping = null,
+}) {
+  const runRange = {
+    start: normalizeDateStart(dateRange.start),
+    end: normalizeDateEnd(dateRange.end),
+  }
+  const periodResolution = resolvePeriodRanges({ config, runRange })
+  if (periodResolution.unresolved_period_keys.length) {
+    throw new CashFlowValidationError(
+      "Template includes custom/ambiguous periods without date ranges. Add period anchors and re-run analysis.",
+      {
+        missing_period_keys: periodResolution.unresolved_period_keys,
+      },
+    )
+  }
+
+  const rowBindings = getIndirectRowBindingsFromConfig(config)
+  const rowBindingLookup = new Map(rowBindings.map((binding) => [binding.semantic_key, binding]))
+  const periodRows = periodResolution.periods.map((period) => ({
+    ...period,
+    in_scope: Boolean(period.start && period.end ? rangesOverlap(period.start, period.end, runRange.start, runRange.end) : true),
+    opening_balance: 0,
+    net_cash_flow: 0,
+    closing_balance: 0,
+    row_values: initializePeriodRowValueMap(rowBindings),
+  }))
+
+  const periodLookup = new Map(periodRows.map((period) => [period.period_key, period]))
+  const periodForDate = (date) =>
+    periodRows.find((period) => period.start && period.end && date >= period.start && date <= period.end) || null
+
+  const indirectMovementMapping = movementMapping || mapIndirectCashMovementsToRows(cashMovements, rowBindings)
+  indirectMovementMapping.mappedMovements.forEach((movement) => {
+    const movementDate = normalizeDateOnly(movement.date)
+    if (movementDate < runRange.start || movementDate > runRange.end) return
+    const period = periodForDate(movementDate)
+    if (!period) return
+    period.net_cash_flow = roundCurrency(period.net_cash_flow + movement.amount)
+    period.row_values[movement.bucket_key] = roundCurrency(
+      Number(period.row_values[movement.bucket_key] || 0) + Number(movement.amount || 0),
+    )
+  })
+
+  generalLedgerRows.forEach((row) => {
+    const rowDate = normalizeDateOnly(row.date)
+    if (rowDate < runRange.start || rowDate > runRange.end) return
+    const period = periodForDate(rowDate)
+    if (!period) return
+
+    const pnlClass = inferProfitAndLossAccount(row.account_name)
+    if (pnlClass) {
+      period.row_values.net_income = roundCurrency(
+        Number(period.row_values.net_income || 0) + Number(row.credit || 0) - Number(row.debit || 0),
+      )
+    }
+
+    const normalizedAccount = normalizeText(row.account_name)
+    if (normalizedAccount.includes("depreciation") || normalizedAccount.includes("amortization")) {
+      period.row_values.depreciation_amortization = roundCurrency(
+        Number(period.row_values.depreciation_amortization || 0) + Number(row.debit || 0) - Number(row.credit || 0),
+      )
+    }
+
+    const wcClass = classifyWorkingCapitalAccount(row.account_name)
+    if (wcClass === "receivable") {
+      period.row_values.change_in_receivables = roundCurrency(
+        Number(period.row_values.change_in_receivables || 0) - (Number(row.debit || 0) - Number(row.credit || 0)),
+      )
+    } else if (wcClass === "inventory") {
+      period.row_values.change_in_inventory = roundCurrency(
+        Number(period.row_values.change_in_inventory || 0) - (Number(row.debit || 0) - Number(row.credit || 0)),
+      )
+    } else if (wcClass === "payable") {
+      period.row_values.change_in_payables = roundCurrency(
+        Number(period.row_values.change_in_payables || 0) + (Number(row.credit || 0) - Number(row.debit || 0)),
+      )
+    }
+  })
+
+  periodRows.forEach((period) => {
+    const operatingTarget = roundCurrency(Number(period.row_values.operating_cash_flow || 0))
+    const operatingBase = roundCurrency(
+      Number(period.row_values.net_income || 0) +
+        Number(period.row_values.depreciation_amortization || 0) +
+        Number(period.row_values.change_in_receivables || 0) +
+        Number(period.row_values.change_in_inventory || 0) +
+        Number(period.row_values.change_in_payables || 0),
+    )
+    period.row_values.other_working_capital_changes = roundCurrency(operatingTarget - operatingBase)
+    period.row_values.investing_cash_flow = roundCurrency(
+      Number(period.row_values.capital_expenditures || 0) + Number(period.row_values.asset_sales || 0),
+    )
+    period.row_values.financing_cash_flow = roundCurrency(
+      Number(period.row_values.capital_contributions || 0) +
+        Number(period.row_values.debt_issued || 0) +
+        Number(period.row_values.debt_repaid || 0) +
+        Number(period.row_values.interest_paid || 0) +
+        Number(period.row_values.dividends_paid || 0),
+    )
+    period.row_values.net_change_in_cash = roundCurrency(
+      Number(period.row_values.operating_cash_flow || 0) +
+        Number(period.row_values.investing_cash_flow || 0) +
+        Number(period.row_values.financing_cash_flow || 0),
+    )
+    period.net_cash_flow = roundCurrency(Number(period.row_values.net_change_in_cash || 0))
+  })
+
+  const orderedStarts = periodRows
+    .filter((period) => period.start)
+    .map((period) => period.start)
+    .sort((left, right) => left.getTime() - right.getTime())
+  const openingReferenceDate = orderedStarts[0] || runRange.start
+  const openingBalance = computeOpeningBalanceAtDate({
+    openingDate: openingReferenceDate,
+    tbAsOfDate,
+    tbCashEndingBalance,
+    cashMovements,
+  })
+
+  let rollingOpening = openingBalance
+  periodRows.forEach((period, index) => {
+    period.opening_balance = roundCurrency(rollingOpening)
+    period.row_values.opening_cash = period.opening_balance
+    period.closing_balance = roundCurrency(period.opening_balance + period.net_cash_flow)
+    period.row_values.closing_cash = period.closing_balance
+    if (index > 0 && rowBindingLookup.has("opening_cash")) {
+      period.row_values.opening_cash = periodRows[index - 1].closing_balance
+    }
+    rollingOpening = period.closing_balance
+  })
+
+  const totals = {
+    total_inflows: roundCurrency(
+      cashMovements.filter((movement) => movement.amount >= 0).reduce((sum, movement) => sum + movement.amount, 0),
+    ),
+    total_outflows: roundCurrency(
+      cashMovements.filter((movement) => movement.amount < 0).reduce((sum, movement) => sum + Math.abs(movement.amount), 0),
+    ),
+    net_cash_flow: roundCurrency(periodRows.reduce((sum, period) => sum + period.net_cash_flow, 0)),
+    opening_balance_start: openingBalance,
+    closing_balance_end: periodRows.length ? periodRows[periodRows.length - 1].closing_balance : openingBalance,
+    bucket_totals: {},
+    row_totals: {},
+  }
+
+  rowBindings.forEach((binding) => {
+    totals.row_totals[binding.semantic_key] = roundCurrency(
+      periodRows.reduce((sum, period) => sum + Number(period.row_values[binding.semantic_key] || 0), 0),
+    )
+  })
+
+  const warnings = [...indirectMovementMapping.warnings]
+  const asOfDate = normalizeDateOnly(tbAsOfDate)
+  const asOfPeriod = periodRows.find((period) => period.start && period.end && asOfDate >= period.start && asOfDate <= period.end)
+  if (asOfPeriod) {
+    const difference = roundCurrency(asOfPeriod.closing_balance - tbCashEndingBalance)
+    if (Math.abs(difference) > 0.01) {
+      warnings.push(
+        `Calculated closing balance at TB as-of period (${asOfPeriod.closing_balance}) differs from TB cash ending (${tbCashEndingBalance}).`,
+      )
+    }
+  }
+
+  return {
+    period_start: formatIsoDate(runRange.start),
+    period_end: formatIsoDate(runRange.end),
+    opening_balance_start: openingBalance,
+    periods: periodRows,
+    totals,
+    warnings,
+    movementMapping: indirectMovementMapping,
+  }
+}
+
 function buildTemplatePeriodData({
   config,
   dateRange,
@@ -2366,6 +3201,9 @@ async function ensureV2TemplateConfig({ templateConfig, templatePath }) {
     return migrateLegacyTemplateConfigToV2({ templatePath, legacyConfig: normalized })
   }
   const v3 = await ensureV3TemplateConfig({ templateConfig, templatePath })
+  if (getStatementMethodFromConfig(v3) === STATEMENT_METHODS.INDIRECT) {
+    throw new CashFlowValidationError("Cannot convert indirect template config to v2.")
+  }
   const monthlyKeys = v3.period_axis.labels
     .map((label) => ({
       key: label.period_key,
@@ -2488,6 +3326,7 @@ async function fillTemplateWorkbook({ templatePath, outputPath, config, periodDa
     templateConfig: config,
     templatePath,
   })
+  const statementMethod = getStatementMethodFromConfig(normalizedConfig)
   const writerPolicy = getWriterPolicyFromConfig(normalizedConfig)
   const buckets = getBucketsFromConfig(normalizedConfig)
   const openingBindings = normalizedConfig.opening_binding?.cells
@@ -2499,6 +3338,10 @@ async function fillTemplateWorkbook({ templatePath, outputPath, config, periodDa
   const bucketBindings = buckets.map((bucket) => ({
     ...bucket,
     resolved_cells: resolvePeriodCellBindings(bucket.cells, `bucket_bindings.${bucket.bucket_key}.cells`),
+  }))
+  const rowBindings = getIndirectRowBindingsFromConfig(normalizedConfig).map((binding) => ({
+    ...binding,
+    resolved_cells: resolvePeriodCellBindings(binding.cells, `row_bindings.${binding.semantic_key}.cells`),
   }))
 
   const workbook = new ExcelJS.Workbook()
@@ -2545,12 +3388,34 @@ async function fillTemplateWorkbook({ templatePath, outputPath, config, periodDa
   }
 
   orderedPeriodKeys.forEach((periodKey) => {
-    const period = periodLookup.get(periodKey) || {
-      period_key: periodKey,
-      opening_balance: 0,
-      closing_balance: 0,
-      bucket_amounts: {},
+    const period =
+      periodLookup.get(periodKey) ||
+      (statementMethod === STATEMENT_METHODS.INDIRECT
+        ? {
+            period_key: periodKey,
+            opening_balance: 0,
+            closing_balance: 0,
+            row_values: {},
+          }
+        : {
+            period_key: periodKey,
+            opening_balance: 0,
+            closing_balance: 0,
+            bucket_amounts: {},
+          })
+
+    if (statementMethod === STATEMENT_METHODS.INDIRECT) {
+      rowBindings.forEach((binding) => {
+        const rowCellBinding = getValueByPeriod(binding.resolved_cells, periodKey)
+        const value = period.row_values?.[binding.semantic_key] || 0
+        setNumberCellIfWritable(
+          resolveWorksheetCell(rowCellBinding, `row ${binding.semantic_key} period ${periodKey}`),
+          value,
+        )
+      })
+      return
     }
+
     const openingBinding = getValueByPeriod(openingBindings, periodKey)
     const closingBinding = getValueByPeriod(closingBindings, periodKey)
 
@@ -2601,6 +3466,7 @@ async function generateCashFlowReport({
     templateConfig,
     templatePath,
   })
+  const statementMethod = getStatementMethodFromConfig(config)
   const buckets = getBucketsFromConfig(config)
   const mappingPolicy = getMappingPolicyFromConfig(config)
   const resolvedRange = resolveRunDateRange({
@@ -2615,20 +3481,34 @@ async function generateCashFlowReport({
     cashAccountName: trialBalance.cashAccountName,
   })
 
-  const mapped = mapMovementsToBuckets(generalLedger.movements, buckets, {
-    learnedMappings,
-    mappingPolicy,
-  })
+  const mapped =
+    statementMethod === STATEMENT_METHODS.INDIRECT
+      ? mapIndirectCashMovementsToRows(generalLedger.movements, getIndirectRowBindingsFromConfig(config))
+      : mapMovementsToBuckets(generalLedger.movements, buckets, {
+          learnedMappings,
+          mappingPolicy,
+        })
 
-  const periodData = buildTemplatePeriodData({
-    config,
-    dateRange: resolvedRange,
-    tbAsOfDate: trialBalance.asOfDate,
-    tbCashEndingBalance: trialBalance.cashEndingBalance,
-    cashMovements: generalLedger.movements,
-    mappedMovements: mapped.mappedMovements,
-    buckets,
-  })
+  const periodData =
+    statementMethod === STATEMENT_METHODS.INDIRECT
+      ? buildIndirectTemplatePeriodData({
+          config,
+          dateRange: resolvedRange,
+          tbAsOfDate: trialBalance.asOfDate,
+          tbCashEndingBalance: trialBalance.cashEndingBalance,
+          generalLedgerRows: generalLedger.rows,
+          cashMovements: generalLedger.movements,
+          movementMapping: mapped,
+        })
+      : buildTemplatePeriodData({
+          config,
+          dateRange: resolvedRange,
+          tbAsOfDate: trialBalance.asOfDate,
+          tbCashEndingBalance: trialBalance.cashEndingBalance,
+          cashMovements: generalLedger.movements,
+          mappedMovements: mapped.mappedMovements,
+          buckets,
+        })
 
   await fillTemplateWorkbook({
     templatePath,
@@ -2640,6 +3520,7 @@ async function generateCashFlowReport({
   const warnings = [
     ...generalLedger.warnings,
     ...periodData.warnings,
+    ...(mapped.warnings || []),
     ...(mapped.unmapped.length
       ? [`${mapped.unmapped.length} movement(s) could not be mapped and were skipped.`]
       : []),
@@ -2655,7 +3536,7 @@ async function generateCashFlowReport({
           opening_balance: period.opening_balance,
           net_cash_flow: period.net_cash_flow,
           closing_balance: period.closing_balance,
-          buckets: period.bucket_amounts,
+          buckets: statementMethod === STATEMENT_METHODS.INDIRECT ? period.row_values || {} : period.bucket_amounts,
         }))
       : []
 
@@ -2698,7 +3579,7 @@ async function generateCashFlowReport({
         opening_balance: period.opening_balance,
         net_cash_flow: period.net_cash_flow,
         closing_balance: period.closing_balance,
-        buckets: period.bucket_amounts,
+        buckets: statementMethod === STATEMENT_METHODS.INDIRECT ? period.row_values || {} : period.bucket_amounts,
       })),
       monthly: monthlyPreview,
       mapping_summary: {
@@ -2735,12 +3616,20 @@ module.exports = {
     parsePeriodToken,
     allocateByWeights,
     roundCurrency,
+    inferStatementMethodFromConfigShape,
+    looksLikeV3TemplateConfig,
+    normalizeStatementMethod,
+    normalizeIndirectRowBindings,
     normalizeBucketKey,
     detectBucketDirection,
     computeTokenSimilarity,
     pickRowLayoutCandidate,
     pickColumnLayoutCandidate,
     resolvePeriodRanges,
+    buildIndirectV3ConfigFromNormalizedSheet,
+    classifyIndirectCashSemanticKey,
+    mapIndirectCashMovementsToRows,
+    buildIndirectTemplatePeriodData,
     buildTemplatePeriodData,
   },
 }
