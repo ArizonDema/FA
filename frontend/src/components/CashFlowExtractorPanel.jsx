@@ -26,6 +26,7 @@ function buildPresetRange(preset, year) {
 
 export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote }) {
   const [loading, setLoading] = useState(false)
+  const [generating, setGenerating] = useState(false)
   const [templates, setTemplates] = useState([])
   const [history, setHistory] = useState([])
   const [latestRun, setLatestRun] = useState(null)
@@ -49,7 +50,12 @@ export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote 
   })
 
   const activeTemplate = useMemo(
-    () => templates.find((template) => template.is_active) || null,
+    () => templates.find((template) => template.is_active && template.can_activate !== false) || null,
+    [templates],
+  )
+
+  const runnableTemplates = useMemo(
+    () => templates.filter((template) => template.is_active && template.can_activate !== false),
     [templates],
   )
 
@@ -70,9 +76,16 @@ export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote 
       const nextTemplates = templateResponse.data.templates || []
       setTemplates(nextTemplates)
       setHistory(historyResponse.data.runs || [])
-      const active = nextTemplates.find((item) => item.is_active)
+      const active = nextTemplates.find((item) => item.is_active && item.can_activate !== false)
       if (active) {
-        setForm((prev) => (prev.template_id ? prev : { ...prev, template_id: active.id }))
+        setForm((prev) => {
+          const stillRunnable = nextTemplates.some(
+            (template) => template.id === prev.template_id && template.is_active && template.can_activate !== false,
+          )
+          return stillRunnable ? prev : { ...prev, template_id: active.id }
+        })
+      } else {
+        setForm((prev) => ({ ...prev, template_id: "" }))
       }
     } catch (error) {
       onError(error.message)
@@ -122,6 +135,7 @@ export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote 
 
   const handleRun = async (event) => {
     event.preventDefault()
+    if (generating) return
     if (!selectedFundId) {
       onError("Select a fund first.")
       return
@@ -136,8 +150,18 @@ export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote 
       onError("Provide date range for this run.")
       return
     }
+    if (!form.template_id && !activeTemplate) {
+      onError("No active ready cash flow template is available. Resolve anchors and activate a template first.")
+      return
+    }
 
     try {
+      setGenerating(true)
+      setLatestRun(null)
+      setLatestPreview(null)
+      setLatestWarnings([])
+      setLatestAutoMappings([])
+      setLatestLowConfidenceMappings([])
       const formData = new FormData()
       formData.append("portfolio_id", selectedFundId)
       formData.append("date_start", form.date_start)
@@ -163,6 +187,8 @@ export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote 
       await loadData()
     } catch (error) {
       onError(error.message)
+    } finally {
+      setGenerating(false)
     }
   }
 
@@ -273,7 +299,7 @@ export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote 
               onChange={(event) => setForm({ ...form, template_id: event.target.value })}
             >
               <option value="">Use Active Template</option>
-              {templates.map((template) => (
+              {runnableTemplates.map((template) => (
                 <option key={template.id} value={template.id}>
                   {template.name}
                   {template.is_active ? " (Active)" : ""}
@@ -291,9 +317,14 @@ export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote 
           </label>
         </div>
 
-        <button className="primary" type="submit">
-          Generate XLSX Report
+        <button className="primary" type="submit" disabled={generating}>
+          {generating ? "Generating..." : "Generate XLSX Report"}
         </button>
+        {generating && (
+          <p className="muted small">
+            Building workbook and mapping cash movements. This can take a moment when LLM mapping is enabled.
+          </p>
+        )}
       </form>
 
       {latestRun && (

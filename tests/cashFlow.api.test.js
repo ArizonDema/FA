@@ -187,7 +187,10 @@ function createTemplateRecord(overrides = {}) {
     status: "active",
     template_file_name: "template.xlsx",
     template_file_path: "C:\\temp\\template.xlsx",
-    config_json: { sheet_name: "Cash Flow", buckets: [] },
+    config_json: {
+      sheet_name: "Cash Flow",
+      buckets: [{ bucket_key: "ops_inflow", label: "Ops Inflow", direction: "inflow" }],
+    },
     is_active: true,
     active_version_id: activeVersion.id,
     activeVersion,
@@ -203,6 +206,7 @@ function createTemplateRecord(overrides = {}) {
         version: this.version,
         template_file_name: this.template_file_name,
         template_file_path: this.template_file_path,
+        status: this.status,
         config_json: this.config_json,
         is_active: this.is_active,
         active_version_id: this.active_version_id,
@@ -222,7 +226,10 @@ function createTemplateVersionRecord(overrides = {}) {
     source_file_name: "template.xlsx",
     source_file_path: "C:\\temp\\template.xlsx",
     source_file_sha256: "sha256-template",
-    config_json: { sheet_name: "Cash Flow", buckets: [] },
+    config_json: {
+      sheet_name: "Cash Flow",
+      buckets: [{ bucket_key: "ops_inflow", label: "Ops Inflow", direction: "inflow" }],
+    },
     raw_structure_json: { worksheet_count: 1 },
     llm_meta_json: { provider: "ollama" },
     update: jest.fn(async function update(values) {
@@ -1067,7 +1074,11 @@ describe("cash-flow API", () => {
 
     expect(response.status).toBe(200)
     expect(response.body.data.analysis.id).toBeDefined()
-    expect(mockTemplateIngestionService.ingestTemplateSchema).toHaveBeenCalled()
+    expect(mockTemplateIngestionService.ingestTemplateSchema).toHaveBeenCalledWith(
+      expect.objectContaining({
+        forceLlm: true,
+      }),
+    )
   })
 
   test("reanalyzes template using active version source path when primary file path is missing", async () => {
@@ -1089,7 +1100,11 @@ describe("cash-flow API", () => {
 
     expect(response.status).toBe(200)
     expect(response.body.data.analysis.id).toBeDefined()
-    expect(mockTemplateIngestionService.ingestTemplateSchema).toHaveBeenCalled()
+    expect(mockTemplateIngestionService.ingestTemplateSchema).toHaveBeenCalledWith(
+      expect.objectContaining({
+        forceLlm: true,
+      }),
+    )
   })
 
   test("returns a clear message when template source file is missing for reanalysis", async () => {
@@ -1140,7 +1155,7 @@ describe("cash-flow API", () => {
     expect(mockTemplateIngestionService.ingestTemplateSchema).toHaveBeenCalled()
   })
 
-  test("blocks template creation when ingestion result requires human review", async () => {
+  test("saves ingestion result that requires human review as inactive draft", async () => {
     const templateFile = path.join(tempDir, "template_create_review.xlsx")
     await writeTinyWorkbook(templateFile)
 
@@ -1198,11 +1213,13 @@ describe("cash-flow API", () => {
       .field("name", "Review Required Template")
       .attach("template_file", templateFile)
 
-    expect(response.status).toBe(400)
-    expect(String(response.body.message || "").toLowerCase()).toContain("needs human review")
+    expect(response.status).toBe(201)
+    expect(response.body.data.saved_as_draft).toBe(true)
+    expect(response.body.data.can_activate).toBe(false)
+    expect(response.body.data.required_anchors).toContain("period_axis")
   })
 
-  test("blocks template creation when flagged analysis is submitted without meaningful config changes", async () => {
+  test("saves flagged analysis without meaningful config changes as inactive draft", async () => {
     const templateFile = path.join(tempDir, "template_flagged_analysis.xlsx")
     await writeTinyWorkbook(templateFile)
 
@@ -1241,6 +1258,12 @@ describe("cash-flow API", () => {
       expires_at: null,
       needs_human_review: true,
       suggested_config_json: flaggedSuggestedConfig,
+      raw_structure_json: { worksheet_count: 1 },
+      llm_meta_json: {},
+      update: jest.fn(async function update(values) {
+        Object.assign(this, values)
+        return this
+      }),
       issues_json: {
         issues: ["LLM output malformed"],
         required_anchors: ["period_axis", "bucket_targets"],
@@ -1255,8 +1278,85 @@ describe("cash-flow API", () => {
       .field("config_json", JSON.stringify(flaggedSuggestedConfig))
       .attach("template_file", templateFile)
 
+    expect(response.status).toBe(201)
+    expect(response.body.data.saved_as_draft).toBe(true)
+    expect(response.body.data.can_activate).toBe(false)
+    expect(response.body.data.required_anchors).toEqual(
+      expect.arrayContaining(["period_axis", "bucket_targets"]),
+    )
+  })
+
+  test("blocks activation when a draft still has unresolved anchors", async () => {
+    const unresolvedConfig = {
+      version: "v3",
+      sheet_name: "Cash Flow",
+      layout_type: "freeform",
+      period_granularity: "custom",
+      period_axis: {
+        orientation: "row",
+        labels: [{ period_key: "period_1", label: "Period 1", period_type: "custom" }],
+        period_bindings: [{ period_key: "period_1", label: "Period 1", cell: "A1" }],
+      },
+      period_resolution_rules: {
+        custom_periods: [{ period_key: "period_1", date_start: "2025-01-01", date_end: "2025-01-01" }],
+      },
+      bucket_bindings: [
+        {
+          bucket_key: "inflow_bucket",
+          label: "Inflow Bucket",
+          direction: "inflow",
+          cells: [{ period_key: "period_1", cell: "B1" }],
+        },
+      ],
+      review_metadata: {
+        needs_human_review: true,
+        required_anchors: ["period_axis"],
+        confirmed_anchors: [],
+      },
+    }
+
+    mockTemplateModel.findByPk.mockResolvedValueOnce(
+      createTemplateRecord({
+        id: "template-draft",
+        status: "draft",
+        is_active: false,
+        config_json: unresolvedConfig,
+        activeVersion: createTemplateVersionRecord({ config_json: unresolvedConfig }),
+      }),
+    )
+
+    const response = await request(app).put("/api/v1/cash-flow/templates/template-draft/activate")
+
     expect(response.status).toBe(400)
-    expect(String(response.body.message || "").toLowerCase()).toContain("resolve required anchors")
+    expect(String(response.body.message || "").toLowerCase()).toContain("review")
+    expect(response.body.errors.required_anchors).toContain("period_axis")
+  })
+
+  test("blocks report run when an explicit template is still a draft", async () => {
+    const tbFile = path.join(tempDir, "tb_draft_template.xlsx")
+    const glFile = path.join(tempDir, "gl_draft_template.xlsx")
+    await writeTinyWorkbook(tbFile)
+    await writeTinyWorkbook(glFile)
+
+    mockTemplateModel.findByPk.mockResolvedValueOnce(
+      createTemplateRecord({
+        id: "template-draft",
+        status: "draft",
+        is_active: false,
+      }),
+    )
+
+    const response = await request(app)
+      .post("/api/v1/cash-flow/reports/run")
+      .field("portfolio_id", "fund-1")
+      .field("date_start", "2025-01-01")
+      .field("date_end", "2025-12-31")
+      .field("template_id", "template-draft")
+      .attach("tb_file", tbFile)
+      .attach("gl_file", glFile)
+
+    expect(response.status).toBe(400)
+    expect(String(response.body.message || "").toLowerCase()).toContain("draft")
   })
 
   test("runs cash flow report from TB + GL uploads", async () => {
@@ -1315,7 +1415,11 @@ describe("cash-flow API", () => {
     expect(response.body.data.preview.monthly).toHaveLength(1)
     expect(response.body.data.report_reliability.reportReliabilityStatus).toBe("grounded")
     expect(response.body.data.report_reliability.humanReviewRequired).toBe(false)
-    expect(mockCashFlowService.generateCashFlowReport).toHaveBeenCalled()
+    expect(mockCashFlowService.generateCashFlowReport).toHaveBeenCalledWith(
+      expect.not.objectContaining({
+        useRuntimeMappingAssistance: false,
+      }),
+    )
   })
 
   test("generates a deterministic approved-mapping report", async () => {
@@ -1435,6 +1539,13 @@ describe("cash-flow API", () => {
 
     expect(response.status).toBe(200)
     expect(mockCashFlowService.generateCashFlowReport).toHaveBeenCalledTimes(2)
+    mockCashFlowService.generateCashFlowReport.mock.calls.forEach(([call]) => {
+      expect(call).toEqual(
+        expect.not.objectContaining({
+          useRuntimeMappingAssistance: false,
+        }),
+      )
+    })
     expect(mockCashFlowService.ensureV3TemplateConfig).toHaveBeenCalledTimes(1)
     expect((response.body.data.warnings || []).some((warning) => String(warning).includes("auto-corrected"))).toBe(true)
   })

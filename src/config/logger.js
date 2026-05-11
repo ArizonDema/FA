@@ -9,6 +9,7 @@ const COMBINED_LOG_PATH = path.join(LOG_DIR, "combined.log")
 const LEGACY_ARCHIVE_THRESHOLD_BYTES = 200 * 1024 * 1024
 const FILE_MAX_SIZE_BYTES = 20 * 1024 * 1024
 const FILE_MAX_COUNT = 10
+const BROKEN_PIPE_HANDLER_KEY = "__cssInvestBrokenPipeHandler"
 
 function ensureLogDirectory() {
   fs.mkdirSync(LOG_DIR, { recursive: true })
@@ -39,9 +40,14 @@ function archiveOversizedLog(logPath) {
 
 function suppressBrokenPipe(stream) {
   if (!stream || typeof stream.on !== "function") return
-  stream.on("error", (error) => {
+  if (stream[BROKEN_PIPE_HANDLER_KEY]) return
+
+  const handler = (error) => {
     if (error?.code === "EPIPE") return
-  })
+  }
+
+  stream[BROKEN_PIPE_HANDLER_KEY] = handler
+  stream.on("error", handler)
 }
 
 ensureLogDirectory()

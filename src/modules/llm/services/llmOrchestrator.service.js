@@ -3,6 +3,7 @@ const https = require("https")
 const config = require("../../../config/app")
 const logger = require("../../../config/logger")
 const CashFlowTemplateIngestionService = require("../../../services/cashFlowTemplateIngestion.service")
+const { resolveOllamaThinkForModel } = require("./ollamaCompatibility.service")
 
 function normalizeText(value) {
   return String(value || "")
@@ -131,6 +132,16 @@ function normalizeFailureCode(value, fallback = "llm_error") {
   return normalized || fallback
 }
 
+function uniqueModels(primaryModel, candidates = []) {
+  const models = []
+  ;[primaryModel, ...(Array.isArray(candidates) ? candidates : [])].forEach((model) => {
+    const normalized = normalizeText(model)
+    if (!normalized) return
+    if (!models.includes(normalized)) models.push(normalized)
+  })
+  return models
+}
+
 function classifyOllamaError(error, { timeoutMs }) {
   const rawMessage = normalizeText(error?.failure_reason || error?.message || "Unknown Ollama error")
   const rawCode = String(error?.code || error?.failure_code || "").trim().toUpperCase()
@@ -204,10 +215,11 @@ class LlmOrchestratorService {
     return CashFlowTemplateIngestionService.computeTemplateHash(templatePath)
   }
 
-  static async analyzeTemplateSchema({ templatePath, sourceFileName }) {
+  static async analyzeTemplateSchema({ templatePath, sourceFileName, forceLlm = false }) {
     return await CashFlowTemplateIngestionService.ingestTemplateSchema({
       templatePath,
       sourceFileName,
+      forceLlm,
     })
   }
 
@@ -219,6 +231,9 @@ class LlmOrchestratorService {
     return {
       provider: config.mappingAssistance?.provider || "ollama",
       model: overrides.model || config.mappingAssistance?.model || config.ollama?.model,
+      modelCandidates: Array.isArray(overrides.modelCandidates)
+        ? overrides.modelCandidates
+        : config.mappingAssistance?.modelCandidates || config.ollama?.modelCandidates || [],
       baseUrl: overrides.baseUrl || config.mappingAssistance?.baseUrl || config.ollama?.baseUrl,
       chatPath: overrides.chatPath || config.mappingAssistance?.chatPath || config.ollama?.chatPath || "/api/chat",
       timeoutMs: Number(overrides.timeoutMs || config.mappingAssistance?.timeoutMs || config.ollama?.timeoutMs || 120000),
@@ -252,31 +267,37 @@ class LlmOrchestratorService {
     timeoutMs = null,
     maxAttempts = null,
     model = null,
+    modelCandidates = null,
+    jsonSchema = null,
+    skillVersion = null,
     extraMetadata = null,
   }) {
     const llmConfig = this.buildMappingConfig({
       timeoutMs,
       maxAttempts,
       model,
+      modelCandidates,
     })
     const endpoint = buildOllamaEndpoint(llmConfig.baseUrl, llmConfig.chatPath)
     const attempts = []
+    const models = uniqueModels(llmConfig.model, modelCandidates || llmConfig.modelCandidates)
 
-    for (let attempt = 1; attempt <= llmConfig.maxAttempts; attempt += 1) {
-      const requestPayload = {
-        model: llmConfig.model,
-        stream: false,
-        think: llmConfig.think,
-        ...(llmConfig.forceJsonOutput ? { format: "json" } : {}),
-        messages,
-        keep_alive: llmConfig.keepAlive,
-        options: {
-          ...(Number.isFinite(llmConfig.numPredict) && llmConfig.numPredict > 0
-            ? { num_predict: Math.round(llmConfig.numPredict) }
-            : {}),
-          ...(Number.isFinite(llmConfig.temperature) ? { temperature: Math.max(0, llmConfig.temperature) } : {}),
-        },
-      }
+    for (const modelName of models) {
+      for (let attempt = 1; attempt <= llmConfig.maxAttempts; attempt += 1) {
+        const requestPayload = {
+          model: modelName,
+          stream: false,
+          think: resolveOllamaThinkForModel(modelName, llmConfig.think),
+          ...(jsonSchema ? { format: jsonSchema } : llmConfig.forceJsonOutput ? { format: "json" } : {}),
+          messages,
+          keep_alive: llmConfig.keepAlive,
+          options: {
+            ...(Number.isFinite(llmConfig.numPredict) && llmConfig.numPredict > 0
+              ? { num_predict: Math.round(llmConfig.numPredict) }
+              : {}),
+            ...(Number.isFinite(llmConfig.temperature) ? { temperature: Math.max(0, llmConfig.temperature) } : {}),
+          },
+        }
 
       const promptChars = estimatePromptChars(messages)
       const requestBytes = Buffer.byteLength(JSON.stringify(requestPayload), "utf8")
@@ -285,11 +306,12 @@ class LlmOrchestratorService {
       logger.info("[phase5] LLM structured request started", {
         task_type: taskType,
         attempt,
-        model: llmConfig.model,
+        model: modelName,
         endpoint,
         timeout_ms: llmConfig.timeoutMs,
         prompt_chars: promptChars,
         request_bytes: requestBytes,
+        skill_version: skillVersion || null,
         metadata: extraMetadata || null,
       })
 
@@ -337,13 +359,15 @@ class LlmOrchestratorService {
 
         const meta = {
           provider: llmConfig.provider,
-          model: payload?.model || llmConfig.model,
+          model: payload?.model || modelName,
           endpoint,
           timeout_ms: llmConfig.timeoutMs,
           request_duration_ms: Date.now() - startedAt,
           prompt_chars: promptChars,
           request_bytes: requestBytes,
           attempt,
+          skill_version: skillVersion || null,
+          schema_constrained: Boolean(jsonSchema),
         }
 
         attempts.push({
@@ -359,6 +383,7 @@ class LlmOrchestratorService {
           endpoint,
           duration_ms: meta.request_duration_ms,
           prompt_chars: promptChars,
+          skill_version: skillVersion || null,
         })
 
         return {
@@ -379,14 +404,15 @@ class LlmOrchestratorService {
         logger.warn("[phase5] LLM structured request failed", {
           task_type: taskType,
           attempt,
-          model: llmConfig.model,
+          model: modelName,
           endpoint,
           timeout_ms: llmConfig.timeoutMs,
           failure_code: failure.code,
           failure_reason: failure.reason,
+          skill_version: skillVersion || null,
         })
 
-        if (attempt >= llmConfig.maxAttempts) {
+        if (attempt >= llmConfig.maxAttempts && modelName === models[models.length - 1]) {
           const wrappedError = new Error(failure.reason)
           wrappedError.name = "LlmRequestError"
           wrappedError.failure_code = failure.code
@@ -395,9 +421,10 @@ class LlmOrchestratorService {
           wrappedError.attempts = attempts
           wrappedError.timeout_ms = llmConfig.timeoutMs
           wrappedError.endpoint = endpoint
-          wrappedError.model = llmConfig.model
+          wrappedError.model = modelName
           throw wrappedError
         }
+      }
       }
     }
 

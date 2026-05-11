@@ -74,6 +74,21 @@ describe("Template parsing pipeline", () => {
     )
   })
 
+  test("returns a validation error when the workbook payload is not a real xlsx file", async () => {
+    const invalidWorkbookPath = path.join(tempDir, "invalid-template.xlsx")
+    fs.writeFileSync(invalidWorkbookPath, "not a real workbook")
+
+    const filePayload = TemplateFileLoader.load({
+      filePath: invalidWorkbookPath,
+      sourceFileName: "invalid-template.xlsx",
+    })
+
+    await expect(WorkbookParser.parse(filePayload)).rejects.toMatchObject({
+      name: "CashFlowValidationError",
+      message: "Cash flow template is not a valid .xlsx workbook or is corrupted. Re-export it as an Excel .xlsx file and try again.",
+    })
+  })
+
   test("normalizes template rows into section, data, subtotal, blank, and note rows", async () => {
     const filePayload = TemplateFileLoader.load({
       filePath: workbookPath,

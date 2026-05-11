@@ -38,6 +38,17 @@ export const API_ORIGIN = (() => {
 })()
 export const API_DOCS_URL = API_ORIGIN ? `${API_ORIGIN}/api/docs` : "/api/docs"
 
+export class ApiError extends Error {
+  constructor(message, { status = null, payload = null, errors = null } = {}) {
+    super(message)
+    this.name = "ApiError"
+    this.status = status
+    this.payload = payload
+    this.errors = errors
+    this.details = errors
+  }
+}
+
 export function apiUrl(path = "") {
   if (!path) return API_BASE
   const normalizedPath = path.startsWith("/") ? path : `/${path}`
@@ -77,11 +88,12 @@ async function fetchWithRetry(url, options) {
 
 async function parseApiError(response) {
   const payload = await parseResponse(response)
-  return (
-    payload?.errors?.[0]?.message ||
-    payload?.message ||
-    `Request failed (${response.status})`
-  )
+  const message = payload?.errors?.[0]?.message || payload?.message || `Request failed (${response.status})`
+  return new ApiError(message, {
+    status: response.status,
+    payload,
+    errors: payload?.errors || null,
+  })
 }
 
 function extractFilenameFromDisposition(dispositionHeader) {
@@ -135,7 +147,11 @@ export async function apiRequest(path, { method = "GET", token, body } = {}) {
         throw new Error("Backend is unavailable. Make sure the API server is running.")
       }
     }
-    throw new Error(reason)
+    throw new ApiError(reason, {
+      status: response.status,
+      payload,
+      errors: payload?.errors || null,
+    })
   }
 
   return payload
@@ -166,7 +182,11 @@ export async function apiMultipartRequest(path, { method = "POST", token, formDa
   if (!response.ok) {
     const reason =
       payload?.errors?.[0]?.message || payload?.message || `Request failed (${response.status})`
-    throw new Error(reason)
+    throw new ApiError(reason, {
+      status: response.status,
+      payload,
+      errors: payload?.errors || null,
+    })
   }
 
   return payload
@@ -191,8 +211,7 @@ export async function apiDownload(path, { method = "GET", token, body, defaultFi
   }
 
   if (!response.ok) {
-    const reason = await parseApiError(response)
-    throw new Error(reason)
+    throw await parseApiError(response)
   }
 
   const blob = await response.blob()

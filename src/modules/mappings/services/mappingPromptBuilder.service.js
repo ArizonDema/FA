@@ -1,5 +1,8 @@
 const config = require("../../../config/app")
+const LlmSkillPackService = require("../../llm/services/llmSkillPack.service")
 const { normalizePhrase } = require("../utils/mappingText.util")
+
+const MAPPING_SKILL_VERSION = "cash-flow-mapping.v1"
 
 function compactCandidate(concept) {
   return {
@@ -14,6 +17,34 @@ function compactCandidate(concept) {
 }
 
 class MappingPromptBuilder {
+  static buildRowAssistanceResponseSchema() {
+    return {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        rowId: { type: "string" },
+        recommendedCandidates: {
+          type: "array",
+          items: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              semanticConceptKey: { type: "string" },
+              rank: { type: "integer", minimum: 1 },
+              llmScore: { type: "number", minimum: 0, maximum: 1 },
+              reasoning: { type: "string" },
+              evidence: { type: "array", items: { type: "string" } },
+            },
+            required: ["semanticConceptKey", "rank", "llmScore", "reasoning", "evidence"],
+          },
+        },
+        ambiguities: { type: "array", items: { type: "string" } },
+        needsHumanReview: { type: "boolean" },
+      },
+      required: ["rowId", "recommendedCandidates", "ambiguities", "needsHumanReview"],
+    }
+  }
+
   static buildRowAssistancePrompt({
     row,
     deterministicSuggestions = [],
@@ -50,6 +81,7 @@ class MappingPromptBuilder {
     }
 
     const systemPrompt = [
+      LlmSkillPackService.renderSkillPack(MAPPING_SKILL_VERSION),
       "You are an accounting mapping assistant.",
       "You are advisory only. Deterministic scoring remains the primary system.",
       "Choose the best semantic concept candidates for one template row using only the supplied candidates and context.",
@@ -72,7 +104,7 @@ class MappingPromptBuilder {
       "Do not invent keys outside deterministicCandidates or additionalEligibleConcepts.",
       "Keep reasoning concise and evidence atomic.",
       "If the row is ambiguous, mark needsHumanReview true.",
-    ].join("\n")
+    ].filter(Boolean).join("\n")
 
     const userPrompt = [
       `Prompt version: ${promptVersion}`,
@@ -82,6 +114,7 @@ class MappingPromptBuilder {
 
     return {
       promptVersion,
+      skillVersion: MAPPING_SKILL_VERSION,
       requestPayload,
       messages: [
         { role: "system", content: systemPrompt },

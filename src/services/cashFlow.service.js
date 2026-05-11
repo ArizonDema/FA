@@ -1,6 +1,8 @@
 const fs = require("fs")
 const path = require("path")
-const ExcelJS = require("exceljs")
+const appConfig = require("../config/app")
+const { readWorkbookFromFile } = require("../utils/excelWorkbook.util")
+const CashFlowConcepts = require("./cashFlowConcepts.service")
 
 const TB_HEADER_SPEC = {
   company: ["Company"],
@@ -60,6 +62,230 @@ const STATEMENT_METHODS = {
   DIRECT: "direct",
   INDIRECT: "indirect",
 }
+
+const DIRECT_CASH_FLOW_CONCEPTS = [
+  {
+    key: "customer_receipts",
+    direction: "inflow",
+    patterns: [
+      /\bcash receipts?\b/,
+      /\bcustomer(s)?\b/,
+      /\bclient(s)?\b/,
+      /\baccounts receivable\b/,
+      /\bar\b/,
+      /\bclient balances?\b/,
+      /\bcustomer balances?\b/,
+      /\bcollections?\b/,
+      /\bcollected\b/,
+      /\brevenue\b/,
+      /\bcash sales\b/,
+      /\bsales receipts?\b/,
+      /\bmerchant\b/,
+    ],
+  },
+  {
+    key: "other_operating_inflows",
+    direction: "inflow",
+    patterns: [/\brefunds?\b/, /\brebates?\b/, /\bother operating inflows?\b/, /\boperating inflows?\b/],
+  },
+  {
+    key: "supplier_payments",
+    direction: "outflow",
+    patterns: [
+      /\bsuppliers?\b/,
+      /\bvendors?\b/,
+      /\bvendor disbursements?\b/,
+      /\btrade vendor(s)?\b/,
+      /\bpartner payouts?\b/,
+      /\bpartner operating payouts?\b/,
+      /\bexternal partner payouts?\b/,
+      /\boperating payouts?\b/,
+      /\baccounts payable\b/,
+      /\bap\b/,
+      /\bcogs\b/,
+      /\bcost of sales\b/,
+      /\binventory\b/,
+      /\bmaterials?\b/,
+    ],
+  },
+  {
+    key: "payroll",
+    direction: "outflow",
+    patterns: [
+      /\bpayroll\b/,
+      /\bwages?\b/,
+      /\bsalar(y|ies)\b/,
+      /\bbenefits?\b/,
+      /\bbonus(es)?\b/,
+      /\bcommissions?\b/,
+      /\bcompensation\b/,
+      /\bpeople costs?\b/,
+      /\bteam costs?\b/,
+      /\bteam compensation\b/,
+    ],
+  },
+  {
+    key: "rent_facilities",
+    direction: "outflow",
+    patterns: [/\brent\b/, /\bpremises?\b/, /\bfacilit(y|ies) costs?\b/, /\blease\b/, /\boccupancy\b/, /\bspace commitments?\b/, /\bworkplace\b/],
+  },
+  {
+    key: "sales_marketing",
+    direction: "outflow",
+    patterns: [
+      /\bmarketing\b/,
+      /\badvertis(e|ing)\b/,
+      /\bpromotion(s)?\b/,
+      /\bbrand\b/,
+      /\bdemand generation\b/,
+      /\bdemand creation\b/,
+      /\bdemand (gen|creation|capture)\b/,
+      /\bgrowth spend\b/,
+      /\bgrowth campaign(s)?\b/,
+      /\bcampaign spend\b/,
+      /\bcampaign expense\b/,
+    ],
+  },
+  {
+    key: "general_admin",
+    direction: "outflow",
+    patterns: [
+      /\bgeneral\b/,
+      /\badmin\b/,
+      /\bg&a\b/,
+      /\badministrative\b/,
+      /\blegal\b/,
+      /\baccounting\b/,
+      /\bprofessional fees?\b/,
+      /\binsurance\b/,
+      /\butilities\b/,
+      /\boverhead\b/,
+      /\bbank charges?\b/,
+      /\bsoftware subscription(s)?\b/,
+      /\bsaas\b/,
+    ],
+  },
+  {
+    key: "income_taxes",
+    direction: "outflow",
+    patterns: [/\bincome taxes?\b/, /\btaxes paid\b/, /\btax payment(s)?\b/],
+  },
+  {
+    key: "capital_expenditures",
+    direction: "outflow",
+    patterns: [
+      /\bcapex\b/,
+      /\bcapital expenditures?\b/,
+      /\bfixed assets?\b/,
+      /\basset purchases?\b/,
+      /\bequipment\b/,
+      /\bhardware\b/,
+      /\bproperty\b/,
+      /\bplant\b/,
+      /\bppe\b/,
+      /\bleasehold improvements?\b/,
+    ],
+  },
+  {
+    key: "capitalized_software",
+    direction: "outflow",
+    patterns: [/\bcapitali[sz]ed software\b/, /\bsoftware development capitalization\b/, /\bdevelopment capitalization\b/],
+  },
+  {
+    key: "asset_sale_proceeds",
+    direction: "inflow",
+    patterns: [/\basset sale\b/, /\bdisposal proceeds?\b/, /\bsale proceeds?\b/, /\binvestment sale\b/],
+  },
+  {
+    key: "debt_drawdown",
+    direction: "inflow",
+    patterns: [
+      /\bdebt drawdown\b/,
+      /\bborrowings?\b/,
+      /\bborrowing proceeds?\b/,
+      /\bloan proceeds?\b/,
+      /\bdebt issued\b/,
+      /\bnotes? payable proceeds?\b/,
+      /\bcredit facilit(y|ies) proceeds?\b/,
+      /\bcredit line proceeds?\b/,
+      /\bfinancing proceeds?\b/,
+    ],
+  },
+  {
+    key: "debt_repayment",
+    direction: "outflow",
+    patterns: [
+      /\bdebt repayments?\b/,
+      /\bprincipal repayments?\b/,
+      /\bprincipal paid\b/,
+      /\bborrowing principal paid\b/,
+      /\bloan payments?\b/,
+      /\bnote repayments?\b/,
+      /\bcredit facilit(y|ies) repayments?\b/,
+    ],
+  },
+  {
+    key: "interest_paid",
+    direction: "outflow",
+    patterns: [/\binterest paid\b/, /\binterest expense\b/, /\bfinance costs?\b/, /\bfinance charges? paid\b/, /\bfinance charges?\b/],
+  },
+  {
+    key: "equity_injection",
+    direction: "inflow",
+    patterns: [
+      /\bequity injection\b/,
+      /\bcapital contributions?\b/,
+      /\bpaid in capital\b/,
+      /\bpaid-in capital\b/,
+      /\bowner contributions?\b/,
+      /\bpartner contributions?\b/,
+      /\bmember funding\b/,
+      /\bfounder funding\b/,
+      /\bfounder contributions?\b/,
+      /\binvestor funding\b/,
+      /\binvestor cash\b/,
+      /\bcapital calls?\b/,
+      /\bsubscriptions?\b/,
+    ],
+  },
+  {
+    key: "dividends_distributions",
+    direction: "outflow",
+    patterns: [/\bdividends? paid\b/, /\bdistributions?\b/, /\bredemptions?\b/, /\bowner drawings?\b/, /\bpartner drawings?\b/],
+  },
+]
+
+const DIRECT_OUTFLOW_TEXT_HINTS = [
+  /\boutflows?\b/,
+  /\bpayments?\b/,
+  /\bpaid\b/,
+  /\bexpense(s)?\b/,
+  /\bcost(s)?\b/,
+  /\brepayments?\b/,
+  /\bdividends?\b/,
+  /\bdistributions?\b/,
+  /\bredemptions?\b/,
+  /\bcapex\b/,
+  /\bexpenditures?\b/,
+  /\bpurchases?\b/,
+  /\bpayroll\b/,
+  /\brent\b/,
+  /\bmarketing\b/,
+  /\badmin\b/,
+  /\btaxes?\b/,
+]
+
+const DIRECT_INFLOW_TEXT_HINTS = [
+  /\binflows?\b/,
+  /\breceipts?\b/,
+  /\bproceeds?\b/,
+  /\bdrawdowns?\b/,
+  /\bborrowings?\b/,
+  /\bcontributions?\b/,
+  /\binjections?\b/,
+  /\bfunding\b/,
+  /\bcapital calls?\b/,
+]
 
 const INDIRECT_ROW_DEFINITIONS = [
   {
@@ -222,6 +448,16 @@ const INDIRECT_ROW_LOOKUP = new Map(
 
 const REQUIRED_INDIRECT_FINANCING_KEYS = ["capital_contributions"]
 
+function getIndirectRowDefinitions() {
+  return INDIRECT_ROW_DEFINITIONS.map((definition) => ({
+    semantic_key: definition.semantic_key,
+    label: definition.label,
+    role: definition.role,
+    cash_direction: definition.cash_direction,
+    required: Boolean(definition.required),
+  }))
+}
+
 class CashFlowValidationError extends Error {
   constructor(message, details = null) {
     super(message)
@@ -262,6 +498,16 @@ function readCellPrimitive(value) {
   }
 
   return value
+}
+
+function isFormulaCellValue(value) {
+  return Boolean(value && typeof value === "object" && value.formula)
+}
+
+function isFormulaLiteralNumber(value) {
+  if (!isFormulaCellValue(value)) return false
+  const formula = String(value.formula || "").trim()
+  return /^[+-]?(?:\d+|\d*\.\d+)$/.test(formula)
 }
 
 function readCellText(value) {
@@ -406,6 +652,8 @@ function looksLikeCustomPeriodLabel(text) {
   const normalized = normalizeText(text)
   if (!normalized) return false
   if (shouldIgnoreBucketLabel(normalized)) return false
+  const compactNumeric = normalized.replace(/,/g, "").replace(/\s+/g, "")
+  if (/^[+-]?(?:\d+|\d*\.\d+)$/.test(compactNumeric)) return false
   if (/\b(period|p\d+|h1|h2|half|week|w\d+|fy|year|yr)\b/i.test(normalized)) return true
   if (/\d/.test(normalized)) return true
   return false
@@ -413,8 +661,12 @@ function looksLikeCustomPeriodLabel(text) {
 
 function parsePeriodToken(rawValue, options = {}) {
   const allowCustom = options.allowCustom !== false
+  const allowFormulaResult = options.allowFormulaResult === true
+  const allowNumericPeriod = options.allowNumericPeriod === true
+  if (isFormulaCellValue(rawValue) && !allowFormulaResult) return null
   const primitive = readCellPrimitive(rawValue)
   if (primitive === null || primitive === undefined || primitive === "") return null
+  if (typeof primitive === "number" && !allowNumericPeriod) return null
 
   if (primitive instanceof Date) {
     const month = primitive.getMonth() + 1
@@ -433,20 +685,6 @@ function parsePeriodToken(rawValue, options = {}) {
   const normalized = normalizeText(text).replace(/\./g, "")
   if (!normalized) return null
 
-  const month = parseMonthValue(rawValue)
-  if (month) {
-    const yearMatch = normalized.match(/\b(19|20)\d{2}\b/)
-    const year = yearMatch ? Number.parseInt(yearMatch[0], 10) : null
-    return {
-      label: text,
-      period_key: `m${String(month).padStart(2, "0")}${year ? `_${year}` : ""}`,
-      period_type: "monthly",
-      month,
-      year,
-      quarter: Math.floor((month - 1) / 3) + 1,
-    }
-  }
-
   const quarterMatch = normalized.match(/(?:^|\b)q([1-4])(?:\s*(?:fy|fy|year|yr)?\s*(\d{2,4}))?(?:\b|$)/i)
   if (quarterMatch) {
     const quarter = Number.parseInt(quarterMatch[1], 10)
@@ -463,6 +701,34 @@ function parsePeriodToken(rawValue, options = {}) {
       period_type: "quarterly",
       quarter,
       year,
+    }
+  }
+
+  const yearMatch = normalized.match(/^(19|20)\d{2}$/)
+  if (yearMatch) {
+    const year = Number.parseInt(yearMatch[0], 10)
+    return {
+      label: text,
+      period_key: `y_${year}`,
+      period_type: "yearly",
+      year,
+    }
+  }
+
+  const compactNumeric = normalized.replace(/,/g, "").replace(/\s+/g, "")
+  if (!allowNumericPeriod && /^[+-]?(?:\d+|\d*\.\d+)$/.test(compactNumeric)) return null
+
+  const month = parseMonthValue(rawValue)
+  if (month) {
+    const embeddedYearMatch = normalized.match(/\b(19|20)\d{2}\b/)
+    const year = embeddedYearMatch ? Number.parseInt(embeddedYearMatch[0], 10) : null
+    return {
+      label: text,
+      period_key: `m${String(month).padStart(2, "0")}${year ? `_${year}` : ""}`,
+      period_type: "monthly",
+      month,
+      year,
+      quarter: Math.floor((month - 1) / 3) + 1,
     }
   }
 
@@ -486,17 +752,6 @@ function parsePeriodToken(rawValue, options = {}) {
     if (year < 100) {
       year += year >= 70 ? 1900 : 2000
     }
-    return {
-      label: text,
-      period_key: `y_${year}`,
-      period_type: "yearly",
-      year,
-    }
-  }
-
-  const yearMatch = normalized.match(/^(19|20)\d{2}$/)
-  if (yearMatch) {
-    const year = Number.parseInt(yearMatch[0], 10)
     return {
       label: text,
       period_key: `y_${year}`,
@@ -684,6 +939,9 @@ function normalizeBucketCollection(inputBuckets, { requireColumnHeader = true } 
     const direction = String(bucket?.direction || "").trim().toLowerCase()
     const fallback = Boolean(bucket?.fallback)
     const columnHeader = String(bucket?.column_header || "").trim()
+    const semanticKey = CashFlowConcepts.normalizeDirectConceptKey(bucket?.semantic_key || bucket?.semanticKey || "")
+    const semanticConcept = semanticKey ? CashFlowConcepts.getDirectConcept(semanticKey) : null
+    const semanticConfidence = Number(bucket?.semantic_confidence ?? bucket?.semanticConfidence ?? 0)
 
     if (!bucketKey) throw new CashFlowValidationError(`Bucket #${bucketIndex + 1} is missing bucket_key`)
     if (seenKeys.has(bucketKey)) throw new CashFlowValidationError(`Bucket key "${bucketKey}" is duplicated`)
@@ -694,6 +952,9 @@ function normalizeBucketCollection(inputBuckets, { requireColumnHeader = true } 
     }
     if (requireColumnHeader && !columnHeader) {
       throw new CashFlowValidationError(`Bucket "${bucketKey}" is missing column_header`)
+    }
+    if (semanticKey && (!semanticConcept || semanticConcept.direction !== direction)) {
+      throw new CashFlowValidationError(`Bucket "${bucketKey}" has invalid semantic_key for ${direction}`)
     }
 
     if (fallback) {
@@ -728,6 +989,16 @@ function normalizeBucketCollection(inputBuckets, { requireColumnHeader = true } 
       column_header: columnHeader || null,
       fallback,
       rules,
+      ...(semanticConcept
+        ? {
+            semantic_key: semanticConcept.key,
+            semantic_confidence: Number.isFinite(semanticConfidence) ? Math.max(0, Math.min(1, semanticConfidence)) : 0,
+            semantic_source: String(bucket?.semantic_source || bucket?.semanticSource || "deterministic").trim() || "deterministic",
+            semantic_evidence: Array.isArray(bucket?.semantic_evidence || bucket?.semanticEvidence)
+              ? (bucket.semantic_evidence || bucket.semanticEvidence).map((item) => String(item || "").trim()).filter(Boolean).slice(0, 8)
+              : [],
+          }
+        : {}),
     }
   })
 }
@@ -1100,6 +1371,17 @@ function validateV3TemplateConfig(input) {
     row_bindings: rowBindings,
     writer_policy: writerPolicy,
     mapping_policy: mappingPolicy,
+    review_metadata:
+      input.review_metadata && typeof input.review_metadata === "object"
+        ? {
+            ...input.review_metadata,
+            confirmed_anchors: Array.isArray(input.review_metadata.confirmed_anchors)
+              ? input.review_metadata.confirmed_anchors
+                  .map((anchor) => String(anchor || "").trim().toLowerCase().replace(/\s+/g, "_"))
+                  .filter(Boolean)
+              : [],
+          }
+        : undefined,
   }
 }
 
@@ -1122,8 +1404,11 @@ function validateTemplateConfig(input) {
 async function parseTrialBalanceFile(filePath) {
   ensureFileExists(filePath, "Trial Balance")
 
-  const workbook = new ExcelJS.Workbook()
-  await workbook.xlsx.readFile(filePath)
+  const workbook = await readWorkbookFromFile({
+    filePath,
+    label: "Trial Balance",
+    ValidationErrorCtor: CashFlowValidationError,
+  })
   const worksheet = workbook.worksheets[0]
   if (!worksheet) {
     throw new CashFlowValidationError("Trial Balance workbook has no worksheets")
@@ -1197,8 +1482,11 @@ function resolveCashLines(lines, cashAccountName) {
 async function parseGeneralLedgerFile(filePath, { cashAccountName }) {
   ensureFileExists(filePath, "General Ledger")
 
-  const workbook = new ExcelJS.Workbook()
-  await workbook.xlsx.readFile(filePath)
+  const workbook = await readWorkbookFromFile({
+    filePath,
+    label: "General Ledger",
+    ValidationErrorCtor: CashFlowValidationError,
+  })
   const worksheet = workbook.worksheets[0]
   if (!worksheet) {
     throw new CashFlowValidationError("General Ledger workbook has no worksheets")
@@ -1311,16 +1599,396 @@ async function parseGeneralLedgerFile(filePath, { cashAccountName }) {
   }
 }
 
-function detectBucketDirection(label) {
-  const normalized = normalizeText(label)
-  if (
-    normalized.includes("outflow") ||
-    normalized.includes("expense") ||
-    normalized.includes("payment") ||
-    normalized.includes("cost")
-  ) {
-    return "outflow"
+function pushUniqueText(target, value, limit = 6) {
+  if (!Array.isArray(target)) return
+  const text = String(value || "").trim().replace(/\s+/g, " ")
+  if (!text) return
+  const key = text.toLowerCase()
+  if (target.some((item) => String(item || "").trim().toLowerCase() === key)) return
+  if (target.length < limit) target.push(text)
+}
+
+function normalizeProfileToken(value) {
+  return normalizeText(value).replace(/[^a-z0-9 ]/g, "").trim()
+}
+
+function pushEvidenceToken(target, value, limit = 16) {
+  if (!Array.isArray(target)) return
+  const token = normalizeProfileToken(value)
+  if (!token || token.length < 3) return
+  if (target.includes(token)) return
+  if (target.length < limit) target.push(token)
+}
+
+function isCashLikeAccount(accountName) {
+  const normalized = normalizeText(accountName)
+  if (!normalized) return false
+  return /\b(cash|checking|bank account|operating account|savings|money market)\b/.test(normalized)
+}
+
+function inferRuntimeAccountClass(accountName, tbRow = null) {
+  const normalized = normalizeText(accountName)
+  if (!normalized) return "other"
+  if (isCashLikeAccount(normalized)) return "cash"
+  if (/\b(accounts receivable|trade receivables?|a\/r| ar |client balances?|customer balances?|open invoices?)\b/.test(` ${normalized} `)) {
+    return "receivable"
   }
+  if (/\binventory\b/.test(normalized)) return "inventory"
+  if (/\b(prepaid|deposit asset|other current asset|current asset)\b/.test(normalized)) return "current_asset"
+  if (
+    /\b(fixed asset|ppe|p p e|property|plant|equipment|vehicle|machinery|furniture|hardware|computer hardware|leasehold|capital asset|accumulated depreciation)\b/.test(
+      normalized,
+    )
+  ) {
+    return "fixed_asset"
+  }
+  if (/\b(accounts payable|trade payable|a\/p| ap |vendor payable|supplier payable)\b/.test(` ${normalized} `)) return "payable"
+  if (/\b(accrued|accrual|credit card|tax payable|payroll payable|wages payable|deferred revenue|unearned revenue)\b/.test(normalized)) {
+    return "current_liability"
+  }
+  if (/\b(loan|note payable|notes payable|debt|line of credit|credit facility|credit line|loc|mortgage|borrowing|term note|capital lease)\b/.test(normalized)) {
+    return "debt"
+  }
+  if (
+    /\b(equity|capital|contribution|member|owner|founder|investor|partner|paid in|paid-in|retained earnings|drawing|drawings|distribution|dividend|redemption|funding)\b/.test(
+      normalized,
+    )
+  ) {
+    return "equity"
+  }
+  if (/\b(revenue|sales|income|merchant|customer)\b/.test(normalized) && !/\bunearned revenue\b/.test(normalized)) return "revenue"
+  if (/\b(payroll|wages?|salar(y|ies)|benefits?|bonus|commission|compensation|people costs?|team costs?)\b/.test(normalized)) {
+    return "payroll_expense"
+  }
+  if (/\b(rent|lease|premises?|occupancy)\b/.test(normalized)) return "rent_expense"
+  if (/\b(marketing|advertising|promotion|brand|sales expense|growth campaign|growth spend|campaign spend)\b/.test(normalized)) {
+    return "marketing_expense"
+  }
+  if (/\b(income tax|tax expense|taxes)\b/.test(normalized)) return "tax_expense"
+  if (/\b(interest expense|finance cost|finance charge|bank fee|loan fee)\b/.test(normalized)) return "interest_expense"
+  if (/\b(expense|fees?|legal|accounting|professional|insurance|utilities|facility services|facilities services|software|subscription|travel|supplies|admin|bank charges?)\b/.test(normalized)) {
+    return "admin_expense"
+  }
+
+  const balance = Number(tbRow?.endingBalance || 0)
+  if (Number.isFinite(balance) && balance < 0 && /\bpayable|liabilit|loan|debt|capital|equity\b/.test(normalized)) {
+    return "liability_or_equity"
+  }
+  return "other"
+}
+
+function getRuntimeAccountClassTokens(accountClass) {
+  const lookup = {
+    cash: ["cash"],
+    receivable: ["accounts receivable", "customer receipts", "revenue"],
+    inventory: ["inventory", "supplier payments", "cost of goods sold"],
+    current_asset: ["current asset", "operating cash flow"],
+    fixed_asset: ["fixed asset", "ppe", "equipment", "capital expenditures", "capex"],
+    payable: ["accounts payable", "supplier payments", "vendor payments"],
+    current_liability: ["current liability", "operating cash flow"],
+    debt: ["debt", "loan", "borrowings", "principal repayment"],
+    equity: ["equity", "capital contribution", "owner distribution"],
+    revenue: ["revenue", "sales", "customer receipts"],
+    payroll_expense: ["payroll", "wages", "salaries"],
+    rent_expense: ["rent", "facilities", "lease"],
+    marketing_expense: ["marketing", "advertising", "promotion"],
+    tax_expense: ["income taxes", "tax payments"],
+    interest_expense: ["interest paid", "interest expense"],
+    admin_expense: ["general admin", "professional fees", "operating expenses"],
+    liability_or_equity: ["liability", "equity", "financing"],
+  }
+  return lookup[accountClass] || []
+}
+
+function createRuntimeAccountProfileBase({ accountName, tbRow = null }) {
+  const normalizedAccount = normalizeText(accountName)
+  const endingDebit = roundCurrency(Number(tbRow?.endingDebit || 0))
+  const endingCredit = roundCurrency(Number(tbRow?.endingCredit || 0))
+  const endingBalance = roundCurrency(
+    tbRow?.endingBalance !== undefined && tbRow?.endingBalance !== null
+      ? Number(tbRow.endingBalance || 0)
+      : endingDebit - endingCredit,
+  )
+  const accountClass = inferRuntimeAccountClass(accountName, tbRow)
+  const profile = {
+    account_name: accountName,
+    normalized_account: normalizedAccount,
+    company: tbRow?.company || null,
+    tb_present: Boolean(tbRow),
+    tb_ending_debit: endingDebit,
+    tb_ending_credit: endingCredit,
+    tb_ending_balance: endingBalance,
+    tb_balance_direction: endingBalance > 0 ? "debit" : endingBalance < 0 ? "credit" : "zero",
+    tb_account_class: accountClass,
+    gl_line_count: 0,
+    movement_count: 0,
+    total_abs_amount: 0,
+    net_amount: 0,
+    active_months: [],
+    sample_descriptions: [],
+    sample_je_numbers: [],
+    evidence_tokens: [],
+    direction_keys: [],
+  }
+
+  pushEvidenceToken(profile.evidence_tokens, normalizedAccount)
+  pushEvidenceToken(profile.evidence_tokens, accountClass)
+  getRuntimeAccountClassTokens(accountClass).forEach((token) => pushEvidenceToken(profile.evidence_tokens, token))
+  return profile
+}
+
+function serializeRuntimeAccountProfile(profile) {
+  return {
+    account_name: profile.account_name,
+    normalized_account: profile.normalized_account,
+    company: profile.company || null,
+    tb_present: Boolean(profile.tb_present),
+    tb_ending_debit: roundCurrency(profile.tb_ending_debit || 0),
+    tb_ending_credit: roundCurrency(profile.tb_ending_credit || 0),
+    tb_ending_balance: roundCurrency(profile.tb_ending_balance || 0),
+    tb_balance_direction: profile.tb_balance_direction || "zero",
+    tb_account_class: profile.tb_account_class || "other",
+    gl_line_count: Number(profile.gl_line_count || 0),
+    movement_count: Number(profile.movement_count || 0),
+    total_abs_amount: roundCurrency(profile.total_abs_amount || 0),
+    net_amount: roundCurrency(profile.net_amount || 0),
+    active_months: Array.from(new Set(profile.active_months || [])).sort(),
+    sample_descriptions: (profile.sample_descriptions || []).slice(0, 6),
+    sample_je_numbers: (profile.sample_je_numbers || []).slice(0, 6),
+    evidence_tokens: (profile.evidence_tokens || []).slice(0, 16),
+    direction_keys: (profile.direction_keys || []).slice().sort(),
+  }
+}
+
+function serializeRuntimeDirectionProfile(profile) {
+  return {
+    account_key: profile.account_key,
+    account_name: profile.account_name,
+    normalized_account: profile.normalized_account,
+    direction: profile.direction,
+    tb_present: Boolean(profile.tb_present),
+    tb_ending_debit: roundCurrency(profile.tb_ending_debit || 0),
+    tb_ending_credit: roundCurrency(profile.tb_ending_credit || 0),
+    tb_ending_balance: roundCurrency(profile.tb_ending_balance || 0),
+    tb_balance_direction: profile.tb_balance_direction || "zero",
+    tb_account_class: profile.tb_account_class || "other",
+    movement_count: Number(profile.movement_count || 0),
+    total_abs_amount: roundCurrency(profile.total_abs_amount || 0),
+    net_amount: roundCurrency(profile.net_amount || 0),
+    active_months: Array.from(new Set(profile.active_months || [])).sort(),
+    sample_descriptions: (profile.sample_descriptions || []).slice(0, 6),
+    sample_je_numbers: (profile.sample_je_numbers || []).slice(0, 6),
+    evidence_tokens: (profile.evidence_tokens || []).slice(0, 16),
+  }
+}
+
+function buildRuntimeAccountProfile({
+  trialBalance = null,
+  generalLedger = null,
+  trialBalanceRows = null,
+  generalLedgerRows = null,
+  movements = null,
+  cashAccountName = null,
+} = {}) {
+  const tbRows = Array.isArray(trialBalance?.rows) ? trialBalance.rows : Array.isArray(trialBalanceRows) ? trialBalanceRows : []
+  const glRows = Array.isArray(generalLedger?.rows) ? generalLedger.rows : Array.isArray(generalLedgerRows) ? generalLedgerRows : []
+  const cashMovements = Array.isArray(generalLedger?.movements) ? generalLedger.movements : Array.isArray(movements) ? movements : []
+  const normalizedCashAccount = normalizeText(cashAccountName || trialBalance?.cashAccountName || "")
+  const cashAccountKeys = new Set()
+  if (normalizedCashAccount) cashAccountKeys.add(normalizedCashAccount)
+
+  tbRows.forEach((row) => {
+    const normalizedAccount = normalizeText(row?.account || row?.account_name || "")
+    if (!normalizedAccount) return
+    if (isCashLikeAccount(normalizedAccount)) cashAccountKeys.add(normalizedAccount)
+  })
+
+  const accountProfiles = new Map()
+  const directionProfiles = new Map()
+  const getAccountProfile = (accountName, tbRow = null) => {
+    const normalizedAccount = normalizeText(accountName)
+    if (!normalizedAccount || cashAccountKeys.has(normalizedAccount) || isCashLikeAccount(normalizedAccount)) return null
+    if (!accountProfiles.has(normalizedAccount)) {
+      accountProfiles.set(normalizedAccount, createRuntimeAccountProfileBase({ accountName, tbRow }))
+    } else if (tbRow && !accountProfiles.get(normalizedAccount).tb_present) {
+      const current = accountProfiles.get(normalizedAccount)
+      const refreshed = createRuntimeAccountProfileBase({ accountName: current.account_name || accountName, tbRow })
+      accountProfiles.set(normalizedAccount, {
+        ...refreshed,
+        gl_line_count: current.gl_line_count,
+        movement_count: current.movement_count,
+        total_abs_amount: current.total_abs_amount,
+        net_amount: current.net_amount,
+        active_months: current.active_months,
+        sample_descriptions: current.sample_descriptions,
+        sample_je_numbers: current.sample_je_numbers,
+        evidence_tokens: Array.from(new Set([...refreshed.evidence_tokens, ...current.evidence_tokens])).slice(0, 16),
+        direction_keys: current.direction_keys,
+      })
+    }
+    return accountProfiles.get(normalizedAccount)
+  }
+
+  tbRows.forEach((row) => {
+    getAccountProfile(row?.account || row?.account_name || "", row)
+  })
+
+  glRows.forEach((row) => {
+    const profile = getAccountProfile(row?.account_name || row?.account || "")
+    if (!profile) return
+    profile.gl_line_count += 1
+    pushUniqueText(profile.sample_descriptions, row?.description, 6)
+    pushUniqueText(profile.sample_je_numbers, row?.je_no, 6)
+    pushEvidenceToken(profile.evidence_tokens, row?.description)
+  })
+
+  cashMovements.forEach((movement) => {
+    const accountName = movement?.account_name || ""
+    const normalizedAccount = normalizeText(accountName)
+    if (!normalizedAccount || cashAccountKeys.has(normalizedAccount) || isCashLikeAccount(normalizedAccount)) return
+    const direction = Number(movement?.amount || 0) >= 0 ? "inflow" : "outflow"
+    const accountKey = buildRuntimeMappingAccountKey(normalizedAccount, direction)
+    const profile = getAccountProfile(accountName)
+    if (!profile || !accountKey) return
+
+    if (!directionProfiles.has(accountKey)) {
+      directionProfiles.set(accountKey, {
+        ...serializeRuntimeAccountProfile(profile),
+        account_key: accountKey,
+        direction,
+        movement_count: 0,
+        total_abs_amount: 0,
+        net_amount: 0,
+        active_months: [],
+        sample_descriptions: [],
+        sample_je_numbers: [],
+        evidence_tokens: [...(profile.evidence_tokens || [])],
+      })
+    }
+
+    const directionProfile = directionProfiles.get(accountKey)
+    const amount = Number(movement?.amount || 0)
+    const absAmount = Math.abs(amount)
+    directionProfile.movement_count += 1
+    directionProfile.total_abs_amount = roundCurrency(Number(directionProfile.total_abs_amount || 0) + absAmount)
+    directionProfile.net_amount = roundCurrency(Number(directionProfile.net_amount || 0) + amount)
+    profile.movement_count += 1
+    profile.total_abs_amount = roundCurrency(Number(profile.total_abs_amount || 0) + absAmount)
+    profile.net_amount = roundCurrency(Number(profile.net_amount || 0) + amount)
+
+    try {
+      const monthKey = normalizeDateOnly(movement.date).toISOString().slice(0, 7)
+      pushUniqueText(directionProfile.active_months, monthKey, 24)
+      pushUniqueText(profile.active_months, monthKey, 24)
+    } catch (error) {
+      // Ignore malformed dates here; GL parsing already validates normal upload rows.
+    }
+
+    pushUniqueText(directionProfile.sample_descriptions, movement?.description, 6)
+    pushUniqueText(directionProfile.sample_je_numbers, movement?.je_no, 6)
+    pushEvidenceToken(directionProfile.evidence_tokens, movement?.description)
+    pushEvidenceToken(directionProfile.evidence_tokens, direction)
+    pushUniqueText(profile.sample_descriptions, movement?.description, 6)
+    pushUniqueText(profile.sample_je_numbers, movement?.je_no, 6)
+    pushEvidenceToken(profile.evidence_tokens, movement?.description)
+    pushEvidenceToken(profile.evidence_tokens, direction)
+    pushUniqueText(profile.direction_keys, accountKey, 4)
+  })
+
+  const serializedAccounts = Array.from(accountProfiles.values()).map(serializeRuntimeAccountProfile)
+  const serializedDirections = Array.from(directionProfiles.values()).map(serializeRuntimeDirectionProfile)
+  const byAccount = {}
+  serializedAccounts.forEach((profile) => {
+    byAccount[profile.normalized_account] = profile
+  })
+  const byAccountDirection = {}
+  serializedDirections.forEach((profile) => {
+    byAccountDirection[profile.account_key] = profile
+  })
+
+  return {
+    by_account: byAccount,
+    by_account_direction: byAccountDirection,
+    accounts: serializedAccounts,
+    direction_profiles: serializedDirections,
+    summary: {
+      profiled_accounts: serializedAccounts.length,
+      tb_only_accounts: serializedAccounts.filter((profile) => profile.tb_present && Number(profile.movement_count || 0) === 0).length,
+      movement_accounts: serializedAccounts.filter((profile) => Number(profile.movement_count || 0) > 0).length,
+      direction_profiles: serializedDirections.length,
+      cash_accounts_excluded: cashAccountKeys.size,
+    },
+  }
+}
+
+function getRuntimeAccountDirectionProfile(accountProfile, accountName, direction) {
+  const normalizedAccount = normalizeText(accountName)
+  const normalizedDirection = normalizeText(direction).toLowerCase()
+  if (!accountProfile || !normalizedAccount || !normalizedDirection) return null
+  const accountKey = buildRuntimeMappingAccountKey(normalizedAccount, normalizedDirection)
+  return accountProfile.by_account_direction?.[accountKey] || null
+}
+
+function compactRuntimeProfileEvidence(profile) {
+  if (!profile) return null
+  return {
+    tb_account_class: profile.tb_account_class || "other",
+    tb_ending_balance: roundCurrency(profile.tb_ending_balance || 0),
+    tb_balance_direction: profile.tb_balance_direction || "zero",
+    movement_count: Number(profile.movement_count || 0),
+    total_abs_amount: roundCurrency(profile.total_abs_amount || 0),
+    net_amount: roundCurrency(profile.net_amount || 0),
+    active_months: (profile.active_months || []).slice(0, 12),
+    sample_descriptions: (profile.sample_descriptions || []).slice(0, 4),
+    sample_je_numbers: (profile.sample_je_numbers || []).slice(0, 4),
+    evidence_tokens: (profile.evidence_tokens || []).slice(0, 12),
+  }
+}
+
+function buildRuntimeAccountProfileSummary({ accountProfile, mapped = null, assistanceSummary = null } = {}) {
+  const finalAssignments = Array.isArray(mapped?.finalBucketAssignments) ? mapped.finalBucketAssignments : []
+  const autoMappings = Array.isArray(mapped?.autoCreatedMappings) ? mapped.autoCreatedMappings : []
+  const lowConfidence = Array.isArray(mapped?.lowConfidenceMappings) ? mapped.lowConfidenceMappings : []
+  const rejected = Array.isArray(assistanceSummary?.rejectedRecommendations) ? assistanceSummary.rejectedRecommendations : []
+  const mappedAccountKeys = new Set(
+    finalAssignments.map((assignment) => buildRuntimeMappingAccountKey(assignment.normalized_account || assignment.account_name, assignment.direction)),
+  )
+  return {
+    profiled_accounts: Number(accountProfile?.summary?.profiled_accounts || 0),
+    movement_accounts: Number(accountProfile?.summary?.movement_accounts || 0),
+    direction_profiles: Number(accountProfile?.summary?.direction_profiles || 0),
+    mapped_accounts: mappedAccountKeys.size,
+    profile_auto_mappings: autoMappings.filter((mapping) => mapping.source === "profile_auto").length,
+    llm_assisted_mappings: autoMappings.filter((mapping) => mapping.source === "llm_assisted").length,
+    review_required_mappings: lowConfidence.length + rejected.length,
+  }
+}
+
+function detectBucketDirection(input) {
+  const options = typeof input === "object" && input !== null && !Array.isArray(input)
+    ? input
+    : { label: input }
+  const label = options.label || ""
+  const sectionLabel = options.sectionLabel || ""
+  const text = normalizeText(`${sectionLabel} ${label}`)
+  const numericDirection = inferDirectionFromCellValues(options.cells || [])
+  const concept = bestDirectCashFlowConcept(text)
+  const outflowHints = scorePatternMatches(text, DIRECT_OUTFLOW_TEXT_HINTS)
+  const inflowHints = scorePatternMatches(text, DIRECT_INFLOW_TEXT_HINTS)
+
+  if (concept && (!numericDirection || concept.direction === numericDirection)) {
+    return concept.direction
+  }
+
+  if (outflowHints && !inflowHints) return "outflow"
+  if (inflowHints && !outflowHints) return "inflow"
+  if (outflowHints && inflowHints) {
+    if (numericDirection) return numericDirection
+    return outflowHints >= inflowHints ? "outflow" : "inflow"
+  }
+
+  if (concept) return concept.direction
+  if (numericDirection) return numericDirection
   return "inflow"
 }
 
@@ -1372,6 +2040,8 @@ function shouldIgnoreBucketLabel(label) {
   if (!normalized) return true
   return (
     normalized.includes("month") ||
+    normalized === "summary" ||
+    normalized.includes("free cash flow") ||
     isOpeningLabel(normalized) ||
     isClosingLabel(normalized) ||
     normalized.includes("beginning") ||
@@ -1382,17 +2052,102 @@ function shouldIgnoreBucketLabel(label) {
   )
 }
 
-function getCellNumericSignal(value) {
+function isFallbackBucketLabel(label) {
+  return /\b(other|misc|miscellaneous|uncategorized|remaining|catch all|catch-all)\b/i.test(String(label || ""))
+}
+
+function scorePatternMatches(text, patterns = []) {
+  const normalized = normalizeText(text)
+  if (!normalized) return 0
+  return patterns.reduce((score, pattern) => score + (pattern.test(normalized) ? 1 : 0), 0)
+}
+
+function matchDirectCashFlowConcepts(text, direction = null) {
+  const normalized = normalizeText(text)
+  if (!normalized) return []
+  return DIRECT_CASH_FLOW_CONCEPTS.map((concept) => {
+    if (direction && concept.direction !== direction) return null
+    const matchCount = scorePatternMatches(normalized, concept.patterns)
+    if (!matchCount) return null
+    return {
+      key: concept.key,
+      direction: concept.direction,
+      score: Math.min(1, 0.72 + matchCount * 0.07),
+      matchCount,
+    }
+  }).filter(Boolean)
+}
+
+function bestDirectCashFlowConcept(text, direction = null) {
+  return matchDirectCashFlowConcepts(text, direction).sort((left, right) => right.score - left.score)[0] || null
+}
+
+function getNumericValue(value) {
+  const primitive = readCellPrimitive(value)
+  if (primitive === null || primitive === undefined || primitive === "") return null
+  if (typeof primitive === "number") return Number.isFinite(primitive) ? primitive : null
+  if (primitive instanceof Date) return null
+  const parsed = Number.parseFloat(String(primitive).replace(/,/g, ""))
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function inferDirectionFromCellValues(values = []) {
+  const numericValues = (Array.isArray(values) ? values : [])
+    .map((value) => getNumericValue(value))
+    .filter((value) => value !== null && value !== 0)
+  if (!numericValues.length) return null
+  const negativeCount = numericValues.filter((value) => value < 0).length
+  const positiveCount = numericValues.filter((value) => value > 0).length
+  if (negativeCount > positiveCount) return "outflow"
+  if (positiveCount > negativeCount) return "inflow"
+  const total = numericValues.reduce((sum, value) => sum + value, 0)
+  if (total < 0) return "outflow"
+  if (total > 0) return "inflow"
+  return null
+}
+
+function getCellNumericSignal(value, options = {}) {
+  if (isFormulaCellValue(value)) return options.allowFormula === true
   const primitive = readCellPrimitive(value)
   if (primitive === null || primitive === undefined || primitive === "") return false
   if (typeof primitive === "number") return true
   if (primitive instanceof Date) return false
-  if (typeof primitive === "object" && primitive.formula) return true
   if (typeof primitive === "string") {
     const number = Number.parseFloat(primitive.replace(/,/g, ""))
     return Number.isFinite(number)
   }
   return false
+}
+
+function chooseColumnLayoutLabelColumn({ worksheet, headerRowIndex, firstPeriodCol, maxRows }) {
+  const preferredHeaderHints = ["line item", "lineitem", "description", "account", "label", "name"]
+  const rejectedHeaderHints = ["section", "category", "class"]
+  const headerRow = worksheet.getRow(headerRowIndex)
+  let best = null
+
+  for (let candidate = 1; candidate < firstPeriodCol; candidate += 1) {
+    const headerText = normalizeHeader(readCellText(headerRow.getCell(candidate).value))
+    const labels = []
+    for (let scanRow = headerRowIndex + 1; scanRow <= Math.min(maxRows, headerRowIndex + 140); scanRow += 1) {
+      const label = normalizeText(readCellText(worksheet.getRow(scanRow).getCell(candidate).value))
+      if (label) labels.push(label)
+    }
+
+    const uniqueLabels = new Set(labels)
+    const preferred = preferredHeaderHints.some((hint) => headerText.includes(hint))
+    const rejected = rejectedHeaderHints.some((hint) => headerText.includes(hint))
+    const repeatedPenalty = labels.length && uniqueLabels.size <= Math.max(2, Math.ceil(labels.length * 0.25)) ? 2 : 0
+    const score = uniqueLabels.size * 1.25 + labels.length * 0.15 + (preferred ? 20 : 0) - (rejected ? 6 : 0) - repeatedPenalty
+
+    if (!best || score > best.score) {
+      best = {
+        column: candidate,
+        score,
+      }
+    }
+  }
+
+  return best?.column || Math.max(1, firstPeriodCol - 1)
 }
 
 function getStatementMethodFromConfig(config) {
@@ -1780,15 +2535,12 @@ function pickColumnLayoutCandidate(worksheet) {
     )
 
     const firstCol = periodEntries[0].col
-    let labelColumn = null
-    for (let candidate = 1; candidate < firstCol; candidate += 1) {
-      const signal = normalizeText(readCellText(worksheet.getRow(row + 1).getCell(candidate).value))
-      if (signal) {
-        labelColumn = candidate
-        break
-      }
-    }
-    if (!labelColumn) labelColumn = Math.max(1, firstCol - 1)
+    const labelColumn = chooseColumnLayoutLabelColumn({
+      worksheet,
+      headerRowIndex: row,
+      firstPeriodCol: firstCol,
+      maxRows,
+    })
 
     let openingRow = null
     let closingRow = null
@@ -1809,12 +2561,14 @@ function pickColumnLayoutCandidate(worksheet) {
       if (shouldIgnoreBucketLabel(normalizedLabel)) continue
 
       const hasNumericSignal = periodEntries.some((entry) =>
-        getCellNumericSignal(worksheet.getRow(scanRow).getCell(entry.col).value),
+        getCellNumericSignal(worksheet.getRow(scanRow).getCell(entry.col).value, { allowFormula: true }),
       )
       if (!hasNumericSignal) continue
       bucketRows.push({
         row: scanRow,
         label: label || normalizedLabel,
+        sectionLabel:
+          labelColumn > 1 ? readCellText(worksheet.getRow(scanRow).getCell(labelColumn - 1).value) : "",
       })
     }
 
@@ -1846,16 +2600,12 @@ function pickColumnLayoutCandidate(worksheet) {
 }
 
 function ensureDirectionalFallbacks(bucketBindings) {
-  const inflowFallback = bucketBindings.find((item) => item.direction === "inflow" && item.fallback)
-  const outflowFallback = bucketBindings.find((item) => item.direction === "outflow" && item.fallback)
-  if (!inflowFallback) {
-    const firstInflow = bucketBindings.find((item) => item.direction === "inflow")
-    if (firstInflow) firstInflow.fallback = true
-  }
-  if (!outflowFallback) {
-    const firstOutflow = bucketBindings.find((item) => item.direction === "outflow")
-    if (firstOutflow) firstOutflow.fallback = true
-  }
+  ;["inflow", "outflow"].forEach((direction) => {
+    const fallbackBuckets = bucketBindings.filter((item) => item.direction === direction && item.fallback)
+    fallbackBuckets.slice(1).forEach((bucket) => {
+      bucket.fallback = false
+    })
+  })
 }
 
 function buildV3ConfigFromLayoutDetection(worksheet, layoutCandidate) {
@@ -1901,11 +2651,16 @@ function buildV3ConfigFromLayoutDetection(worksheet, layoutCandidate) {
       const bucketKey = normalizeBucketKey(bucket.label, `bucket_${bucketIndex + 1}`)
       if (seenBucketKeys.has(bucketKey)) return
       seenBucketKeys.add(bucketKey)
+      const bucketCells = layoutCandidate.periodEntries.map((entry) => worksheet.getRow(entry.row).getCell(bucket.column).value)
       bucketBindings.push({
         bucket_key: bucketKey,
         label: bucket.label,
-        direction: detectBucketDirection(bucket.label),
-        fallback: /other|misc|uncategorized|remaining/i.test(bucket.label),
+        direction: detectBucketDirection({
+          label: bucket.label,
+          sectionLabel: bucket.sectionLabel,
+          cells: bucketCells,
+        }),
+        fallback: isFallbackBucketLabel(bucket.label),
         rules: [],
         cells: layoutCandidate.periodEntries.map((entry, index) => ({
           period_key: periodLabels[index].period_key,
@@ -1941,11 +2696,16 @@ function buildV3ConfigFromLayoutDetection(worksheet, layoutCandidate) {
       const bucketKey = normalizeBucketKey(bucket.label, `bucket_${bucketIndex + 1}`)
       if (seenBucketKeys.has(bucketKey)) return
       seenBucketKeys.add(bucketKey)
+      const bucketCells = layoutCandidate.periodEntries.map((entry) => worksheet.getRow(bucket.row).getCell(entry.col).value)
       bucketBindings.push({
         bucket_key: bucketKey,
         label: bucket.label,
-        direction: detectBucketDirection(bucket.label),
-        fallback: /other|misc|uncategorized|remaining/i.test(bucket.label),
+        direction: detectBucketDirection({
+          label: bucket.label,
+          sectionLabel: bucket.sectionLabel,
+          cells: bucketCells,
+        }),
+        fallback: isFallbackBucketLabel(bucket.label),
         rules: [],
         cells: layoutCandidate.periodEntries.map((entry, index) => ({
           period_key: periodLabels[index].period_key,
@@ -1986,6 +2746,91 @@ function buildV3ConfigFromLayoutDetection(worksheet, layoutCandidate) {
       low_confidence_threshold: 0.35,
     },
   }
+}
+
+function evaluateDirectBucketSemanticQuality(bucketBindings = []) {
+  if (!Array.isArray(bucketBindings) || !bucketBindings.length) {
+    return {
+      score: 0,
+      issues: ["No direct cash-flow bucket bindings were detected."],
+      needsHumanReview: true,
+    }
+  }
+
+  const directionCounts = bucketBindings.reduce(
+    (counts, bucket) => {
+      if (bucket.direction === "inflow") counts.inflow += 1
+      if (bucket.direction === "outflow") counts.outflow += 1
+      return counts
+    },
+    { inflow: 0, outflow: 0 },
+  )
+  const ambiguous = bucketBindings.filter((bucket) => {
+    if (isFallbackBucketLabel(bucket.label)) return false
+    if (bestDirectCashFlowConcept(`${bucket.label} ${bucket.bucket_key}`, bucket.direction)) return false
+    return scorePatternMatches(`${bucket.label} ${bucket.bucket_key}`, [
+      ...DIRECT_INFLOW_TEXT_HINTS,
+      ...DIRECT_OUTFLOW_TEXT_HINTS,
+    ]) === 0
+  })
+  const generic = bucketBindings.filter((bucket) => /^bucket [0-9]+$/i.test(String(bucket.label || "")))
+  const issues = []
+
+  if (!directionCounts.inflow) issues.push("No direct inflow bucket rows were detected.")
+  if (!directionCounts.outflow) issues.push("No direct outflow bucket rows were detected.")
+  if (ambiguous.length > Math.max(1, Math.ceil(bucketBindings.length * 0.35))) {
+    issues.push(
+      `Several direct bucket labels need semantic review: ${ambiguous
+        .slice(0, 4)
+        .map((bucket) => bucket.label)
+        .join(", ")}.`,
+    )
+  }
+  if (generic.length) {
+    issues.push("One or more detected bucket labels are generic placeholders and need review.")
+  }
+
+  const recognizedRatio = (bucketBindings.length - ambiguous.length - generic.length) / bucketBindings.length
+  const directionCoverage = directionCounts.inflow && directionCounts.outflow ? 1 : 0.45
+  const score = Math.max(
+    0,
+    Math.min(1, recognizedRatio * 0.72 + directionCoverage * 0.22 + (bucketBindings.some((bucket) => bucket.fallback) ? 0.06 : 0.03)),
+  )
+
+  return {
+    score,
+    issues,
+    needsHumanReview: score < 0.62 || directionCounts.inflow === 0 || directionCounts.outflow === 0 || generic.length > 0,
+  }
+}
+
+function calculateDirectTemplateConfidence({
+  periodCount,
+  strictPeriods,
+  bucketCount,
+  hasCustomPeriods,
+  hasOpening,
+  hasClosing,
+  semanticQuality,
+}) {
+  const periodScore = Math.min(1, Math.max(0, periodCount / 12))
+  const strictScore = periodCount ? Math.min(1, Math.max(0, strictPeriods / periodCount)) : 0
+  const bucketScore = Math.min(1, Math.max(0, bucketCount / 10))
+  const semanticScore = Math.max(0, Math.min(1, Number(semanticQuality?.score || 0)))
+  let confidence =
+    0.24 +
+    periodScore * 0.2 +
+    strictScore * 0.16 +
+    bucketScore * 0.12 +
+    semanticScore * 0.32 +
+    (hasOpening ? 0.04 : 0) +
+    (hasClosing ? 0.04 : 0)
+
+  if (hasCustomPeriods) confidence -= 0.14
+  if (semanticQuality?.needsHumanReview) confidence = Math.min(confidence, 0.64)
+  if (!hasOpening || !hasClosing) confidence = Math.min(confidence, 0.82)
+
+  return roundCurrency(Math.max(0.22, Math.min(0.88, confidence)))
 }
 
 function buildMinimalSuggestedV3Config(sheetName = "Cash Flow") {
@@ -2056,8 +2901,11 @@ function buildMinimalSuggestedV3Config(sheetName = "Cash Flow") {
 
 async function analyzeTemplateWorkbook({ templatePath }) {
   ensureFileExists(templatePath, "Cash flow template")
-  const workbook = new ExcelJS.Workbook()
-  await workbook.xlsx.readFile(templatePath)
+  const workbook = await readWorkbookFromFile({
+    filePath: templatePath,
+    label: "Cash flow template",
+    ValidationErrorCtor: CashFlowValidationError,
+  })
   if (!workbook.worksheets.length) {
     throw new CashFlowValidationError("Template workbook has no worksheets")
   }
@@ -2108,13 +2956,16 @@ async function analyzeTemplateWorkbook({ templatePath }) {
   const strictPeriods = bestCandidate.periodEntries.filter((item) => item.strict).length
   const bucketCount = suggestedConfig.bucket_bindings.length
   const hasCustomPeriods = suggestedConfig.period_axis.labels.some((label) => label.period_type === "custom")
-
-  let confidence = roundCurrency(
-    Math.min(
-      0.99,
-      Math.max(0.3, periodCount * 0.09 + bucketCount * 0.08 + strictPeriods * 0.07 + (hasCustomPeriods ? -0.12 : 0.12)),
-    ),
-  )
+  const semanticQuality = evaluateDirectBucketSemanticQuality(suggestedConfig.bucket_bindings)
+  let confidence = calculateDirectTemplateConfidence({
+    periodCount,
+    strictPeriods,
+    bucketCount,
+    hasCustomPeriods,
+    hasOpening: Boolean(suggestedConfig.opening_binding),
+    hasClosing: Boolean(suggestedConfig.closing_binding),
+    semanticQuality,
+  })
 
   const issues = []
   const requiredAnchors = []
@@ -2131,6 +2982,10 @@ async function analyzeTemplateWorkbook({ templatePath }) {
     issues.push("Low-confidence detection. Review axis and bucket bindings in the confirmation step.")
     requiredAnchors.push("period_axis")
   }
+  semanticQuality.issues.forEach((issue) => issues.push(issue))
+  if (semanticQuality.needsHumanReview) {
+    requiredAnchors.push("bucket_targets")
+  }
   if (!suggestedConfig.opening_binding) {
     issues.push("Opening balance target not detected. It will be skipped unless you map it manually.")
   }
@@ -2143,7 +2998,7 @@ async function analyzeTemplateWorkbook({ templatePath }) {
     confidence,
     issues,
     required_anchors: Array.from(new Set(requiredAnchors)),
-    needs_human_review: confidence < 0.55 || requiredAnchors.length > 0,
+    needs_human_review: confidence < 0.55 || requiredAnchors.length > 0 || semanticQuality.needsHumanReview,
     suggested_config_json: suggestedConfig,
   }
 }
@@ -2152,8 +3007,11 @@ async function migrateLegacyTemplateConfigToV2({ templatePath, legacyConfig }) {
   const normalizedLegacy = validateLegacyTemplateConfig(legacyConfig)
   ensureFileExists(templatePath, "Cash flow template")
 
-  const workbook = new ExcelJS.Workbook()
-  await workbook.xlsx.readFile(templatePath)
+  const workbook = await readWorkbookFromFile({
+    filePath: templatePath,
+    label: "Cash flow template",
+    ValidationErrorCtor: CashFlowValidationError,
+  })
   const worksheet = workbook.getWorksheet(normalizedLegacy.sheet_name)
   if (!worksheet) {
     throw new CashFlowValidationError(`Template sheet "${normalizedLegacy.sheet_name}" not found`)
@@ -2312,9 +3170,34 @@ async function migrateLegacyTemplateConfigToV3({ templatePath, legacyConfig }) {
   return migrateV2TemplateConfigToV3(v2)
 }
 
+function expandCashFlowTokens(tokens) {
+  const expanded = new Set(tokens)
+  const addWhenPresent = (needles, additions) => {
+    if (needles.some((needle) => expanded.has(needle))) {
+      additions.forEach((addition) => expanded.add(addition))
+    }
+  }
+
+  addWhenPresent(["customer", "customers", "receivable", "receivables", "revenue"], ["receipt", "receipts"])
+  addWhenPresent(["client", "clients", "collection", "collections", "collected"], ["customer", "receipt", "receipts"])
+  addWhenPresent(["supplier", "suppliers", "vendor", "vendors", "payable", "payables"], ["payment", "payments"])
+  addWhenPresent(["disbursement", "disbursements"], ["payment", "payments"])
+  addWhenPresent(["salary", "salaries", "wage", "wages", "benefit", "benefits", "compensation", "people"], ["payroll"])
+  addWhenPresent(["advertising", "promotion", "brand", "growth", "campaign"], ["marketing"])
+  addWhenPresent(["premises", "lease", "occupancy"], ["rent", "facilities"])
+  addWhenPresent(["equipment", "hardware", "ppe", "plant", "property"], ["capex", "expenditure", "asset"])
+  addWhenPresent(["loan", "borrowings", "borrowing", "note", "credit", "facility"], ["debt"])
+  addWhenPresent(["principal"], ["repayment"])
+  addWhenPresent(["finance", "charge", "charges"], ["interest"])
+  addWhenPresent(["contribution", "contributions", "funding", "injection", "founder", "investor"], ["equity", "capital"])
+  addWhenPresent(["dividend", "dividends", "distribution", "distributions"], ["payout"])
+
+  return expanded
+}
+
 function computeTokenSimilarity(left, right) {
-  const leftTokens = new Set(normalizeText(left).split(" ").filter(Boolean))
-  const rightTokens = new Set(normalizeText(right).split(" ").filter(Boolean))
+  const leftTokens = expandCashFlowTokens(normalizeText(left).split(" ").filter(Boolean))
+  const rightTokens = expandCashFlowTokens(normalizeText(right).split(" ").filter(Boolean))
   if (!leftTokens.size || !rightTokens.size) return 0
   let overlap = 0
   leftTokens.forEach((token) => {
@@ -2323,25 +3206,257 @@ function computeTokenSimilarity(left, right) {
   return overlap / Math.max(leftTokens.size, rightTokens.size)
 }
 
+function getRuntimeProfileEvidenceText(profile, movement = null) {
+  return normalizeText(
+    [
+      movement?.account_name,
+      movement?.normalized_account,
+      movement?.description,
+      profile?.account_name,
+      profile?.normalized_account,
+      profile?.tb_account_class,
+      ...(Array.isArray(profile?.evidence_tokens) ? profile.evidence_tokens : []),
+      ...(Array.isArray(profile?.sample_descriptions) ? profile.sample_descriptions : []),
+    ]
+      .filter(Boolean)
+      .join(" "),
+  )
+}
+
+function directTargetScoresFromProfile(profile, direction, evidenceText) {
+  const targets = new Map()
+  const addTarget = (key, score, reason) => {
+    if (!key) return
+    const existing = targets.get(key)
+    if (!existing || Number(score || 0) > existing.score) {
+      targets.set(key, {
+        key,
+        score: Math.max(0, Math.min(1, Number(score || 0))),
+        reason,
+      })
+    }
+  }
+
+  const accountClass = profile?.tb_account_class || null
+  const classTargets = {
+    receivable: { inflow: ["customer_receipts", 0.84, "tb_class_receivable"] },
+    revenue: { inflow: ["customer_receipts", 0.82, "tb_class_revenue"] },
+    inventory: { outflow: ["supplier_payments", 0.78, "tb_class_inventory"] },
+    payable: { outflow: ["supplier_payments", 0.82, "tb_class_payable"] },
+    fixed_asset: {
+      inflow: ["asset_sale_proceeds", 0.78, "tb_class_fixed_asset"],
+      outflow: ["capital_expenditures", 0.86, "tb_class_fixed_asset"],
+    },
+    debt: {
+      inflow: ["debt_drawdown", 0.87, "tb_class_debt"],
+      outflow: ["debt_repayment", 0.86, "tb_class_debt"],
+    },
+    equity: {
+      inflow: ["equity_injection", 0.87, "tb_class_equity"],
+      outflow: ["dividends_distributions", 0.8, "tb_class_equity"],
+    },
+    payroll_expense: { outflow: ["payroll", 0.86, "tb_class_payroll_expense"] },
+    rent_expense: { outflow: ["rent_facilities", 0.84, "tb_class_rent_expense"] },
+    marketing_expense: { outflow: ["sales_marketing", 0.84, "tb_class_marketing_expense"] },
+    tax_expense: { outflow: ["income_taxes", 0.84, "tb_class_tax_expense"] },
+    interest_expense: { outflow: ["interest_paid", 0.86, "tb_class_interest_expense"] },
+    admin_expense: { outflow: ["general_admin", 0.74, "tb_class_admin_expense"] },
+  }
+
+  const classTarget = classTargets[accountClass]?.[direction]
+  if (classTarget) addTarget(classTarget[0], classTarget[1], classTarget[2])
+
+  if (profile) {
+    matchDirectCashFlowConcepts(evidenceText, direction).forEach((concept) => {
+      addTarget(concept.key, Math.min(0.94, Number(concept.score || 0) + 0.08), "profile_evidence_concept")
+    })
+  }
+
+  return Array.from(targets.values())
+}
+
+function bucketSupportsDirectTarget(bucket, bucketEvidence, bucketConceptKeys, targetKey) {
+  if (!targetKey) return false
+  const normalizedBucketKey = normalizeBucketKey(bucket?.bucket_key || "", "")
+  const semanticKey = CashFlowConcepts.normalizeDirectConceptKey(bucket?.semantic_key || "")
+  if (CashFlowConcepts.keysEquivalent(normalizedBucketKey, targetKey)) return true
+  if (semanticKey && CashFlowConcepts.keysEquivalent(semanticKey, targetKey)) return true
+  if (Array.from(bucketConceptKeys || []).some((key) => CashFlowConcepts.keysEquivalent(key, targetKey))) return true
+  if (normalizeText(bucketEvidence).includes(normalizeText(targetKey))) return true
+  return false
+}
+
+function scoreDirectBucketMatchDetails(movement, bucket, options = {}) {
+  const explicitDirection = normalizeText(movement?.direction || options.direction || "").toLowerCase()
+  const direction = explicitDirection || (Number(movement?.amount || 0) >= 0 ? "inflow" : "outflow")
+  if (bucket?.direction && bucket.direction !== direction) {
+    return {
+      score: 0,
+      lexical_score: 0,
+      concept_score: 0,
+      profile_score: 0,
+      direction_hint_score: 0,
+      profile_target_key: null,
+      reasons: ["direction_mismatch"],
+    }
+  }
+
+  const profile = options.accountProfile || movement?.account_profile || null
+  const accountEvidence = getRuntimeProfileEvidenceText(profile, movement)
+  const basicAccountEvidence = normalizeText(
+    [movement?.account_name, movement?.normalized_account, movement?.description]
+      .filter(Boolean)
+      .join(" "),
+  )
+  const semanticConcept = CashFlowConcepts.getDirectConcept(bucket?.semantic_key || "")
+  const bucketEvidence = normalizeText(
+    [
+      bucket?.label,
+      bucket?.bucket_key,
+      bucket?.description,
+      semanticConcept?.label,
+      ...(Array.isArray(semanticConcept?.synonyms) ? semanticConcept.synonyms : []),
+      ...(Array.isArray(bucket?.semantic_evidence) ? bucket.semantic_evidence : []),
+    ]
+      .filter(Boolean)
+      .join(" "),
+  )
+  const lexicalScore = Math.max(
+    computeTokenSimilarity(accountEvidence, bucket?.label),
+    computeTokenSimilarity(accountEvidence, bucket?.bucket_key),
+    computeTokenSimilarity(accountEvidence, bucketEvidence),
+  )
+
+  const accountConcepts = matchDirectCashFlowConcepts(accountEvidence, direction)
+  const bucketConcepts = [
+    ...matchDirectCashFlowConcepts(bucketEvidence, direction),
+    ...(semanticConcept && semanticConcept.direction === direction
+      ? [
+          {
+            key: semanticConcept.key,
+            direction: semanticConcept.direction,
+            score: Math.max(0.88, Number(bucket?.semantic_confidence || 0)),
+            matchCount: 1,
+          },
+        ]
+      : []),
+  ]
+  const bucketConceptKeys = new Set(bucketConcepts.map((concept) => concept.key))
+  const sharedConcept = accountConcepts.find((concept) =>
+    Array.from(bucketConceptKeys).some((key) => CashFlowConcepts.keysEquivalent(key, concept.key)),
+  )
+  const conceptScore = sharedConcept ? Math.min(0.96, (sharedConcept.score + 0.86) / 2) : 0
+  const basicConcepts = matchDirectCashFlowConcepts(basicAccountEvidence, direction)
+  const profileTargets = directTargetScoresFromProfile(profile, direction, accountEvidence)
+  const bestProfileTarget = profileTargets
+    .filter((target) => bucketSupportsDirectTarget(bucket, bucketEvidence, bucketConceptKeys, target.key))
+    .sort((left, right) => right.score - left.score)[0] || null
+  const profileScore = bestProfileTarget ? bestProfileTarget.score : 0
+  const directionHintScore =
+    !conceptScore &&
+    scorePatternMatches(bucketEvidence, direction === "inflow" ? DIRECT_INFLOW_TEXT_HINTS : DIRECT_OUTFLOW_TEXT_HINTS) &&
+    scorePatternMatches(accountEvidence, direction === "inflow" ? DIRECT_INFLOW_TEXT_HINTS : DIRECT_OUTFLOW_TEXT_HINTS)
+      ? 0.62
+      : 0
+
+  let score = Math.max(lexicalScore, conceptScore, profileScore, directionHintScore)
+  const reasons = []
+  if (lexicalScore >= 0.45) reasons.push("name_similarity")
+  if (conceptScore >= 0.7) reasons.push(`shared_concept:${sharedConcept?.key}`)
+  if (profileScore >= 0.7) reasons.push(bestProfileTarget?.reason || "profile_evidence")
+  if (directionHintScore >= 0.6) reasons.push("direction_hint")
+  if (basicConcepts.length && profileScore >= 0.7 && !basicConcepts.some((concept) => concept.key === bestProfileTarget?.key)) {
+    reasons.push("gl_or_tb_overrode_weak_account_name")
+  }
+  if (bucket?.is_fallback || bucket?.fallback) score = Math.min(score || 0.38, 0.48)
+  return {
+    score: roundCurrency(Math.max(0, Math.min(1, score))),
+    lexical_score: roundCurrency(lexicalScore),
+    concept_score: roundCurrency(conceptScore),
+    profile_score: roundCurrency(profileScore),
+    direction_hint_score: roundCurrency(directionHintScore),
+    profile_target_key: bestProfileTarget?.key || null,
+    reasons,
+  }
+}
+
+function scoreDirectBucketMatch(movement, bucket, options = {}) {
+  return scoreDirectBucketMatchDetails(movement, bucket, options).score
+}
+
+function buildLearnedMappingLookup(learnedMappings = []) {
+  const learnedLookup = new Map()
+  ;(Array.isArray(learnedMappings) ? learnedMappings : []).forEach((mapping) => {
+    const normalizedAccount = normalizeText(mapping?.normalized_account || mapping?.account_name || "")
+    const direction = normalizeText(mapping?.direction || "").toLowerCase()
+    const bucketKey = normalizeBucketKey(mapping?.bucket_key || "", "")
+    if (!normalizedAccount || !direction || !bucketKey) return
+    const metadata = mapping?.metadata || mapping?.metadata_json || null
+    const semanticKey = CashFlowConcepts.normalizeDirectConceptKey(
+      mapping?.semantic_key || metadata?.semantic_key || metadata?.bucket_semantic_key || "",
+    )
+
+    learnedLookup.set(`${normalizedAccount}:${direction}`, {
+      bucket_key: bucketKey,
+      confidence: Number(mapping?.confidence || 1),
+      source: mapping?.source || "auto_semantic",
+      status: mapping?.status || "suggested",
+      metadata,
+      semantic_key: semanticKey || null,
+      account_profile: mapping?.account_profile || mapping?.profile_evidence || null,
+      evidence: Array.isArray(mapping?.evidence) ? mapping.evidence : [],
+      profile_score: Number(mapping?.profile_score || 0),
+      llm_score: Number(mapping?.llm_score || 0),
+    })
+  })
+  return learnedLookup
+}
+
+function mergeAutoCreatedMappings(existingMappings = [], additionalMappings = []) {
+  const merged = new Map()
+  ;[...(existingMappings || []), ...(additionalMappings || [])].forEach((mapping) => {
+    const normalizedAccount = normalizeText(mapping?.normalized_account || "")
+    const direction = normalizeText(mapping?.direction || "").toLowerCase()
+    const bucketKey = normalizeBucketKey(mapping?.bucket_key || "", "")
+    if (!normalizedAccount || !direction || !bucketKey) return
+    const semanticKey = CashFlowConcepts.normalizeDirectConceptKey(
+      mapping?.semantic_key || mapping?.bucket_semantic_key || mapping?.metadata?.semantic_key || mapping?.metadata_json?.semantic_key || "",
+    )
+
+    const key = `${normalizedAccount}:${direction}:${bucketKey}`
+    const current = merged.get(key)
+    if (!current || Number(mapping?.confidence || 0) > Number(current.confidence || 0)) {
+      merged.set(key, {
+        normalized_account: normalizedAccount,
+        direction,
+        bucket_key: bucketKey,
+        confidence: Number(mapping?.confidence || 0),
+        source: mapping?.source || "auto_semantic",
+        status: mapping?.status || "suggested",
+        semantic_key: semanticKey || null,
+        profile_score: Number(mapping?.profile_score || 0),
+        llm_score: Number(mapping?.llm_score || 0),
+        deterministic_score: Number(mapping?.deterministic_score || mapping?.confidence || 0),
+        evidence: Array.isArray(mapping?.evidence) ? mapping.evidence : [],
+        reasoning: mapping?.reasoning || null,
+        previous_bucket_key: mapping?.previous_bucket_key || null,
+        account_profile: mapping?.account_profile || mapping?.profile_evidence || null,
+      })
+    }
+  })
+  return Array.from(merged.values())
+}
+
 function mapMovementsToBuckets(movements, buckets, options = {}) {
   const mappingPolicy = normalizeMappingPolicy(options.mappingPolicy)
   const learnedMappings = Array.isArray(options.learnedMappings) ? options.learnedMappings : []
+  const accountProfile = options.accountProfile || null
   const fallbackByDirection = {
     inflow: buckets.find((bucket) => bucket.direction === "inflow" && bucket.fallback) || null,
     outflow: buckets.find((bucket) => bucket.direction === "outflow" && bucket.fallback) || null,
   }
 
-  const learnedLookup = new Map()
-  learnedMappings.forEach((mapping) => {
-    const normalizedAccount = normalizeText(mapping.normalized_account || mapping.account_name || "")
-    if (!normalizedAccount) return
-    learnedLookup.set(`${normalizedAccount}:${mapping.direction}`, {
-      bucket_key: mapping.bucket_key,
-      confidence: Number(mapping.confidence || 1),
-      source: mapping.source || "auto_semantic",
-      status: mapping.status || "suggested",
-    })
-  })
+  const learnedLookup = buildLearnedMappingLookup(learnedMappings)
 
   const mappedMovements = []
   const unmapped = []
@@ -2351,6 +3466,8 @@ function mapMovementsToBuckets(movements, buckets, options = {}) {
   movements.forEach((movement) => {
     const direction = movement.amount >= 0 ? "inflow" : "outflow"
     const normalizedAccount = normalizeText(movement.account_name)
+    const profileEntry = getRuntimeAccountDirectionProfile(accountProfile, normalizedAccount, direction)
+    const compactProfile = compactRuntimeProfileEvidence(profileEntry)
     const directionBuckets = buckets
       .map((bucket, bucketIndex) => ({ bucket, bucketIndex }))
       .filter((item) => item.bucket.direction === direction)
@@ -2359,6 +3476,7 @@ function mapMovementsToBuckets(movements, buckets, options = {}) {
     let selectedSource = "template_rule"
     let selectedConfidence = 1
     let selectedGroundingStatus = "template_rule"
+    let selectedScoreDetails = null
 
     let bestRuleMatch = null
     directionBuckets.forEach(({ bucket, bucketIndex }) => {
@@ -2405,20 +3523,30 @@ function mapMovementsToBuckets(movements, buckets, options = {}) {
     if (!selectedBucket) {
       let bestSemantic = null
       directionBuckets.forEach(({ bucket }) => {
-        const score = Math.max(
-          computeTokenSimilarity(normalizedAccount, bucket.label),
-          computeTokenSimilarity(normalizedAccount, bucket.bucket_key),
+        const details = scoreDirectBucketMatchDetails(
+          {
+            ...movement,
+            direction,
+            normalized_account: normalizedAccount,
+          },
+          bucket,
+          { accountProfile: profileEntry },
         )
-        if (!bestSemantic || score > bestSemantic.score) {
-          bestSemantic = { bucket, score }
+        if (!bestSemantic || details.score > bestSemantic.score) {
+          bestSemantic = { bucket, score: details.score, details }
         }
       })
 
       if (bestSemantic && bestSemantic.score >= mappingPolicy.low_confidence_threshold) {
         selectedBucket = bestSemantic.bucket
-        selectedSource = "auto_semantic"
+        selectedSource =
+          bestSemantic.details?.profile_score >= mappingPolicy.high_confidence_threshold &&
+          bestSemantic.score >= mappingPolicy.high_confidence_threshold
+            ? "profile_auto"
+            : "auto_semantic"
         selectedConfidence = bestSemantic.score
-        selectedGroundingStatus = "auto_semantic"
+        selectedGroundingStatus = selectedSource === "profile_auto" ? "suggested" : "auto_semantic"
+        selectedScoreDetails = bestSemantic.details
       }
     }
 
@@ -2444,25 +3572,43 @@ function mapMovementsToBuckets(movements, buckets, options = {}) {
       direction,
       bucket_key: selectedBucket.bucket_key,
       bucket_label: selectedBucket.label,
+      bucket_semantic_key: selectedBucket.semantic_key || selectedScoreDetails?.profile_target_key || null,
       abs_amount: roundCurrency(Math.abs(movement.amount)),
       mapping_source: selectedSource,
       mapping_confidence: Number(selectedConfidence || 0),
       grounding_status: selectedGroundingStatus,
+      profile_score: Number(selectedScoreDetails?.profile_score || 0),
+      profile_evidence: compactProfile,
+      mapping_evidence: selectedScoreDetails?.reasons || [],
     })
 
     const existingLearned = learnedLookup.get(`${normalizedAccount}:${direction}`)
-    if (!existingLearned && mappingPolicy.auto_create) {
+    const canPersistAutoMapping =
+      !existingLearned &&
+      mappingPolicy.auto_create &&
+      Number(selectedConfidence || 0) >= Number(mappingPolicy.high_confidence_threshold || 0.7) &&
+      !["fallback"].includes(selectedSource) &&
+      selectedGroundingStatus !== "fallback"
+    if (canPersistAutoMapping) {
       autoCreatedMappings.push({
         normalized_account: normalizedAccount,
         direction,
         bucket_key: selectedBucket.bucket_key,
+        semantic_key: selectedBucket.semantic_key || selectedScoreDetails?.profile_target_key || null,
         confidence: Number(selectedConfidence || 0),
         source: selectedSource === "template_rule" ? "template_rule" : selectedSource,
+        status: "suggested",
+        profile_score: Number(selectedScoreDetails?.profile_score || 0),
+        deterministic_score: Number(selectedConfidence || 0),
+        evidence: selectedScoreDetails?.reasons || [],
+        account_profile: compactProfile,
       })
       learnedLookup.set(`${normalizedAccount}:${direction}`, {
         bucket_key: selectedBucket.bucket_key,
         confidence: Number(selectedConfidence || 0),
         source: selectedSource,
+        status: "suggested",
+        semantic_key: selectedBucket.semantic_key || selectedScoreDetails?.profile_target_key || null,
       })
     }
 
@@ -2491,11 +3637,22 @@ function mapMovementsToBuckets(movements, buckets, options = {}) {
         normalized_account: normalizeText(row.account_name),
         direction: row.direction,
         bucket_key: row.bucket_key,
+        semantic_key: row.bucket_semantic_key || null,
         confidence: Number(row.mapping_confidence || 0),
         source: row.mapping_source,
         grounding_status: row.grounding_status || null,
         abs_amount: Number(row.abs_amount || 0),
+        profile_score: Number(row.profile_score || 0),
+        profile_evidence: row.profile_evidence || null,
+        mapping_evidence: row.mapping_evidence || [],
       })
+    } else {
+      const existing = assignmentMap.get(key)
+      existing.abs_amount = roundCurrency(Number(existing.abs_amount || 0) + Number(row.abs_amount || 0))
+      existing.confidence = Math.max(Number(existing.confidence || 0), Number(row.mapping_confidence || 0))
+      if (!existing.profile_evidence && row.profile_evidence) existing.profile_evidence = row.profile_evidence
+      if (!existing.semantic_key && row.bucket_semantic_key) existing.semantic_key = row.bucket_semantic_key
+      existing.profile_score = Math.max(Number(existing.profile_score || 0), Number(row.profile_score || 0))
     }
   })
 
@@ -2534,6 +3691,97 @@ function resolvePeriodCellBindings(entries, label) {
 
 function getValueByPeriod(bindings, periodKey) {
   return bindings.find((binding) => binding.period_key === periodKey) || null
+}
+
+function getFormulaText(cell) {
+  const value = cell?.value
+  if (!value || typeof value !== "object" || !value.formula) return ""
+  return String(value.formula || "")
+}
+
+function clearFormulaCachedResults(workbook) {
+  workbook.worksheets.forEach((worksheet) => {
+    worksheet.eachRow({ includeEmpty: false }, (row) => {
+      row.eachCell({ includeEmpty: false }, (cell) => {
+        const value = cell.value
+        if (!isFormulaCellValue(value) || value.result === undefined) return
+        const { result, ...formulaValue } = value
+        cell.value = formulaValue
+      })
+    })
+  })
+}
+
+function parseCellAddressLoose(address) {
+  return parseCellAddress(String(address || "").replace(/\$/g, ""))
+}
+
+function parseFormulaRanges(formula) {
+  const ranges = []
+  const text = String(formula || "")
+  const rangePattern = /(?:'[^']+'!|[A-Za-z0-9_ ]+!)?(\$?[A-Z]{1,3}\$?\d+)\s*:\s*(\$?[A-Z]{1,3}\$?\d+)/gi
+  let match = null
+  while ((match = rangePattern.exec(text))) {
+    try {
+      const start = parseCellAddressLoose(match[1])
+      const end = parseCellAddressLoose(match[2])
+      ranges.push({
+        startRow: Math.min(start.row, end.row),
+        endRow: Math.max(start.row, end.row),
+        startCol: Math.min(start.col, end.col),
+        endCol: Math.max(start.col, end.col),
+      })
+    } catch (error) {
+      // Ignore formula fragments that are not normal A1 ranges.
+    }
+  }
+  return ranges
+}
+
+function inferDirectBucketCellWriteSigns(worksheet, bucketBindings = []) {
+  const cellLookup = new Map()
+  ;(bucketBindings || []).forEach((bucket) => {
+    ;(bucket.resolved_cells || []).forEach((cell) => {
+      cellLookup.set(cell.address, {
+        address: cell.address,
+        row: cell.row,
+        col: cell.col,
+        bucket_key: bucket.bucket_key,
+        direction: bucket.direction,
+      })
+    })
+  })
+
+  const writeSigns = new Map()
+  cellLookup.forEach((cell) => {
+    writeSigns.set(cell.address, 1)
+  })
+
+  worksheet.eachRow({ includeEmpty: false }, (row) => {
+    row.eachCell({ includeEmpty: false }, (cell) => {
+      const formula = getFormulaText(cell)
+      if (!formula) return
+      parseFormulaRanges(formula).forEach((range) => {
+        const bucketCells = Array.from(cellLookup.values()).filter(
+          (item) =>
+            item.row >= range.startRow &&
+            item.row <= range.endRow &&
+            item.col >= range.startCol &&
+            item.col <= range.endCol,
+        )
+        if (bucketCells.length < 2) return
+        const directions = new Set(bucketCells.map((item) => item.direction).filter(Boolean))
+        if (!directions.has("inflow") || !directions.has("outflow")) return
+        bucketCells
+          .filter((item) => item.direction === "outflow")
+          .forEach((item) => {
+            writeSigns.set(item.address, -1)
+          })
+      })
+    })
+  })
+
+  return writeSigns
 }
 
 function normalizeDateStart(dateValue) {
@@ -2756,20 +4004,107 @@ function classifyIndirectCashSemanticKey(accountName, direction) {
   const normalized = normalizeText(accountName)
   if (!normalized) return null
 
-  if (normalized.includes("office equipment") || normalized.includes("capital expenditure") || normalized.includes("fixed asset")) {
+  if (
+    normalized.includes("office equipment") ||
+    normalized.includes("capital expenditure") ||
+    normalized.includes("capex") ||
+    normalized.includes("fixed asset") ||
+    normalized.includes("ppe") ||
+    normalized.includes("property plant") ||
+    normalized.includes("investment purchase")
+  ) {
     return direction === "outflow" ? "capital_expenditures" : "asset_sales"
   }
-  if (normalized.includes("owner capital") || normalized.includes("capital contribution")) {
+  if (normalized.includes("asset sale") || normalized.includes("disposal proceeds") || normalized.includes("sale proceeds")) {
+    return direction === "inflow" ? "asset_sales" : null
+  }
+  if (
+    normalized.includes("owner capital") ||
+    normalized.includes("capital contribution") ||
+    normalized.includes("member funding") ||
+    normalized.includes("capital call") ||
+    normalized.includes("paid in capital") ||
+    normalized.includes("paid-in capital") ||
+    normalized.includes("equity injection") ||
+    normalized.includes("partner contribution")
+  ) {
     return direction === "inflow" ? "capital_contributions" : null
   }
-  if (normalized.includes("owner drawings") || normalized.includes("drawings") || normalized.includes("dividend")) {
+  if (
+    normalized.includes("owner drawings") ||
+    normalized.includes("drawings") ||
+    normalized.includes("dividend") ||
+    normalized.includes("distribution") ||
+    normalized.includes("redemption")
+  ) {
     return direction === "outflow" ? "dividends_paid" : null
   }
-  if (normalized.includes("notes payable") || normalized.includes("loan payable") || normalized.includes("debt")) {
+  if (
+    normalized.includes("notes payable") ||
+    normalized.includes("loan payable") ||
+    normalized.includes("loan proceeds") ||
+    normalized.includes("borrowings") ||
+    normalized.includes("debt")
+  ) {
     return direction === "inflow" ? "debt_issued" : "debt_repaid"
   }
   if (normalized.includes("interest expense") || normalized.includes("interest payable")) {
     return direction === "outflow" ? "interest_paid" : null
+  }
+
+  return null
+}
+
+function classifyIndirectCashSemanticKeyFromProfile(profile, accountName, direction) {
+  if (!profile) return null
+  const evidenceText = getRuntimeProfileEvidenceText(profile, {
+    account_name: accountName,
+    normalized_account: normalizeText(accountName),
+    direction,
+  })
+  const accountClass = profile.tb_account_class || "other"
+  const classTargets = {
+    fixed_asset: direction === "outflow" ? "capital_expenditures" : "asset_sales",
+    debt: direction === "inflow" ? "debt_issued" : "debt_repaid",
+    equity: direction === "inflow" ? "capital_contributions" : "dividends_paid",
+    interest_expense: direction === "outflow" ? "interest_paid" : null,
+  }
+  if (classTargets[accountClass]) {
+    return {
+      semantic_key: classTargets[accountClass],
+      confidence: accountClass === "equity" || accountClass === "debt" ? 0.87 : 0.84,
+      reason: `tb_class_${accountClass}`,
+      evidence: compactRuntimeProfileEvidence(profile),
+    }
+  }
+
+  const directConcept = bestDirectCashFlowConcept(evidenceText, direction)
+  const conceptTargets = {
+    capital_expenditures: "capital_expenditures",
+    asset_sale_proceeds: "asset_sales",
+    debt_drawdown: "debt_issued",
+    debt_repayment: "debt_repaid",
+    interest_paid: "interest_paid",
+    equity_injection: "capital_contributions",
+    dividends_distributions: "dividends_paid",
+  }
+  if (directConcept?.key && conceptTargets[directConcept.key]) {
+    return {
+      semantic_key: conceptTargets[directConcept.key],
+      confidence: Math.min(0.9, Number(directConcept.score || 0.78) + 0.08),
+      reason: `profile_concept_${directConcept.key}`,
+      evidence: compactRuntimeProfileEvidence(profile),
+    }
+  }
+
+  const textKey = classifyIndirectCashSemanticKey(evidenceText, direction)
+  if (textKey && textKey !== "operating_cash_flow") {
+    return {
+      semantic_key: textKey,
+      confidence: 0.78,
+      reason: "profile_text_signal",
+      evidence: compactRuntimeProfileEvidence(profile),
+    }
   }
 
   return null
@@ -2785,10 +4120,14 @@ function summarizeIndirectAssignments(assignments = []) {
         normalized_account: normalizeText(assignment.account_name),
         direction: assignment.direction,
         bucket_key: assignment.bucket_key,
+        semantic_key: assignment.bucket_key,
         confidence: Number(assignment.mapping_confidence || 0),
         source: assignment.mapping_source,
         grounding_status: assignment.grounding_status || null,
         abs_amount: Number(assignment.abs_amount || 0),
+        profile_score: Number(assignment.profile_score || 0),
+        profile_evidence: assignment.profile_evidence || null,
+        mapping_evidence: assignment.mapping_evidence || [],
       })
     } else {
       deduped.get(key).abs_amount = roundCurrency(
@@ -2799,21 +4138,38 @@ function summarizeIndirectAssignments(assignments = []) {
   return Array.from(deduped.values())
 }
 
-function mapIndirectCashMovementsToRows(movements, rowBindings) {
+function mapIndirectCashMovementsToRows(movements, rowBindings, options = {}) {
   const bindingLookup = new Map((rowBindings || []).map((binding) => [binding.semantic_key, binding]))
+  const learnedLookup = buildLearnedMappingLookup(options.learnedMappings)
+  const accountProfile = options.accountProfile || null
   const mappedMovements = []
   const lowConfidenceMappings = []
   const unmapped = []
   const warnings = []
+  const autoCreatedMappings = []
 
   movements.forEach((movement) => {
     const direction = movement.amount >= 0 ? "inflow" : "outflow"
+    const normalizedAccount = normalizeText(movement.account_name)
+    const profileEntry = getRuntimeAccountDirectionProfile(accountProfile, normalizedAccount, direction)
+    const profileSemantic = classifyIndirectCashSemanticKeyFromProfile(profileEntry, movement.account_name, direction)
+    const learned = learnedLookup.get(`${normalizedAccount}:${direction}`) || null
     const explicitSemanticKey = classifyIndirectCashSemanticKey(movement.account_name, direction)
     const fallbackSemanticKey = "operating_cash_flow"
-    let selectedSemanticKey = explicitSemanticKey || fallbackSemanticKey
-    let mappingSource = explicitSemanticKey ? "template_rule" : "derived_operating"
-    let confidence = explicitSemanticKey ? 1 : 0.82
-    let groundingStatus = explicitSemanticKey ? "template_rule" : "suggested"
+    let selectedSemanticKey = learned?.bucket_key || profileSemantic?.semantic_key || explicitSemanticKey || fallbackSemanticKey
+    let mappingSource = learned?.source || (profileSemantic ? "profile_auto" : explicitSemanticKey ? "template_rule" : "derived_operating")
+    let confidence = learned ? Number(learned.confidence || 1) : profileSemantic?.confidence || (explicitSemanticKey ? 0.86 : 0.82)
+    let groundingStatus = learned
+      ? learned.status === "approved"
+        ? "approved"
+        : "suggested"
+      : profileSemantic
+        ? "suggested"
+        : explicitSemanticKey
+          ? "template_rule"
+          : "suggested"
+    let mappingEvidence = profileSemantic?.reason ? [profileSemantic.reason] : explicitSemanticKey ? ["account_name_semantic"] : []
+    let profileScore = profileSemantic?.confidence || 0
 
     if (selectedSemanticKey !== fallbackSemanticKey && !bindingLookup.has(selectedSemanticKey)) {
       warnings.push(
@@ -2832,6 +4188,8 @@ function mapIndirectCashMovementsToRows(movements, rowBindings) {
       mappingSource = "derived_operating"
       confidence = 0.82
       groundingStatus = "suggested"
+      mappingEvidence = []
+      profileScore = 0
     }
 
     mappedMovements.push({
@@ -2839,16 +4197,49 @@ function mapIndirectCashMovementsToRows(movements, rowBindings) {
       direction,
       bucket_key: selectedSemanticKey,
       bucket_label: bindingLookup.get(selectedSemanticKey)?.label || selectedSemanticKey,
+      bucket_semantic_key: selectedSemanticKey,
       abs_amount: roundCurrency(Math.abs(movement.amount)),
       mapping_source: mappingSource,
       mapping_confidence: confidence,
       grounding_status: groundingStatus,
+      profile_score: Number(profileScore || 0),
+      profile_evidence: compactRuntimeProfileEvidence(profileEntry),
+      mapping_evidence: mappingEvidence,
     })
+
+    const shouldAutoCreate =
+      !learned &&
+      options.mappingPolicy?.auto_create !== false &&
+      selectedSemanticKey !== fallbackSemanticKey &&
+      Number(confidence || 0) >= 0.7 &&
+      bindingLookup.has(selectedSemanticKey)
+    if (shouldAutoCreate) {
+      autoCreatedMappings.push({
+        normalized_account: normalizedAccount,
+        direction,
+        bucket_key: selectedSemanticKey,
+        semantic_key: selectedSemanticKey,
+        confidence: Number(confidence || 0),
+        source: mappingSource,
+        status: "suggested",
+        profile_score: Number(profileScore || 0),
+        deterministic_score: Number(confidence || 0),
+        evidence: mappingEvidence,
+        account_profile: compactRuntimeProfileEvidence(profileEntry),
+      })
+      learnedLookup.set(`${normalizedAccount}:${direction}`, {
+        bucket_key: selectedSemanticKey,
+        confidence: Number(confidence || 0),
+        source: mappingSource,
+        status: "suggested",
+        semantic_key: selectedSemanticKey,
+      })
+    }
 
     if (confidence < 0.75) {
       lowConfidenceMappings.push({
         account_name: movement.account_name,
-        normalized_account: normalizeText(movement.account_name),
+        normalized_account: normalizedAccount,
         direction,
         bucket_key: selectedSemanticKey,
         confidence,
@@ -2860,7 +4251,7 @@ function mapIndirectCashMovementsToRows(movements, rowBindings) {
     mappedMovements,
     unmapped,
     warnings: Array.from(new Set(warnings)),
-    autoCreatedMappings: [],
+    autoCreatedMappings: mergeAutoCreatedMappings(autoCreatedMappings),
     lowConfidenceMappings,
     finalBucketAssignments: summarizeIndirectAssignments(mappedMovements),
   }
@@ -3181,8 +4572,11 @@ async function ensureV3TemplateConfig({ templateConfig, templatePath }) {
 
   if (templatePath) {
     ensureFileExists(templatePath, "Cash flow template")
-    const workbook = new ExcelJS.Workbook()
-    await workbook.xlsx.readFile(templatePath)
+    const workbook = await readWorkbookFromFile({
+      filePath: templatePath,
+      label: "Cash flow template",
+      ValidationErrorCtor: CashFlowValidationError,
+    })
     const worksheet = workbook.getWorksheet(v3Config.sheet_name)
     if (!worksheet) {
       throw new CashFlowValidationError(`Template sheet "${v3Config.sheet_name}" not found`, {
@@ -3319,6 +4713,437 @@ function buildFiscalYearData({
   }
 }
 
+function buildRuntimeMappingAccountKey(normalizedAccount, direction) {
+  return `${normalizeText(normalizedAccount)}:${normalizeText(direction).toLowerCase()}`
+}
+
+function buildRuntimeMovementContext(movements = []) {
+  const lookup = new Map()
+  ;(Array.isArray(movements) ? movements : []).forEach((movement) => {
+    const direction = Number(movement?.amount || 0) >= 0 ? "inflow" : "outflow"
+    const normalizedAccount = normalizeText(movement?.account_name || "")
+    if (!normalizedAccount) return
+    const accountKey = buildRuntimeMappingAccountKey(normalizedAccount, direction)
+    if (!accountKey) return
+
+    if (!lookup.has(accountKey)) {
+      lookup.set(accountKey, {
+        movement_count: 0,
+        total_abs_amount: 0,
+        sample_descriptions: [],
+      })
+    }
+
+    const context = lookup.get(accountKey)
+    context.movement_count += 1
+    context.total_abs_amount = roundCurrency(context.total_abs_amount + Math.abs(Number(movement?.amount || 0)))
+
+    const description = String(movement?.description || "").trim()
+    if (description && !context.sample_descriptions.includes(description) && context.sample_descriptions.length < 4) {
+      context.sample_descriptions.push(description)
+    }
+  })
+
+  return lookup
+}
+
+function hasIndirectSpecializedRuntimeSignal(accountName) {
+  const normalized = normalizeText(accountName)
+  if (!normalized) return false
+  return /capital contribution|capital call|paid in capital|paid-in capital|owner capital|capital expenditure|capitalized|contribution|subscription|financing|drawdown|distribution|redemption|drawing|dividend|loan|note payable|debt|borrowing|interest|equipment|fixed asset|property|plant|ppe|asset sale|asset disposal|investment|proceeds/.test(
+    normalized,
+  )
+}
+
+function getIndirectRuntimeAllowedCandidates(rowBindings = [], direction) {
+  const allowed = []
+  const seen = new Set()
+  ;(rowBindings || []).forEach((binding) => {
+    const definition = INDIRECT_ROW_LOOKUP.get(binding.semantic_key)
+    const bindingRole = binding.role || definition?.role
+    if (!definition || bindingRole !== "input") return
+    if (definition.cash_direction !== direction) return
+    if (seen.has(binding.semantic_key)) return
+    seen.add(binding.semantic_key)
+    allowed.push({
+      mapping_key: binding.semantic_key,
+      semantic_key: binding.semantic_key,
+      label: binding.label,
+      description: `${definition.label} (${definition.cash_direction})`,
+      is_fallback: false,
+    })
+  })
+
+  const operatingBinding = (rowBindings || []).find((binding) => binding.semantic_key === "operating_cash_flow")
+  if (operatingBinding && !seen.has("operating_cash_flow")) {
+    allowed.push({
+      mapping_key: "operating_cash_flow",
+      semantic_key: "operating_cash_flow",
+      label: operatingBinding.label,
+      description: "Operating cash flow fallback",
+      is_fallback: true,
+    })
+  }
+
+  return allowed
+}
+
+function buildRuntimeMappingCandidates({
+  statementMethod,
+  initialMapping,
+  buckets,
+  rowBindings,
+  mappingPolicy,
+  movements = [],
+  accountProfile = null,
+}) {
+  const candidates = []
+  const candidateKeys = new Set()
+  const highConfidenceThreshold = Number(mappingPolicy?.high_confidence_threshold || 0.7)
+  const movementContextLookup = buildRuntimeMovementContext(movements)
+
+  const addCandidate = ({
+    account_name,
+    normalized_account,
+    direction,
+    current_mapping_key = null,
+    current_mapping_label = null,
+    current_mapping_source = null,
+    current_mapping_confidence = 0,
+    allowed_candidates = [],
+  }) => {
+    const accountKey = buildRuntimeMappingAccountKey(normalized_account || account_name, direction)
+    if (!accountKey || candidateKeys.has(accountKey) || allowed_candidates.length < 2) return
+    const movementContext = movementContextLookup.get(accountKey) || {}
+    const profileEntry = getRuntimeAccountDirectionProfile(accountProfile, normalized_account || account_name, direction)
+    const accountEvidence = {
+      account_name,
+      normalized_account: normalized_account || account_name,
+      description: (movementContext.sample_descriptions || []).join(" "),
+      direction,
+      amount: direction === "outflow" ? -1 : 1,
+      account_profile: profileEntry,
+    }
+    const enrichedAllowedCandidates = (allowed_candidates || []).map((candidate) => {
+      const scoreDetails =
+        candidate.deterministic_score !== undefined
+          ? {
+              score: Number(candidate.deterministic_score || 0),
+              profile_score: Number(candidate.profile_score || 0),
+              reasons: candidate.evidence || [],
+              profile_target_key: candidate.profile_target_key || null,
+            }
+          : scoreDirectBucketMatchDetails(
+              accountEvidence,
+              {
+                bucket_key: candidate.mapping_key,
+                label: candidate.label,
+                description: candidate.description,
+                direction,
+                fallback: candidate.is_fallback,
+                semantic_key: candidate.semantic_key || null,
+                semantic_confidence: candidate.semantic_confidence || 0,
+                semantic_evidence: candidate.semantic_evidence || [],
+              },
+              { accountProfile: profileEntry },
+            )
+      return {
+        ...candidate,
+        deterministic_score: Number(scoreDetails.score || 0),
+        profile_score: Number(scoreDetails.profile_score || 0),
+        profile_target_key: scoreDetails.profile_target_key || null,
+        evidence: scoreDetails.reasons || [],
+      }
+    })
+    const bestDeterministic = enrichedAllowedCandidates
+      .filter((candidate) => !candidate.is_fallback)
+      .sort((left, right) => Number(right.deterministic_score || 0) - Number(left.deterministic_score || 0))[0] || null
+    candidateKeys.add(accountKey)
+    candidates.push({
+      account_key: accountKey,
+      account_name,
+      normalized_account: normalizeText(normalized_account || account_name),
+      direction,
+      movement_count: Number(movementContext.movement_count || 0),
+      total_abs_amount: Number(movementContext.total_abs_amount || 0),
+      sample_descriptions: movementContext.sample_descriptions || [],
+      account_profile: compactRuntimeProfileEvidence(profileEntry),
+      best_profile_mapping_key:
+        bestDeterministic && Number(bestDeterministic.profile_score || 0) >= 0.7
+          ? bestDeterministic.mapping_key
+          : null,
+      best_profile_score: bestDeterministic ? Number(bestDeterministic.profile_score || 0) : 0,
+      best_deterministic_mapping_key: bestDeterministic?.mapping_key || null,
+      best_deterministic_score: bestDeterministic ? Number(bestDeterministic.deterministic_score || 0) : 0,
+      current_mapping_key,
+      current_mapping_label,
+      current_mapping_source,
+      current_mapping_confidence: Number(current_mapping_confidence || 0),
+      allowed_candidates: enrichedAllowedCandidates,
+    })
+  }
+
+  if (statementMethod === STATEMENT_METHODS.INDIRECT) {
+    ;(initialMapping?.finalBucketAssignments || []).forEach((assignment) => {
+      const source = normalizeBucketKey(assignment?.source || assignment?.mapping_source || "", "")
+      if (!["derived_operating", "fallback"].includes(source)) return
+      const profileEntry = getRuntimeAccountDirectionProfile(
+        accountProfile,
+        assignment.normalized_account || assignment.account_name,
+        assignment.direction,
+      )
+      const profileEvidenceText = getRuntimeProfileEvidenceText(profileEntry, {
+        account_name: assignment.account_name,
+        normalized_account: assignment.normalized_account,
+        direction: assignment.direction,
+      })
+      if (
+        !hasIndirectSpecializedRuntimeSignal(assignment.account_name || assignment.normalized_account) &&
+        !hasIndirectSpecializedRuntimeSignal(profileEvidenceText)
+      ) {
+        return
+      }
+
+      const allowedCandidates = getIndirectRuntimeAllowedCandidates(rowBindings, assignment.direction)
+      addCandidate({
+        account_name: assignment.account_name,
+        normalized_account: assignment.normalized_account,
+        direction: assignment.direction,
+        current_mapping_key: assignment.bucket_key,
+        current_mapping_label:
+          (rowBindings || []).find((binding) => binding.semantic_key === assignment.bucket_key)?.label || assignment.bucket_key,
+        current_mapping_source: assignment.source || assignment.mapping_source || null,
+        current_mapping_confidence: assignment.confidence || assignment.mapping_confidence || 0,
+        allowed_candidates: allowedCandidates,
+      })
+    })
+
+    return candidates
+  }
+
+  ;(initialMapping?.finalBucketAssignments || []).forEach((assignment) => {
+    const source = normalizeBucketKey(assignment?.source || assignment?.mapping_source || "", "")
+    const grounding = normalizeBucketKey(assignment?.grounding_status || "", "")
+    const confidence = Number(assignment?.confidence || assignment?.mapping_confidence || 0)
+    const currentBucket = (buckets || []).find((bucket) => bucket.bucket_key === assignment.bucket_key) || null
+    const currentUsesLlmSemantic = normalizeBucketKey(currentBucket?.semantic_source || "", "") === "llm_semantic"
+    const isGrounded = ["template_rule", "approved"].includes(grounding) || ["template_rule", "manual_rule", "seeded"].includes(source)
+    if (isGrounded) return
+    if (
+      confidence >= highConfidenceThreshold &&
+      !["fallback", "auto_semantic"].includes(source) &&
+      grounding !== "suggested" &&
+      !currentUsesLlmSemantic
+    ) {
+      return
+    }
+
+    const allowedCandidates = (buckets || [])
+      .filter((bucket) => bucket.direction === assignment.direction)
+      .map((bucket) => ({
+        mapping_key: bucket.bucket_key,
+        label: bucket.label,
+        description: bucket.fallback ? "Fallback bucket" : "Template bucket",
+        is_fallback: Boolean(bucket.fallback),
+        semantic_key: bucket.semantic_key || null,
+        semantic_confidence: Number(bucket.semantic_confidence || 0),
+        semantic_source: bucket.semantic_source || null,
+        semantic_evidence: Array.isArray(bucket.semantic_evidence) ? bucket.semantic_evidence : [],
+      }))
+
+    addCandidate({
+      account_name: assignment.account_name,
+      normalized_account: assignment.normalized_account,
+      direction: assignment.direction,
+      current_mapping_key: assignment.bucket_key,
+      current_mapping_label: assignment.bucket_label || (buckets || []).find((bucket) => bucket.bucket_key === assignment.bucket_key)?.label || assignment.bucket_key,
+      current_mapping_source: assignment.source || assignment.mapping_source || null,
+      current_mapping_confidence: confidence,
+      allowed_candidates: allowedCandidates,
+    })
+  })
+
+  return candidates
+}
+
+async function resolveRuntimeMappingAssistant(explicitAssistant = null) {
+  if (explicitAssistant && typeof explicitAssistant.assistMappings === "function") {
+    return explicitAssistant
+  }
+
+  try {
+    const assistant = require("../modules/mappings/services/runtimeMappingAssistant.service")
+    if (assistant && typeof assistant.assistMappings === "function") {
+      return assistant
+    }
+  } catch (error) {
+    return null
+  }
+
+  return null
+}
+
+async function maybeApplyRuntimeMappingAssistance({
+  statementMethod,
+  movements,
+  initialMapping,
+  buckets,
+  rowBindings,
+  mappingPolicy,
+  learnedMappings,
+  accountProfile = null,
+  useRuntimeMappingAssistance = false,
+  runtimeMappingAssistant = null,
+}) {
+  const baseSummary = {
+    enabled: Boolean(useRuntimeMappingAssistance),
+    statementMethod,
+    candidatesConsidered: 0,
+    attempted: false,
+    acceptedCount: 0,
+    rejectedCount: 0,
+    failed: false,
+  }
+  if (!useRuntimeMappingAssistance) {
+    return {
+      mapped: initialMapping,
+      assistanceSummary: baseSummary,
+    }
+  }
+
+  const assistant = await resolveRuntimeMappingAssistant(runtimeMappingAssistant)
+  if (!assistant) {
+    return {
+      mapped: initialMapping,
+      assistanceSummary: {
+        ...baseSummary,
+        failed: true,
+        failureReason: "runtime_mapping_assistant_unavailable",
+      },
+    }
+  }
+
+  const candidates = buildRuntimeMappingCandidates({
+    statementMethod,
+    initialMapping,
+    buckets,
+    rowBindings,
+    mappingPolicy,
+    movements,
+    accountProfile,
+  })
+  if (!candidates.length) {
+    return {
+      mapped: initialMapping,
+      assistanceSummary: {
+        ...baseSummary,
+        candidatesConsidered: 0,
+      },
+    }
+  }
+
+  let assistance = null
+  try {
+    assistance = await assistant.assistMappings({
+      statementMethod,
+      candidates,
+    })
+  } catch (error) {
+    return {
+      mapped: initialMapping,
+      assistanceSummary: {
+        ...baseSummary,
+        candidatesConsidered: candidates.length,
+        attempted: true,
+        failed: true,
+        failureReason: String(error?.message || "runtime_mapping_assistance_failed"),
+      },
+    }
+  }
+  const acceptedMappings = Array.isArray(assistance?.acceptedMappings) ? assistance.acceptedMappings : []
+  const rejectedRecommendations = Array.isArray(assistance?.rejectedRecommendations) ? assistance.rejectedRecommendations : []
+  const profileEvidenceStats = {
+    candidates_with_profile: candidates.filter((candidate) => candidate.account_profile).length,
+    strong_profile_candidates: candidates.filter((candidate) => Number(candidate.best_profile_score || 0) >= 0.7).length,
+    deterministic_profile_disagreements: rejectedRecommendations.filter(
+      (item) => item.reason === "profile_llm_conflict_requires_review",
+    ).length,
+  }
+  const assistanceSummary = {
+    ...baseSummary,
+    ...(assistance?.summary || {}),
+    candidatePoolSize: candidates.length,
+    candidatesConsidered: Number(assistance?.summary?.candidatesConsidered || candidates.length),
+    notes: assistance?.notes || [],
+    runtimeScope: appConfig.mappingAssistance?.runtimeScope || "ambiguous_novel",
+    confidenceCalibrationNotes: [
+      "accepted mappings require schema-valid targets, non-empty evidence, and min score",
+      "profile/llm conflicts within 0.12 are review-only",
+      "auto-created runtime mappings persist as suggested",
+    ],
+    profileEvidenceStats,
+    rejectedRecommendations,
+    acceptedMappings: acceptedMappings.map((mapping) => ({
+      normalized_account: mapping.normalized_account,
+      direction: mapping.direction,
+      bucket_key: mapping.bucket_key,
+      semantic_key: mapping.semantic_key || null,
+      confidence: mapping.confidence,
+      llm_score: mapping.llm_score || mapping.confidence,
+      profile_score: mapping.profile_score || 0,
+      reasoning: mapping.reasoning || null,
+      previous_bucket_key: mapping.previous_bucket_key || null,
+      changed: Boolean(mapping.changed),
+    })),
+  }
+
+  if (!acceptedMappings.length) {
+    return {
+      mapped: initialMapping,
+      assistanceSummary,
+    }
+  }
+
+  const augmentedLearnedMappings = [...(learnedMappings || []), ...acceptedMappings]
+  const remapped =
+    statementMethod === STATEMENT_METHODS.INDIRECT
+      ? mapIndirectCashMovementsToRows(movements, rowBindings, {
+          learnedMappings: augmentedLearnedMappings,
+          mappingPolicy,
+          accountProfile,
+        })
+      : mapMovementsToBuckets(movements, buckets, {
+          learnedMappings: augmentedLearnedMappings,
+          mappingPolicy,
+          accountProfile,
+        })
+
+  remapped.autoCreatedMappings = mergeAutoCreatedMappings(
+    remapped.autoCreatedMappings,
+    acceptedMappings.map((mapping) => ({
+      normalized_account: mapping.normalized_account,
+      direction: mapping.direction,
+      bucket_key: mapping.bucket_key,
+      semantic_key: mapping.semantic_key || null,
+      confidence: mapping.confidence,
+      source: mapping.source || "llm_assisted",
+      status: "suggested",
+      profile_score: mapping.profile_score || 0,
+      llm_score: mapping.llm_score || mapping.confidence || 0,
+      deterministic_score: mapping.deterministic_score || 0,
+      evidence: mapping.evidence || [],
+      reasoning: mapping.reasoning || null,
+      previous_bucket_key: mapping.previous_bucket_key || null,
+      account_profile: mapping.account_profile || null,
+    })),
+  )
+
+  return {
+    mapped: remapped,
+    assistanceSummary,
+  }
+}
+
 async function fillTemplateWorkbook({ templatePath, outputPath, config, periodData, fiscalData }) {
   ensureFileExists(templatePath, "Cash flow template")
 
@@ -3344,15 +5169,27 @@ async function fillTemplateWorkbook({ templatePath, outputPath, config, periodDa
     resolved_cells: resolvePeriodCellBindings(binding.cells, `row_bindings.${binding.semantic_key}.cells`),
   }))
 
-  const workbook = new ExcelJS.Workbook()
-  await workbook.xlsx.readFile(templatePath)
+  const workbook = await readWorkbookFromFile({
+    filePath: templatePath,
+    label: "Cash flow template",
+    ValidationErrorCtor: CashFlowValidationError,
+  })
   const worksheet = workbook.getWorksheet(normalizedConfig.sheet_name)
   if (!worksheet) {
     throw new CashFlowValidationError(`Template sheet "${normalizedConfig.sheet_name}" not found`)
   }
+  const directBucketWriteSigns =
+    statementMethod === STATEMENT_METHODS.DIRECT
+      ? inferDirectBucketCellWriteSigns(worksheet, bucketBindings)
+      : new Map()
 
   const setNumberCellIfWritable = (cell, value) => {
     if (writerPolicy.preserve_formulas && isFormulaCell(cell.value)) return false
+    cell.value = roundCurrency(value)
+    return true
+  }
+  const setOpeningNumberCell = (cell, value) => {
+    if (writerPolicy.preserve_formulas && isFormulaCell(cell.value) && !isFormulaLiteralNumber(cell.value)) return false
     cell.value = roundCurrency(value)
     return true
   }
@@ -3420,7 +5257,7 @@ async function fillTemplateWorkbook({ templatePath, outputPath, config, periodDa
     const closingBinding = getValueByPeriod(closingBindings, periodKey)
 
     if (openingBinding) {
-      setNumberCellIfWritable(
+      setOpeningNumberCell(
         resolveWorksheetCell(openingBinding, `opening period ${periodKey}`),
         period.opening_balance || 0,
       )
@@ -3429,9 +5266,10 @@ async function fillTemplateWorkbook({ templatePath, outputPath, config, periodDa
     bucketBindings.forEach((bucket) => {
       const bucketCellBinding = getValueByPeriod(bucket.resolved_cells, periodKey)
       const amount = period.bucket_amounts?.[bucket.bucket_key] || 0
+      const writeSign = bucket.direction === "outflow" ? directBucketWriteSigns.get(bucketCellBinding?.address) || 1 : 1
       setNumberCellIfWritable(
         resolveWorksheetCell(bucketCellBinding, `bucket ${bucket.bucket_key} period ${periodKey}`),
-        amount,
+        roundCurrency(Number(amount || 0) * writeSign),
       )
     })
 
@@ -3445,6 +5283,7 @@ async function fillTemplateWorkbook({ templatePath, outputPath, config, periodDa
 
   if (writerPolicy.full_recalc_on_open) {
     workbook.calcProperties.fullCalcOnLoad = true
+    clearFormulaCachedResults(workbook)
   }
   fs.mkdirSync(path.dirname(outputPath), { recursive: true })
   await workbook.xlsx.writeFile(outputPath)
@@ -3461,6 +5300,8 @@ async function generateCashFlowReport({
   fiscalYear,
   outputFilePath,
   learnedMappings = [],
+  useRuntimeMappingAssistance = Boolean(appConfig.mappingAssistance?.runtimeEnabled),
+  runtimeMappingAssistant = null,
 }) {
   const config = await ensureV3TemplateConfig({
     templateConfig,
@@ -3468,6 +5309,7 @@ async function generateCashFlowReport({
   })
   const statementMethod = getStatementMethodFromConfig(config)
   const buckets = getBucketsFromConfig(config)
+  const rowBindings = getIndirectRowBindingsFromConfig(config)
   const mappingPolicy = getMappingPolicyFromConfig(config)
   const resolvedRange = resolveRunDateRange({
     dateStart,
@@ -3480,14 +5322,42 @@ async function generateCashFlowReport({
   const generalLedger = await parseGeneralLedgerFile(glFilePath, {
     cashAccountName: trialBalance.cashAccountName,
   })
+  const accountProfile = buildRuntimeAccountProfile({
+    trialBalance,
+    generalLedger,
+    cashAccountName: trialBalance.cashAccountName,
+  })
 
-  const mapped =
+  const initialMapping =
     statementMethod === STATEMENT_METHODS.INDIRECT
-      ? mapIndirectCashMovementsToRows(generalLedger.movements, getIndirectRowBindingsFromConfig(config))
+      ? mapIndirectCashMovementsToRows(generalLedger.movements, rowBindings, {
+          learnedMappings,
+          mappingPolicy,
+          accountProfile,
+        })
       : mapMovementsToBuckets(generalLedger.movements, buckets, {
           learnedMappings,
           mappingPolicy,
+          accountProfile,
         })
+  const runtimeAssistance = await maybeApplyRuntimeMappingAssistance({
+    statementMethod,
+    movements: generalLedger.movements,
+    initialMapping,
+    buckets,
+    rowBindings,
+    mappingPolicy,
+    learnedMappings,
+    accountProfile,
+    useRuntimeMappingAssistance,
+    runtimeMappingAssistant,
+  })
+  const mapped = runtimeAssistance.mapped
+  const accountProfileSummary = buildRuntimeAccountProfileSummary({
+    accountProfile,
+    mapped,
+    assistanceSummary: runtimeAssistance.assistanceSummary,
+  })
 
   const periodData =
     statementMethod === STATEMENT_METHODS.INDIRECT
@@ -3557,6 +5427,8 @@ async function generateCashFlowReport({
       auto_mappings_created: mapped.autoCreatedMappings,
       low_confidence_mappings: mapped.lowConfidenceMappings,
       final_bucket_assignments: mapped.finalBucketAssignments,
+      assistance_summary: runtimeAssistance.assistanceSummary,
+      account_profile_summary: accountProfileSummary,
     },
     preview: {
       period_start: periodData.period_start,
@@ -3587,6 +5459,8 @@ async function generateCashFlowReport({
         mapped_cash_movements: mapped.mappedMovements.length,
         auto_mappings_created: mapped.autoCreatedMappings.length,
         low_confidence_mappings: mapped.lowConfidenceMappings.length,
+        assistance: runtimeAssistance.assistanceSummary,
+        account_profile: accountProfileSummary,
       },
     },
   }
@@ -3601,6 +5475,7 @@ module.exports = {
   migrateLegacyTemplateConfigToV2,
   migrateLegacyTemplateConfigToV3,
   migrateV2TemplateConfigToV3,
+  getIndirectRowDefinitions,
   ensureV2TemplateConfig,
   ensureV3TemplateConfig,
   parseTrialBalanceFile,
@@ -3623,12 +5498,25 @@ module.exports = {
     normalizeBucketKey,
     detectBucketDirection,
     computeTokenSimilarity,
+    scoreDirectBucketMatch,
+    scoreDirectBucketMatchDetails,
+    evaluateDirectBucketSemanticQuality,
     pickRowLayoutCandidate,
     pickColumnLayoutCandidate,
     resolvePeriodRanges,
     buildIndirectV3ConfigFromNormalizedSheet,
     classifyIndirectCashSemanticKey,
+    classifyIndirectCashSemanticKeyFromProfile,
     mapIndirectCashMovementsToRows,
+    buildLearnedMappingLookup,
+    buildRuntimeAccountProfile,
+    getRuntimeAccountDirectionProfile,
+    compactRuntimeProfileEvidence,
+    buildRuntimeAccountProfileSummary,
+    buildRuntimeMappingCandidates,
+    buildRuntimeMovementContext,
+    maybeApplyRuntimeMappingAssistance,
+    inferDirectBucketCellWriteSigns,
     buildIndirectTemplatePeriodData,
     buildTemplatePeriodData,
   },

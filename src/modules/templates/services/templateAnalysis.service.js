@@ -11,20 +11,19 @@ const {
   createSchemaHash,
   deepMerge,
   extractTemplateRows,
-  normalizeAnalysisIssues,
-  normalizeRequiredAnchors,
-  stableStringify,
   toAnalysisResultPayload,
 } = require("../utils/templateAnalysis.util")
+const { evaluateTemplateReadiness } = require("./templateReadiness.service")
 
 const ANALYSIS_TTL_MS = 7 * 24 * 60 * 60 * 1000
 
 class TemplateAnalysisService {
-  static async runTemplateIngestion({ templatePath, sourceFileName }) {
+  static async runTemplateIngestion({ templatePath, sourceFileName, forceLlm = false }) {
     const sourceHash = LlmOrchestratorService.computeTemplateHash(templatePath)
     const ingestionResult = await LlmOrchestratorService.analyzeTemplateSchema({
       templatePath,
       sourceFileName,
+      forceLlm,
     })
 
     const payload = toAnalysisResultPayload(ingestionResult)
@@ -130,19 +129,6 @@ class TemplateAnalysisService {
       }
 
       const mergedConfig = explicitConfig ? deepMerge(analysisConfig, explicitConfig) : analysisConfig
-      const hasMeaningfulOverride =
-        Boolean(explicitConfig) && stableStringify(mergedConfig || null) !== stableStringify(analysisConfig || null)
-
-      if (analysis.needs_human_review && !hasMeaningfulOverride) {
-        throw new CashFlowService.CashFlowValidationError(
-          "Selected analysis is flagged for human review. Update config_json to resolve required anchors before saving.",
-          {
-            issues: normalizeAnalysisIssues(analysis?.issues_json?.issues),
-            required_anchors: normalizeRequiredAnchors(analysis?.issues_json?.required_anchors),
-          },
-        )
-      }
-
       baseConfig = mergedConfig
     } else {
       ingestionResult = await this.runTemplateIngestion({
@@ -158,20 +144,6 @@ class TemplateAnalysisService {
         ? deepMerge(ingestionResult.suggested_config_json, explicitConfig)
         : ingestionResult.suggested_config_json
 
-      const hasMeaningfulOverride =
-        Boolean(explicitConfig) &&
-        stableStringify(mergedConfig || null) !== stableStringify(ingestionResult.suggested_config_json || null)
-
-      if (ingestionResult.needs_human_review && !hasMeaningfulOverride) {
-        throw new CashFlowService.CashFlowValidationError(
-          "Template ingestion needs human review before creation. Update config_json to resolve required anchors first.",
-          {
-            issues: ingestionResult.issues || [],
-            required_anchors: ingestionResult.required_anchors || [],
-          },
-        )
-      }
-
       baseConfig = mergedConfig
     }
 
@@ -180,10 +152,19 @@ class TemplateAnalysisService {
       templatePath,
     })
 
+    const normalizedConfig = CashFlowService.validateTemplateConfig(normalizedV3)
+    const review = evaluateTemplateReadiness({
+      config: normalizedConfig,
+      analysisNeedsReview: Boolean(analysis?.needs_human_review || ingestionResult?.needs_human_review),
+      requiredAnchors: analysis?.issues_json?.required_anchors || ingestionResult?.required_anchors || [],
+      baseConfig: analysis?.suggested_config_json || ingestionResult?.suggested_config_json || null,
+    })
+
     return {
       analysis,
       ingestionResult,
-      normalizedConfig: CashFlowService.validateTemplateConfig(normalizedV3),
+      normalizedConfig,
+      review,
     }
   }
 

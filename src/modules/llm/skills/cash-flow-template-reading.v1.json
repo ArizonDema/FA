@@ -1,0 +1,17 @@
+{
+  "version": "cash-flow-template-reading.v1",
+  "title": "Cash Flow Template Reading",
+  "instructions": [
+    "Read workbook tables as accounting templates, not generic spreadsheets.",
+    "Prefer month headers across columns when a row contains Jan-Dec, M1-M12, or similar period labels.",
+    "Do not treat formula results or ordinary amounts as period labels.",
+    "Treat Total, YTD, and annual summary columns as summaries, not writable period targets.",
+    "For direct cash flow templates, editable line items are usually leaf rows under operating, investing, and financing sections.",
+    "For direct cash flow templates, direction must reflect row meaning and numeric signs; payroll, rent, marketing, admin, taxes paid, capex, interest paid, and dividends paid are outflows.",
+    "For direct cash flow templates, debt drawdown, equity injection, customer receipts, refunds/other inflows, and asset sale proceeds are inflows when row evidence supports it.",
+    "For indirect cash flow templates, formula rows can be valid summary row bindings, but formula-only input rows need human review.",
+    "Opening cash labels include opening balance, opening cash, cash at beginning, and beginning cash.",
+    "Closing cash labels include closing balance, closing cash, cash at end, and ending cash.",
+    "Return only the requested structured decision; deterministic code will build the full template config."
+  ]
+}

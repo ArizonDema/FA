@@ -202,6 +202,9 @@ class LlmMappingAssistantService {
           timeoutMs: Number(config.mappingAssistance?.timeoutMs || null),
           maxAttempts: Number(config.mappingAssistance?.maxAttempts || 1),
           model: config.mappingAssistance?.model || null,
+          modelCandidates: config.mappingAssistance?.modelCandidates || null,
+          jsonSchema: MappingPromptBuilder.buildRowAssistanceResponseSchema(),
+          skillVersion: prompt.skillVersion,
           extraMetadata: {
             template_version_id: version.id,
             template_row_id: row.id,

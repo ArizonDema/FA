@@ -72,6 +72,21 @@ class CashFlowTemplateController {
         actorId: req.user?.id || null,
         ingestionResult: analysisResult,
       })
+      const review = TemplateService.evaluateReadinessForConfig({
+        config: analysisConfigPayload,
+        analysis: {
+          needs_human_review: Boolean(analysisResult.needs_human_review),
+          issues_json: { required_anchors: analysisResult.required_anchors || [] },
+          suggested_config_json: analysisConfigPayload,
+        },
+      })
+      const editorContext = TemplateService.buildEditorContext({
+        analysis,
+        config: analysisConfigPayload,
+        mode: "new_upload",
+        review,
+        workbookStructure: analysisResult.raw_structure_json || null,
+      })
 
       return ResponseHandler.success(
         res,
@@ -83,6 +98,11 @@ class CashFlowTemplateController {
           required_anchors: analysisResult.required_anchors || [],
           suggested_config_json: analysisConfigPayload,
           needs_human_review: Boolean(analysisResult.needs_human_review),
+          review_state: review.review_state,
+          can_activate: review.can_activate,
+          activation_block_reason: review.activation_block_reason,
+          anchor_statuses: review.anchor_statuses,
+          editor_context: editorContext,
           schema_cache_hit: Boolean(analysisResult.schema_cache_hit),
           analysis_source: analysisResult.analysis_source || "llm",
           llm_fallback_reason: analysisResult.llm_failure_reason || null,
@@ -133,15 +153,31 @@ class CashFlowTemplateController {
         fundId,
         name,
         versionLabel: version ? String(version).trim() : null,
+        activationMode: req.body.activation_mode,
         requestedActive: Boolean(req.body.is_active === "true" || req.body.is_active === true),
         upload: req.file,
         actorId: req.user?.id || null,
         analysis: resolved.analysis,
         ingestionResult: resolved.ingestionResult,
         normalizedConfig: resolved.normalizedConfig,
+        review: resolved.review,
       })
 
-      return ResponseHandler.created(res, { template }, "Cash flow template created")
+      return ResponseHandler.created(
+        res,
+        {
+          template: TemplateService.decorateTemplatePayload(template.template, template.readiness),
+          saved_as_draft: template.savedAsDraft,
+          review_state: template.readiness.review_state,
+          can_activate: template.readiness.can_activate,
+          activation_block_reason: template.readiness.activation_block_reason,
+          required_anchors: template.readiness.required_anchors,
+          anchor_statuses: template.readiness.anchor_statuses,
+        },
+        template.savedAsDraft
+          ? "Cash flow template saved as draft for review"
+          : "Cash flow template created",
+      )
     } catch (error) {
       StorageService.removeFileSilently(req.file?.path)
       if (error instanceof CashFlowService.CashFlowValidationError) {
@@ -161,7 +197,21 @@ class CashFlowTemplateController {
       if (!template) {
         return ResponseHandler.notFound(res, "Cash flow template not found")
       }
-      return ResponseHandler.success(res, { template }, "Cash flow template updated")
+      return ResponseHandler.success(
+        res,
+        {
+          template: TemplateService.decorateTemplatePayload(template.template, template.readiness),
+          saved_as_draft: template.savedAsDraft,
+          review_state: template.readiness.review_state,
+          can_activate: template.readiness.can_activate,
+          activation_block_reason: template.readiness.activation_block_reason,
+          required_anchors: template.readiness.required_anchors,
+          anchor_statuses: template.readiness.anchor_statuses,
+        },
+        template.savedAsDraft
+          ? "Cash flow template saved as draft for review"
+          : "Cash flow template updated",
+      )
     } catch (error) {
       if (error instanceof CashFlowService.CashFlowValidationError) {
         return ResponseHandler.badRequest(res, error.message, error.details || null)
@@ -179,8 +229,23 @@ class CashFlowTemplateController {
       if (!template) {
         return ResponseHandler.notFound(res, "Cash flow template not found")
       }
-      return ResponseHandler.success(res, { template }, "Cash flow template activated")
+      return ResponseHandler.success(
+        res,
+        {
+          template: TemplateService.decorateTemplatePayload(template.template, template.readiness),
+          saved_as_draft: false,
+          review_state: template.readiness.review_state,
+          can_activate: template.readiness.can_activate,
+          activation_block_reason: template.readiness.activation_block_reason,
+          required_anchors: template.readiness.required_anchors,
+          anchor_statuses: template.readiness.anchor_statuses,
+        },
+        "Cash flow template activated",
+      )
     } catch (error) {
+      if (error instanceof CashFlowService.CashFlowValidationError) {
+        return ResponseHandler.badRequest(res, error.message, error.details || null)
+      }
       return next(error)
     }
   }
@@ -197,6 +262,7 @@ class CashFlowTemplateController {
       const analysisResult = await TemplateAnalysisService.runTemplateIngestion({
         templatePath: resolvedTemplatePath,
         sourceFileName: template.template_file_name || template.activeVersion?.source_file_name,
+        forceLlm: true,
       })
 
       const { analysis, analysisConfigPayload } = await TemplateAnalysisService.createAnalysisRecord({
@@ -210,6 +276,14 @@ class CashFlowTemplateController {
       })
 
       let updatedTemplate = null
+      const review = TemplateService.evaluateReadinessForConfig({
+        config: analysisConfigPayload || buildAnalysisConfigPayload(analysisResult),
+        analysis: {
+          needs_human_review: Boolean(analysisResult.needs_human_review),
+          issues_json: { required_anchors: analysisResult.required_anchors || [] },
+          suggested_config_json: analysisConfigPayload || buildAnalysisConfigPayload(analysisResult),
+        },
+      })
       if (String(req.body?.apply || "").toLowerCase() === "true") {
         updatedTemplate = await TemplateService.applyReanalysis({
           templateId: template.id,
@@ -222,13 +296,28 @@ class CashFlowTemplateController {
         res,
         {
           analysis,
-          template: updatedTemplate,
+          template: updatedTemplate
+            ? TemplateService.decorateTemplatePayload(updatedTemplate.template, updatedTemplate.readiness)
+            : null,
           detected_layout: analysisResult.detected_layout_type,
           confidence: analysisResult.confidence,
           issues: analysisResult.issues || [],
           required_anchors: analysisResult.required_anchors || [],
           suggested_config_json: analysisConfigPayload || buildAnalysisConfigPayload(analysisResult),
           needs_human_review: Boolean(analysisResult.needs_human_review),
+          review_state: review.review_state,
+          can_activate: review.can_activate,
+          activation_block_reason: review.activation_block_reason,
+          anchor_statuses: review.anchor_statuses,
+          editor_context: TemplateService.buildEditorContext({
+            template,
+            version: template.activeVersion,
+            analysis,
+            config: analysisConfigPayload || buildAnalysisConfigPayload(analysisResult),
+            mode: "reanalyze",
+            review,
+            workbookStructure: analysisResult.raw_structure_json || null,
+          }),
           schema_cache_hit: Boolean(analysisResult.schema_cache_hit),
           analysis_source: analysisResult.analysis_source || "llm",
           llm_fallback_reason: analysisResult.llm_failure_reason || null,
@@ -237,6 +326,25 @@ class CashFlowTemplateController {
           ? "Template reanalyzed and config applied"
           : "Template reanalysis completed",
       )
+    } catch (error) {
+      if (error instanceof CashFlowService.CashFlowValidationError) {
+        return ResponseHandler.badRequest(res, error.message, error.details || null)
+      }
+      return next(error)
+    }
+  }
+
+  static async getTemplateEditorContext(req, res, next) {
+    try {
+      const result = await TemplateService.getTemplateEditorContext({
+        templateId: req.params.id,
+      })
+
+      if (!result) {
+        return ResponseHandler.notFound(res, "Cash flow template not found")
+      }
+
+      return ResponseHandler.success(res, result, "Cash flow template editor context retrieved")
     } catch (error) {
       if (error instanceof CashFlowService.CashFlowValidationError) {
         return ResponseHandler.badRequest(res, error.message, error.details || null)

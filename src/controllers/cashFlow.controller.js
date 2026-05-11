@@ -318,6 +318,21 @@ async function recordAudit(req, entityType, entityId, action, before, after) {
   }
 }
 
+function buildAutoMappingMetadata(mapping = {}) {
+  return {
+    semantic_key: mapping.semantic_key || null,
+    source: mapping.source || "auto_semantic",
+    status: mapping.status || "suggested",
+    profile_score: Number(mapping.profile_score || 0),
+    llm_score: Number(mapping.llm_score || 0),
+    deterministic_score: Number(mapping.deterministic_score || mapping.confidence || 0),
+    evidence: Array.isArray(mapping.evidence) ? mapping.evidence : [],
+    reasoning: mapping.reasoning || null,
+    previous_bucket_key: mapping.previous_bucket_key || null,
+    account_profile: mapping.account_profile || null,
+  }
+}
+
 class CashFlowController {
   static async getTemplates(req, res, next) {
     try {
@@ -993,6 +1008,8 @@ class CashFlowController {
               bucket_key: mapping.bucket_key,
               confidence: mapping.confidence,
               source: mapping.source || "auto_semantic",
+              status: mapping.status || "suggested",
+              metadata_json: buildAutoMappingMetadata(mapping),
               usage_count: 0,
               last_used_at: null,
               created_by: req.user?.id || null,
@@ -1000,12 +1017,14 @@ class CashFlowController {
             transaction,
           })
 
-          if (!created) {
+          if (!created && record.status !== "approved") {
             await record.update(
               {
                 bucket_key: mapping.bucket_key,
                 confidence: mapping.confidence,
                 source: mapping.source || record.source,
+                status: mapping.status || record.status || "suggested",
+                metadata_json: buildAutoMappingMetadata(mapping),
               },
               { transaction },
             )
@@ -1046,6 +1065,8 @@ class CashFlowController {
           auto_mappings_created: result.mapping?.auto_mappings_created || [],
           low_confidence_mappings: result.mapping?.low_confidence_mappings || [],
           final_bucket_assignments: result.mapping?.final_bucket_assignments || [],
+          assistance_summary: result.mapping?.assistance_summary || null,
+          account_profile_summary: result.mapping?.account_profile_summary || null,
         },
         output_paths: {
           xlsx: result.outputFilePath,
@@ -1069,6 +1090,8 @@ class CashFlowController {
           auto_mappings_created: result.mapping?.auto_mappings_created || [],
           low_confidence_mappings: result.mapping?.low_confidence_mappings || [],
           final_bucket_assignments: result.mapping?.final_bucket_assignments || [],
+          assistance_summary: result.mapping?.assistance_summary || null,
+          account_profile_summary: result.mapping?.account_profile_summary || null,
         },
         "Cash flow report generated",
       )

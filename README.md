@@ -216,13 +216,18 @@ DEFAULT_LOCKUP_MONTHS=12
 
 # Ollama (template analysis)
 OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=qwen3:14b
+OLLAMA_MODEL=gpt-oss:20b
+OLLAMA_MODEL_CANDIDATES=qwen3:30b,qwen3:14b
 OLLAMA_CHAT_PATH=/api/chat
 OLLAMA_HEALTH_PATH=/api/tags
 OLLAMA_TIMEOUT_MS=600000
+OLLAMA_TEMPLATE_ANALYSIS_TIMEOUT_MS=120000
 OLLAMA_HEALTH_TIMEOUT_MS=10000
 OLLAMA_MAX_ATTEMPTS=2
-OLLAMA_NUM_PREDICT=800
+OLLAMA_TEMPLATE_TEMPERATURE=0
+OLLAMA_TEMPLATE_NUM_PREDICT=1800
+OLLAMA_TEMPLATE_NUM_CTX=8192
+OLLAMA_MAX_CONCURRENCY=1
 OLLAMA_THINK=false
 OLLAMA_FORCE_JSON_OUTPUT=true
 OLLAMA_COMPACT_PROMPT_FIRST=true
@@ -286,7 +291,21 @@ This repository now includes a React frontend in \`/frontend\` with:
   - Withdrawal queue approvals/rejections
   - Operations data (cash ledger, fee records, contracts, stock assets)
 
-### Run Frontend
+### Run App UI
+
+\`\`\`bash
+npm run website:start
+\`\`\`
+
+Normal app URL:
+
+\`\`\`
+http://localhost:8000
+\`\`\`
+
+The backend serves the built React frontend and the API from the same port. Use this mode for demos, testing report generation, and normal local use.
+
+Frontend hot-reload dev mode is still available for UI-only work:
 
 \`\`\`bash
 cd frontend
@@ -294,17 +313,8 @@ npm install
 npm run dev:solo
 \`\`\`
 
-Frontend dev URL:
+That opens Vite on `http://localhost:3000` and proxies API calls to `http://localhost:8000`. Most users should not need this separate port.
 
-\`\`\`
-http://localhost:3000
-\`\`\`
-
-Stable runtime URL (backend serves frontend bundle):
-
-\`\`\`
-http://localhost:8000
-\`\`\`
 
 API base URL:
 

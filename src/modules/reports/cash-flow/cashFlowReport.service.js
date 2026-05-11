@@ -38,6 +38,14 @@ class CashFlowReportService {
         "No active cash flow template found for this fund. Upload and activate one first.",
       )
     }
+    const readiness = TemplateService.evaluateReadinessForTemplate(template)
+    if (!template.is_active || template.status !== "active" || !readiness.can_activate) {
+      throw new CashFlowService.CashFlowValidationError(
+        readiness.activation_block_reason ||
+          "Selected cash flow template is still a draft. Resolve required anchors and activate it before running extraction.",
+        readiness,
+      )
+    }
 
     const activeVersion = template.activeVersion
     const templateVersionId = activeVersion?.id || template.active_version_id || null
@@ -194,6 +202,19 @@ class CashFlowReportService {
       },
     }
 
+    const buildAutoMappingMetadata = (mapping, action) => ({
+      ...(mapping?.metadata_json || mapping?.metadata || {}),
+      [action]: "cash_flow_report_run",
+      report_run_id: run.id,
+      profile_score: Number(mapping?.profile_score || 0),
+      llm_score: Number(mapping?.llm_score || 0),
+      deterministic_score: Number(mapping?.deterministic_score || mapping?.confidence || 0),
+      evidence: Array.isArray(mapping?.evidence) ? mapping.evidence : [],
+      reasoning: mapping?.reasoning || null,
+      previous_bucket_key: mapping?.previous_bucket_key || null,
+      account_profile: mapping?.account_profile || mapping?.profile_evidence || null,
+    })
+
     await sequelize.transaction(async (transaction) => {
       const autoMappings = Array.isArray(result.mapping?.auto_mappings_created)
         ? result.mapping.auto_mappings_created
@@ -216,10 +237,7 @@ class CashFlowReportService {
             usage_count: 0,
             last_used_at: null,
             created_by: actorId,
-            metadata_json: {
-              created_from: "cash_flow_report_run",
-              report_run_id: run.id,
-            },
+            metadata_json: buildAutoMappingMetadata(mapping, "created_from"),
           },
           transaction,
         })
@@ -230,10 +248,10 @@ class CashFlowReportService {
               bucket_key: mapping.bucket_key,
               confidence: mapping.confidence,
               source: mapping.source || record.source,
+              status: record.status === "approved" ? "approved" : "suggested",
               metadata_json: {
                 ...(record.metadata_json || {}),
-                updated_from: "cash_flow_report_run",
-                report_run_id: run.id,
+                ...buildAutoMappingMetadata(mapping, "updated_from"),
               },
             },
             { transaction },
@@ -275,6 +293,8 @@ class CashFlowReportService {
         auto_mappings_created: result.mapping?.auto_mappings_created || [],
         low_confidence_mappings: result.mapping?.low_confidence_mappings || [],
         final_bucket_assignments: result.mapping?.final_bucket_assignments || [],
+        assistance_summary: result.mapping?.assistance_summary || null,
+        account_profile_summary: result.mapping?.account_profile_summary || null,
         reliability_summary: result.mapping?.reliability_summary || null,
       },
       output_paths: {
@@ -284,6 +304,8 @@ class CashFlowReportService {
         auto_mappings_created: result.mapping?.auto_mappings_created || [],
         low_confidence_mappings: result.mapping?.low_confidence_mappings || [],
         final_bucket_assignments: result.mapping?.final_bucket_assignments || [],
+        assistance_summary: result.mapping?.assistance_summary || null,
+        account_profile_summary: result.mapping?.account_profile_summary || null,
         reliability_summary: result.mapping?.reliability_summary || null,
       },
       input_artifacts_json: {
@@ -323,6 +345,8 @@ class CashFlowReportService {
       auto_mappings_created: result.mapping?.auto_mappings_created || [],
       low_confidence_mappings: result.mapping?.low_confidence_mappings || [],
       final_bucket_assignments: result.mapping?.final_bucket_assignments || [],
+      assistance_summary: result.mapping?.assistance_summary || null,
+      account_profile_summary: result.mapping?.account_profile_summary || null,
       reliability_summary: result.mapping?.reliability_summary || null,
     }
   }

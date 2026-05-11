@@ -18,6 +18,7 @@ const upload = createUploadMiddleware({
 router.get("/templates", CashFlowTemplateController.getTemplates)
 router.post("/templates/analyze", upload.single("template_file"), CashFlowTemplateController.analyzeTemplate)
 router.post("/templates", upload.single("template_file"), CashFlowTemplateController.createTemplate)
+router.get("/templates/:id/editor-context", CashFlowTemplateController.getTemplateEditorContext)
 router.post("/templates/:id/versions/:versionId/parse", CashFlowTemplateController.parseTemplateVersion)
 router.get("/templates/:id/versions/:versionId/structure", CashFlowTemplateController.getTemplateVersionStructure)
 router.get("/templates/:id/versions/:versionId/rows", CashFlowTemplateController.getTemplateVersionRows)

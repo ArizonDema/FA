@@ -1,5 +1,5 @@
-const ExcelJS = require("exceljs")
 const CashFlowService = require("../../../services/cashFlow.service")
+const { loadWorkbookFromBuffer } = require("../../../utils/excelWorkbook.util")
 
 const PARSER_VERSION = "2026-04-12.phase2.v1"
 
@@ -252,8 +252,11 @@ function parseCell(cell, mergeLookup) {
 
 class WorkbookParser {
   static async parse(filePayload) {
-    const workbook = new ExcelJS.Workbook()
-    await workbook.xlsx.load(filePayload.buffer)
+    const workbook = await loadWorkbookFromBuffer({
+      buffer: filePayload.buffer,
+      label: "Cash flow template",
+      ValidationErrorCtor: CashFlowService.CashFlowValidationError,
+    })
 
     if (!workbook.worksheets.length) {
       throw new CashFlowService.CashFlowValidationError("Template workbook has no worksheets")

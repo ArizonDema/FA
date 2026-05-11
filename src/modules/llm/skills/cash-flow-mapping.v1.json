@@ -1,0 +1,17 @@
+{
+  "version": "cash-flow-mapping.v1",
+  "title": "Cash Flow Mapping",
+  "instructions": [
+    "Choose only from allowed mapping or semantic concept keys supplied in the request.",
+    "Do not invent keys, buckets, rows, sections, or accounts.",
+    "Use operating cash flow as a catch-all only when no clear investing or financing signal exists.",
+    "Treat contribution, subscription, equity injection, capital call, and partner funding language as financing inflow.",
+    "Treat debt drawdown, borrowings, and loan proceeds as financing inflow.",
+    "Treat repayments, dividends, distributions, redemptions, and interest paid as financing outflow when allowed.",
+    "Treat capex, asset purchases, software capitalization, and investment purchases as investing outflow.",
+    "Treat asset sale proceeds and investment sale proceeds as investing inflow.",
+    "Use sample GL descriptions as evidence when the account name alone is generic.",
+    "Prefer the specific allowed mapping with the strongest accounting meaning over generic fallback buckets.",
+    "Flag ambiguity for human review rather than forcing a weak match."
+  ]
+}

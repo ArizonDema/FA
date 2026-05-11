@@ -18,6 +18,8 @@
     "seed:undo": "npx sequelize-cli db:seed:undo:all",
     "db:setup": "npm run migrate && npm run seed",
     "test": "jest --coverage",
+    "cashflow:evaluate:mapping": "node scripts/evaluate-cashflow-mapping.js",
+    "cashflow:evaluate:testing-template-2": "node scripts/evaluate-testing-template-2-adversarial.js",
     "lint": "eslint src/**/*.js",
     "format": "prettier --write \"src/**/*.js\""
   },

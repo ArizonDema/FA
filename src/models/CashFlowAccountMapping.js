@@ -53,7 +53,15 @@ module.exports = (sequelize, DataTypes) => {
         defaultValue: 1,
       },
       source: {
-        type: DataTypes.ENUM("manual_rule", "auto_semantic", "fallback", "template_rule", "seeded"),
+        type: DataTypes.ENUM(
+          "manual_rule",
+          "auto_semantic",
+          "fallback",
+          "template_rule",
+          "seeded",
+          "profile_auto",
+          "llm_assisted",
+        ),
         allowNull: false,
         defaultValue: "auto_semantic",
       },

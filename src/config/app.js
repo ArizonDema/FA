@@ -16,6 +16,14 @@ function parseOllamaThink(value, fallback = false) {
   return parseBoolean(value, fallback)
 }
 
+function parseCsv(value) {
+  if (value === undefined || value === null || value === "") return []
+  return String(value)
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
 module.exports = {
   // Server Configuration
   env: process.env.NODE_ENV || "development",
@@ -66,36 +74,62 @@ module.exports = {
   ollama: {
     baseUrl: process.env.OLLAMA_BASE_URL || "http://localhost:11434",
     model: process.env.OLLAMA_MODEL || "qwen3:14b",
+    modelCandidates: parseCsv(process.env.OLLAMA_MODEL_CANDIDATES || process.env.OLLAMA_MODELS),
     chatPath: process.env.OLLAMA_CHAT_PATH || "/api/chat",
     healthPath: process.env.OLLAMA_HEALTH_PATH || "/api/tags",
     timeoutMs: Number.parseInt(
       process.env.OLLAMA_TIMEOUT_MS || process.env.OLLAMA_CHAT_TIMEOUT_MS || "600000",
       10,
     ),
+    templateAnalysisTimeoutMs: Number.parseInt(
+      process.env.OLLAMA_TEMPLATE_ANALYSIS_TIMEOUT_MS || process.env.OLLAMA_LAYOUT_TIMEOUT_MS || "120000",
+      10,
+    ),
     healthTimeoutMs: Number.parseInt(process.env.OLLAMA_HEALTH_TIMEOUT_MS || "10000", 10),
     maxAttempts: Number.parseInt(process.env.OLLAMA_MAX_ATTEMPTS || "2", 10),
     keepAlive: process.env.OLLAMA_KEEP_ALIVE || "10m",
     temperature: Number.parseFloat(process.env.OLLAMA_TEMPERATURE || "0.1"),
+    templateTemperature: Number.parseFloat(process.env.OLLAMA_TEMPLATE_TEMPERATURE || process.env.OLLAMA_TEMPERATURE || "0"),
     numPredict: Number.parseInt(process.env.OLLAMA_NUM_PREDICT || "800", 10),
+    templateNumPredict: Number.parseInt(process.env.OLLAMA_TEMPLATE_NUM_PREDICT || process.env.OLLAMA_NUM_PREDICT || "600", 10),
+    numCtx: Number.parseInt(process.env.OLLAMA_NUM_CTX || "0", 10),
+    templateNumCtx: Number.parseInt(process.env.OLLAMA_TEMPLATE_NUM_CTX || process.env.OLLAMA_NUM_CTX || "8192", 10),
+    maxConcurrency: Number.parseInt(process.env.OLLAMA_MAX_CONCURRENCY || "1", 10),
     think: parseOllamaThink(process.env.OLLAMA_THINK, false),
     forceJsonOutput: parseBoolean(process.env.OLLAMA_FORCE_JSON_OUTPUT, true),
     compactPromptFirst: parseBoolean(process.env.OLLAMA_COMPACT_PROMPT_FIRST, true),
     compactPromptThresholdChars: Number.parseInt(process.env.OLLAMA_COMPACT_PROMPT_THRESHOLD_CHARS || "22000", 10),
-    deterministicBypassConfidence: Number.parseFloat(process.env.OLLAMA_DETERMINISTIC_BYPASS_CONFIDENCE || "0.995"),
+    deterministicBypassConfidence: Number.parseFloat(process.env.OLLAMA_DETERMINISTIC_BYPASS_CONFIDENCE || "0.9"),
+  },
+
+  openaiLlm: {
+    enabled: parseBoolean(process.env.OPENAI_LLM_FALLBACK_ENABLED, Boolean(process.env.OPENAI_API_KEY)),
+    apiKey: process.env.OPENAI_API_KEY || "",
+    baseUrl: process.env.OPENAI_BASE_URL || "https://api.openai.com",
+    model: process.env.OPENAI_LLM_MODEL || "gpt-5.1",
+    timeoutMs: Number.parseInt(process.env.OPENAI_LLM_TIMEOUT_MS || "180000", 10),
   },
 
   mappingAssistance: {
     enabled: parseBoolean(process.env.MAPPING_LLM_ENABLED, true),
+    runtimeEnabled: parseBoolean(process.env.MAPPING_LLM_RUNTIME_ENABLED, true),
+    runtimeScope: process.env.MAPPING_LLM_RUNTIME_SCOPE || "ambiguous_novel",
     provider: process.env.MAPPING_LLM_PROVIDER || "ollama",
     model: process.env.MAPPING_LLM_MODEL || process.env.OLLAMA_MODEL || "qwen3:14b",
+    modelCandidates: parseCsv(process.env.MAPPING_LLM_MODEL_CANDIDATES || process.env.OLLAMA_MODEL_CANDIDATES),
     baseUrl: process.env.MAPPING_LLM_BASE_URL || process.env.OLLAMA_BASE_URL || "http://localhost:11434",
     chatPath: process.env.MAPPING_LLM_CHAT_PATH || process.env.OLLAMA_CHAT_PATH || "/api/chat",
-    timeoutMs: Number.parseInt(
-      process.env.MAPPING_LLM_TIMEOUT_MS || process.env.OLLAMA_TIMEOUT_MS || "120000",
+    timeoutMs: Number.parseInt(process.env.MAPPING_LLM_TIMEOUT_MS || "120000", 10),
+    runtimeTimeoutMs: Number.parseInt(
+      process.env.MAPPING_LLM_RUNTIME_TIMEOUT_MS || process.env.MAPPING_LLM_TIMEOUT_MS || "120000",
       10,
     ),
     maxAttempts: Number.parseInt(
       process.env.MAPPING_LLM_MAX_ATTEMPTS || process.env.OLLAMA_MAX_ATTEMPTS || "1",
+      10,
+    ),
+    runtimeMaxAttempts: Number.parseInt(
+      process.env.MAPPING_LLM_RUNTIME_MAX_ATTEMPTS || "1",
       10,
     ),
     keepAlive: process.env.MAPPING_LLM_KEEP_ALIVE || process.env.OLLAMA_KEEP_ALIVE || "10m",
@@ -106,7 +140,13 @@ module.exports = {
     maxCandidates: Number.parseInt(process.env.MAPPING_LLM_MAX_CANDIDATES || "5", 10),
     maxAdditionalCandidates: Number.parseInt(process.env.MAPPING_LLM_MAX_ADDITIONAL_CANDIDATES || "2", 10),
     maxRowsPerRun: Number.parseInt(process.env.MAPPING_LLM_MAX_ROWS_PER_RUN || "25", 10),
+    runtimeMaxAccountsPerRun: Number.parseInt(process.env.MAPPING_LLM_RUNTIME_MAX_ACCOUNTS_PER_RUN || "6", 10),
+    runtimeBatchSize: Number.parseInt(process.env.MAPPING_LLM_RUNTIME_BATCH_SIZE || "2", 10),
+    runtimeMinAcceptedScore: Number.parseFloat(process.env.MAPPING_LLM_RUNTIME_MIN_ACCEPTED_SCORE || "0.70"),
+    templateSemanticEnabled: parseBoolean(process.env.MAPPING_LLM_TEMPLATE_SEMANTIC_ENABLED, true),
+    templateSemanticBatchSize: Number.parseInt(process.env.MAPPING_LLM_TEMPLATE_SEMANTIC_BATCH_SIZE || "2", 10),
     minDeterministicConfidence: Number.parseFloat(process.env.MAPPING_LLM_MIN_DETERMINISTIC_CONFIDENCE || "0.18"),
     promptVersion: process.env.MAPPING_LLM_PROMPT_VERSION || "phase5.v1",
+    runtimePromptVersion: process.env.MAPPING_LLM_RUNTIME_PROMPT_VERSION || "runtime.v1",
   },
 }

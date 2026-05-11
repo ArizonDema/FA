@@ -16,6 +16,7 @@ const { withTemplateIdentity } = require("../../shared/template")
 const { createSchemaHash } = require("../utils/templateAnalysis.util")
 const TemplateAnalysisService = require("./templateAnalysis.service")
 const TemplateParsingService = require("./templateParsing.service")
+const { evaluateTemplateReadiness, uniqueAnchors } = require("./templateReadiness.service")
 
 const TemplateModel = Template || CashFlowTemplate
 
@@ -26,6 +27,33 @@ function parseBoolean(value, fallback = false) {
   if (["true", "1", "yes", "y"].includes(normalized)) return true
   if (["false", "0", "no", "n"].includes(normalized)) return false
   return fallback
+}
+
+function parseActivationMode(value) {
+  const normalized = String(value || "activate_if_ready").trim().toLowerCase()
+  return normalized === "draft" ? "draft" : "activate_if_ready"
+}
+
+function decorateConfigWithReviewMetadata(config, review) {
+  const nextConfig = {
+    ...(config || {}),
+    review_metadata: {
+      ...((config && typeof config.review_metadata === "object" && config.review_metadata) || {}),
+    },
+  }
+
+  if (review?.can_activate) {
+    nextConfig.review_metadata.needs_human_review = false
+    nextConfig.review_metadata.required_anchors = []
+    return nextConfig
+  }
+
+  nextConfig.review_metadata.needs_human_review = true
+  nextConfig.review_metadata.required_anchors = uniqueAnchors(review?.required_anchors || [])
+  if (!Array.isArray(nextConfig.review_metadata.confirmed_anchors)) {
+    nextConfig.review_metadata.confirmed_anchors = []
+  }
+  return nextConfig
 }
 
 class TemplateService {
@@ -133,6 +161,102 @@ class TemplateService {
     return "Template source file is missing on disk. Re-upload this template before reanalyzing."
   }
 
+  static evaluateReadinessForConfig({ config, analysis = null, requiredAnchors = [], baseConfig = null } = {}) {
+    return evaluateTemplateReadiness({
+      config,
+      analysisNeedsReview: Boolean(analysis?.needs_human_review),
+      requiredAnchors: requiredAnchors.length ? requiredAnchors : analysis?.issues_json?.required_anchors || [],
+      baseConfig: baseConfig || analysis?.suggested_config_json || null,
+    })
+  }
+
+  static evaluateReadinessForTemplate(template) {
+    const config = template?.activeVersion?.config_json || template?.config_json
+    return this.evaluateReadinessForConfig({ config })
+  }
+
+  static decorateTemplatePayload(template, readiness = null) {
+    if (!template) return template
+    const payload = withTemplateIdentity(template)
+    const review = readiness || this.evaluateReadinessForTemplate(template)
+    return {
+      ...payload,
+      review_state: review.review_state,
+      can_activate: review.can_activate,
+      activation_block_reason: review.activation_block_reason,
+      required_anchors: review.required_anchors,
+      anchor_statuses: review.anchor_statuses,
+    }
+  }
+
+  static summarizeWorkbookStructure(structure) {
+    const worksheets = Array.isArray(structure?.worksheets)
+      ? structure.worksheets
+      : Array.isArray(structure?.sheets)
+        ? structure.sheets
+        : []
+
+    return {
+      worksheet_count: Number(structure?.worksheet_count || worksheets.length || 0),
+      worksheets: worksheets.map((worksheet) => {
+        const rows = Array.isArray(worksheet.rows)
+          ? worksheet.rows
+          : Array.isArray(worksheet.sampled_rows)
+            ? worksheet.sampled_rows
+            : []
+        return {
+          name: worksheet.name,
+          order: worksheet.order || 0,
+          used_range: worksheet.used_range || null,
+          row_count: worksheet.row_count || worksheet.rowCount || rows.length,
+          column_count: worksheet.column_count || worksheet.columnCount || null,
+          rows: rows.slice(0, 200).map((row) => ({
+            row_index: row.row_index || row.row || row.rowIndex || null,
+            cells: (Array.isArray(row.cells) ? row.cells : []).slice(0, 80).map((cell) => ({
+              address: cell.address,
+              row_index: cell.row_index || cell.row || null,
+              column_index: cell.column_index || cell.column || null,
+              display_value: cell.display_value ?? cell.value ?? cell.raw_value ?? "",
+              value_type: cell.value_type || null,
+              formula_text: cell.formula_text || null,
+              is_merged: Boolean(cell.is_merged),
+            })),
+          })),
+        }
+      }),
+    }
+  }
+
+  static buildEditorContext({
+    template = null,
+    version = null,
+    analysis = null,
+    config,
+    mode = "draft",
+    review = null,
+    workbookStructure = null,
+  }) {
+    const resolvedConfig = config || analysis?.suggested_config_json || version?.config_json || template?.config_json || null
+    const resolvedReview =
+      review ||
+      this.evaluateReadinessForConfig({
+        config: resolvedConfig,
+        analysis,
+      })
+
+    return {
+      mode,
+      template_id: template?.id || analysis?.template_id || null,
+      template_version_id: version?.id || analysis?.template_version_id || null,
+      analysis_id: analysis?.id || null,
+      config: resolvedConfig,
+      workbook: this.summarizeWorkbookStructure(
+        workbookStructure || analysis?.raw_structure_json || version?.raw_structure_json || version?.parsed_structure_json || null,
+      ),
+      review: resolvedReview,
+    }
+  }
+
   static async resolveTemplateSourcePathForReanalysis(template) {
     if (!template) {
       throw new CashFlowService.CashFlowValidationError(
@@ -174,7 +298,7 @@ class TemplateService {
     })
 
     return templates.map((template) => {
-      const payload = withTemplateIdentity(template)
+      const payload = this.decorateTemplatePayload(template)
       const reanalyzeBlockReason = this.getReanalyzeBlockReason(template)
       return {
         ...payload,
@@ -214,14 +338,26 @@ class TemplateService {
     name,
     versionLabel = null,
     requestedActive = false,
+    activationMode = "activate_if_ready",
     upload,
     actorId = null,
     analysis = null,
     ingestionResult = null,
     normalizedConfig,
+    review = null,
   }) {
     const activeTemplate = await this.getActiveTemplateForFund(fundId)
-    const isActive = requestedActive || !activeTemplate
+    const readiness =
+      review ||
+      this.evaluateReadinessForConfig({
+        config: normalizedConfig,
+        analysis,
+        requiredAnchors: ingestionResult?.required_anchors || [],
+        baseConfig: analysis?.suggested_config_json || ingestionResult?.suggested_config_json || null,
+      })
+    const mode = parseActivationMode(activationMode)
+    const isActive = mode !== "draft" && readiness.can_activate && (requestedActive || !activeTemplate)
+    const persistedConfig = decorateConfigWithReviewMetadata(normalizedConfig, readiness)
 
     const template = await sequelize.transaction(async (transaction) => {
       if (isActive) {
@@ -243,7 +379,7 @@ class TemplateService {
           status: isActive ? "active" : "draft",
           template_file_name: upload.originalname,
           template_file_path: upload.path,
-          config_json: normalizedConfig,
+          config_json: persistedConfig,
           is_active: isActive,
           uploaded_by: actorId,
         },
@@ -264,7 +400,7 @@ class TemplateService {
         sourceFileName: upload.originalname,
         sourceFilePath: finalPath,
         sourceFileSha256: analysis?.source_file_sha256 || ingestionResult?.source_file_sha256 || null,
-        configJson: normalizedConfig,
+        configJson: persistedConfig,
         rawStructureJson: analysis?.raw_structure_json || ingestionResult?.raw_structure_json || null,
         llmMetaJson: analysis?.llm_meta_json || ingestionResult?.llm_meta_json || null,
         actorId,
@@ -276,22 +412,24 @@ class TemplateService {
           version: version.version_label,
           template_file_name: upload.originalname,
           template_file_path: finalPath,
-          config_json: normalizedConfig,
+          config_json: persistedConfig,
           active_version_id: version.id,
         },
         { transaction },
       )
 
       if (analysis) {
-        await analysis.update(
-          {
-            status: "confirmed",
-            template_id: identity.id,
-            template_version_id: version.id,
-            schema_hash: createSchemaHash(normalizedConfig),
-          },
-          { transaction },
-        )
+        if (typeof analysis.update === "function") {
+          await analysis.update(
+            {
+              status: "confirmed",
+              template_id: identity.id,
+              template_version_id: version.id,
+              schema_hash: createSchemaHash(persistedConfig),
+            },
+            { transaction },
+          )
+        }
 
         await CashFlowTemplateAnalysis.update(
           { status: "superseded" },
@@ -314,8 +452,9 @@ class TemplateService {
           actorId,
           ingestionResult: {
             ...ingestionResult,
-            suggested_config_json: normalizedConfig,
-            needs_human_review: false,
+            suggested_config_json: persistedConfig,
+            needs_human_review: !readiness.can_activate,
+            required_anchors: readiness.required_anchors || ingestionResult.required_anchors || [],
           },
           status: "confirmed",
         })
@@ -333,7 +472,11 @@ class TemplateService {
       return identity
     })
 
-    return template
+    return {
+      template,
+      readiness: this.evaluateReadinessForConfig({ config: persistedConfig }),
+      savedAsDraft: !isActive,
+    }
   }
 
   static async createTemplateVersion({
@@ -403,6 +546,8 @@ class TemplateService {
 
     const before = template.toJSON()
     const nextValues = {}
+    let responseReadiness = null
+    let resultTemplate = template
 
     if (updates.name !== undefined) {
       const name = String(updates.name || "").trim()
@@ -413,9 +558,10 @@ class TemplateService {
     }
 
     const shouldActivate = parseBoolean(updates.is_active, template.is_active)
+    const activationMode = parseActivationMode(updates.activation_mode)
     const hasVersionedChange = updates.config_json !== undefined || updates.version !== undefined
 
-    await sequelize.transaction(async (transaction) => {
+    resultTemplate = await sequelize.transaction(async (transaction) => {
       if (hasVersionedChange) {
         const baseVersion = template.activeVersion || (await TemplateVersion.findByPk(template.active_version_id, { transaction }))
         const versionLabel = updates.version !== undefined ? String(updates.version || "").trim() || null : template.version
@@ -429,6 +575,58 @@ class TemplateService {
           templatePath: template.template_file_path,
         })
         const normalizedConfig = CashFlowService.validateTemplateConfig(normalizedV3)
+        const readiness = this.evaluateReadinessForConfig({ config: normalizedConfig })
+        responseReadiness = readiness
+        const persistedConfig = decorateConfigWithReviewMetadata(normalizedConfig, readiness)
+
+        if (template.is_active && activationMode === "draft") {
+          const draft = await TemplateModel.create(
+            {
+              portfolio_id: template.portfolio_id,
+              name: nextValues.name || `${template.name} Draft`,
+              version: versionLabel,
+              template_kind: "cash_flow",
+              status: "draft",
+              template_file_name: baseVersion?.source_file_name || template.template_file_name,
+              template_file_path: baseVersion?.source_file_path || template.template_file_path,
+              config_json: persistedConfig,
+              is_active: false,
+              uploaded_by: actorId,
+            },
+            { transaction },
+          )
+
+          const version = await this.createTemplateVersion({
+            templateId: draft.id,
+            fundId: template.portfolio_id,
+            versionLabel,
+            sourceFileName: baseVersion?.source_file_name || template.template_file_name,
+            sourceFilePath: baseVersion?.source_file_path || template.template_file_path,
+            sourceFileSha256: baseVersion?.source_file_sha256 || null,
+            configJson: persistedConfig,
+            rawStructureJson: baseVersion?.raw_structure_json || null,
+            llmMetaJson: baseVersion?.llm_meta_json || null,
+            actorId,
+            transaction,
+          })
+
+          await draft.update(
+            {
+              version: version.version_label,
+              active_version_id: version.id,
+            },
+            { transaction },
+          )
+
+          return draft
+        }
+
+        if (!readiness.can_activate && shouldActivate) {
+          throw new CashFlowService.CashFlowValidationError(
+            readiness.activation_block_reason || "Resolve required anchors before activating this template.",
+            readiness,
+          )
+        }
 
         const version = await this.createTemplateVersion({
           templateId: template.id,
@@ -437,7 +635,7 @@ class TemplateService {
           sourceFileName: baseVersion?.source_file_name || template.template_file_name,
           sourceFilePath: baseVersion?.source_file_path || template.template_file_path,
           sourceFileSha256: baseVersion?.source_file_sha256 || null,
-          configJson: normalizedConfig,
+          configJson: persistedConfig,
           rawStructureJson: baseVersion?.raw_structure_json || null,
           llmMetaJson: baseVersion?.llm_meta_json || null,
           actorId,
@@ -445,11 +643,24 @@ class TemplateService {
         })
 
         nextValues.version = version.version_label
-        nextValues.config_json = normalizedConfig
+        nextValues.config_json = persistedConfig
         nextValues.active_version_id = version.id
       }
 
       if (shouldActivate) {
+        const readiness =
+          responseReadiness ||
+          this.evaluateReadinessForConfig({
+            config: nextValues.config_json || template.activeVersion?.config_json || template.config_json,
+          })
+        responseReadiness = readiness
+        if (!readiness.can_activate) {
+          throw new CashFlowService.CashFlowValidationError(
+            readiness.activation_block_reason || "Resolve required anchors before activating this template.",
+            readiness,
+          )
+        }
+
         await TemplateModel.update(
           { is_active: false, status: "draft" },
           {
@@ -467,19 +678,25 @@ class TemplateService {
       if (Object.keys(nextValues).length) {
         await template.update(nextValues, { transaction })
       }
+
+      return template
     })
 
     await AuditService.logEvent({
       actorId,
-      eventType: "template_updated",
+      eventType: resultTemplate.id === template.id ? "template_updated" : "template_draft_replacement_created",
       entityType: "template",
-      entityId: template.id,
+      entityId: resultTemplate.id,
       before,
-      after: template.toJSON(),
+      after: resultTemplate.toJSON(),
       metadata: { fund_id: template.portfolio_id },
     })
 
-    return template
+    return {
+      template: resultTemplate,
+      readiness: responseReadiness || this.evaluateReadinessForTemplate(resultTemplate),
+      savedAsDraft: !resultTemplate.is_active,
+    }
   }
 
   static async activateTemplate({ templateId, actorId = null }) {
@@ -487,6 +704,13 @@ class TemplateService {
     if (!template) return null
 
     const before = template.toJSON()
+    const readiness = this.evaluateReadinessForTemplate(template)
+    if (!readiness.can_activate) {
+      throw new CashFlowService.CashFlowValidationError(
+        readiness.activation_block_reason || "Resolve required anchors before activating this template.",
+        readiness,
+      )
+    }
 
     await sequelize.transaction(async (transaction) => {
       await TemplateModel.update(
@@ -509,7 +733,11 @@ class TemplateService {
       metadata: { fund_id: template.portfolio_id },
     })
 
-    return template
+    return {
+      template,
+      readiness,
+      savedAsDraft: false,
+    }
   }
 
   static async applyReanalysis({
@@ -520,21 +748,22 @@ class TemplateService {
     const template = await this.getTemplate(templateId)
     if (!template) return null
 
-    if (analysis.needs_human_review) {
-      throw new CashFlowService.CashFlowValidationError(
-        "Reanalysis is flagged for human review. Resolve required anchors before applying.",
-        {
-          issues: analysis?.issues_json?.issues || [],
-          required_anchors: analysis?.issues_json?.required_anchors || [],
-        },
-      )
-    }
-
     const normalizedV3 = await CashFlowService.ensureV3TemplateConfig({
       templateConfig: analysis.suggested_config_json,
       templatePath: template.template_file_path,
     })
     const normalizedConfig = CashFlowService.validateTemplateConfig(normalizedV3)
+    const readiness = this.evaluateReadinessForConfig({
+      config: normalizedConfig,
+      analysis,
+    })
+    if (!readiness.can_activate) {
+      throw new CashFlowService.CashFlowValidationError(
+        readiness.activation_block_reason || "Resolve required anchors before applying reanalysis.",
+        readiness,
+      )
+    }
+    const persistedConfig = decorateConfigWithReviewMetadata(normalizedConfig, readiness)
 
     await sequelize.transaction(async (transaction) => {
       const version = await this.createTemplateVersion({
@@ -544,7 +773,7 @@ class TemplateService {
         sourceFileName: template.template_file_name,
         sourceFilePath: template.template_file_path,
         sourceFileSha256: analysis.source_file_sha256 || null,
-        configJson: normalizedConfig,
+        configJson: persistedConfig,
         rawStructureJson: analysis.raw_structure_json || null,
         llmMetaJson: analysis.llm_meta_json || null,
         actorId,
@@ -553,7 +782,7 @@ class TemplateService {
 
       await template.update(
         {
-          config_json: normalizedConfig,
+          config_json: persistedConfig,
           active_version_id: version.id,
         },
         { transaction },
@@ -564,14 +793,45 @@ class TemplateService {
           status: "confirmed",
           template_id: template.id,
           template_version_id: version.id,
-          schema_hash: createSchemaHash(normalizedConfig),
+          schema_hash: createSchemaHash(persistedConfig),
           needs_human_review: false,
         },
         { transaction },
       )
     })
 
-    return template
+    return {
+      template,
+      readiness,
+      savedAsDraft: false,
+    }
+  }
+
+  static async getTemplateEditorContext({ templateId }) {
+    const template = await this.getTemplate(templateId)
+    if (!template) return null
+
+    const version = template.activeVersion || (await TemplateVersion.findByPk(template.active_version_id))
+    const analyses = await CashFlowTemplateAnalysis.findAll({
+      where: { template_id: template.id },
+      order: [["created_at", "DESC"]],
+      limit: 1,
+    })
+    const analysis = analyses?.[0] || null
+    const config = version?.config_json || template.config_json
+    const review = this.evaluateReadinessForTemplate(template)
+
+    return {
+      template: this.decorateTemplatePayload(template, review),
+      editor_context: this.buildEditorContext({
+        template,
+        version,
+        analysis,
+        config,
+        mode: template.is_active ? "active" : "draft",
+        review,
+      }),
+    }
   }
 
   static ensureTemplateFileExists(template) {
