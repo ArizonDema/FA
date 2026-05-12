@@ -829,6 +829,10 @@ function shouldIgnoreLayoutBucketLabel(value) {
 
 function detectLayoutBucketDirection({ label, sectionLabel, cells }) {
   const text = normalizeText(`${sectionLabel || ""} ${label || ""}`).toLowerCase()
+  const concept = CashFlowConcepts.bestDirectCashFlowConcept(text)
+  if (concept?.direction === "inflow" || concept?.direction === "outflow") {
+    return concept.direction
+  }
   if (
     text.includes("payment") ||
     text.includes("paid") ||
@@ -838,7 +842,14 @@ function detectLayoutBucketDirection({ label, sectionLabel, cells }) {
     text.includes("distribution") ||
     text.includes("capex") ||
     text.includes("expenditure") ||
-    text.includes("purchase")
+    text.includes("purchase") ||
+    text.includes("spend") ||
+    text.includes("settlement") ||
+    text.includes("commitment") ||
+    text.includes("remittance") ||
+    text.includes("capitalization") ||
+    text.includes("sendback") ||
+    text.includes("sweep")
   ) {
     return "outflow"
   }
@@ -897,10 +908,99 @@ function assertLayoutRowLabel({ rows, rowNumber, labelColumn, predicate, fieldNa
   return row
 }
 
-function resolveEffectivePeriodLabelColumn({ headerRow, requestedLabelColumn, firstPeriodColumn }) {
+const LAYOUT_LABEL_HINTS = [
+  /\bcash\b/i,
+  /\breceipts?\b/i,
+  /\bpayments?\b/i,
+  /\bsettlements?\b/i,
+  /\bspend\b/i,
+  /\bpurchases?\b/i,
+  /\bcustomers?\b/i,
+  /\bpeople\b/i,
+  /\bpayroll\b/i,
+  /\brent\b/i,
+  /\bspace\b/i,
+  /\bmarketing\b/i,
+  /\bacquisition\b/i,
+  /\bequipment\b/i,
+  /\bborrow/i,
+  /\blender\b/i,
+  /\bprincipal\b/i,
+  /\bsponsor\b/i,
+  /\bowner\b/i,
+  /\bdebt\b/i,
+  /\bequity\b/i,
+]
+
+const GENERIC_LAYOUT_LABEL_VALUES = new Set([
+  "system",
+  "formula",
+  "input",
+  "manual",
+  "actual",
+  "budget",
+  "forecast",
+  "owner",
+  "calc",
+])
+
+function scoreLayoutLabelColumn({ headerRow, rows, headerRowNumber, column }) {
+  const headerText = textFromRawCell(cellFromRow(headerRow, column)).toLowerCase()
+  const labels = (Array.isArray(rows) ? rows : [])
+    .filter((row) => Number(row.row) > Number(headerRowNumber || headerRow?.row || 0))
+    .map((row) => textFromRawCell(cellFromRow(row, column)).toLowerCase())
+    .filter(Boolean)
+  const uniqueLabels = new Set(labels)
+  const preferredHeaderHints = ["line item", "lineitem", "description", "account", "label", "name", "cash behavior", "behavior", "activity"]
+  const rejectedHeaderHints = ["section", "category", "class", "owner", "status", "source"]
+  const preferred = preferredHeaderHints.some((hint) => headerText.includes(hint))
+  const rejected = rejectedHeaderHints.some((hint) => headerText.includes(hint))
+  const repeatedPenalty = labels.length && uniqueLabels.size <= Math.max(2, Math.ceil(labels.length * 0.25)) ? 12 : 0
+  const genericCount = labels.filter((label) => GENERIC_LAYOUT_LABEL_VALUES.has(label)).length
+  const multiWordCount = labels.filter((label) => label.split(/\s+/).filter(Boolean).length >= 2).length
+  const openingClosingCount = labels.filter((label) => isOpeningLabelText(label) || isClosingLabelText(label)).length
+  const cashFlowHintCount = labels.filter((label) => LAYOUT_LABEL_HINTS.some((pattern) => pattern.test(label))).length
+  const shortGenericCount = labels.filter((label) => label.length <= 8 && !LAYOUT_LABEL_HINTS.some((pattern) => pattern.test(label))).length
+
+  return {
+    column,
+    score:
+      uniqueLabels.size * 1.1 +
+      labels.length * 0.12 +
+      multiWordCount * 0.65 +
+      cashFlowHintCount * 0.9 +
+      openingClosingCount * 5 +
+      (preferred ? 16 : 0) -
+      (rejected ? 9 : 0) -
+      repeatedPenalty -
+      genericCount * 4 -
+      shortGenericCount * 0.3,
+  }
+}
+
+function resolveEffectivePeriodLabelColumn({ headerRow, rows = [], requestedLabelColumn, firstPeriodColumn }) {
   const requested = Number(requestedLabelColumn)
   const firstPeriod = Number(firstPeriodColumn)
   if (!Number.isInteger(firstPeriod) || firstPeriod <= 2) return requested
+
+  if (Array.isArray(rows) && rows.length) {
+    const scores = []
+    for (let candidate = 1; candidate < firstPeriod; candidate += 1) {
+      scores.push(
+        scoreLayoutLabelColumn({
+          headerRow,
+          rows,
+          headerRowNumber: headerRow?.row,
+          column: candidate,
+        }),
+      )
+    }
+    const best = scores.sort((left, right) => right.score - left.score)[0] || null
+    const requestedScore = scores.find((entry) => Number(entry.column) === Number(requested))?.score ?? 0
+    if (best && best.column !== requested && best.score >= requestedScore + 6) {
+      return best.column
+    }
+  }
 
   const nearestPrePeriodColumn = firstPeriod - 1
   const nearestPrePeriodLabel = textFromRawCell(cellFromRow(headerRow, nearestPrePeriodColumn))
@@ -1000,6 +1100,7 @@ function buildDirectColumnConfigFromLayoutDecision({ rawStructure, layoutDecisio
   const periodEntries = validateLayoutDecisionPeriodRange({ worksheet, headerRow, firstColumn, lastColumn })
   const effectiveLabelColumn = resolveEffectivePeriodLabelColumn({
     headerRow,
+    rows,
     requestedLabelColumn: layoutDecision.period_label_column,
     firstPeriodColumn: periodEntries[0]?.column || firstColumn,
   })
@@ -1773,7 +1874,6 @@ function effectiveDirectSemanticDecisionScore(decision, bucket) {
   const text = normalizeText([
     bucket?.label,
     bucket?.bucket_key,
-    decision?.reasoning,
     ...(Array.isArray(decision?.evidence) ? decision.evidence : []),
   ].filter(Boolean).join(" "))
   const inferred = CashFlowConcepts.bestDirectCashFlowConcept(text, direction)
@@ -1781,6 +1881,27 @@ function effectiveDirectSemanticDecisionScore(decision, bucket) {
     return Math.max(score, 0.86)
   }
   return score
+}
+
+function inferDirectSemanticDecisionFromBucket(decision, bucket) {
+  const direction = normalizeText(decision?.direction || bucket?.direction || "").toLowerCase()
+  if (!["inflow", "outflow"].includes(direction)) return null
+  const text = normalizeText([
+    bucket?.label,
+    bucket?.bucket_key,
+    ...(Array.isArray(decision?.evidence) ? decision.evidence : []),
+  ].filter(Boolean).join(" "))
+  return CashFlowConcepts.bestDirectCashFlowConcept(text, direction)
+}
+
+function shouldPreferInferredDirectSemantic({ inferred, decision }) {
+  if (!inferred?.key || Number(inferred.score || 0) < 0.79) return false
+  if (inferred.key === decision?.semanticKey) return false
+  const llmKey = normalizeText(decision?.semanticKey || "")
+  const llmScore = Number(decision?.llmScore || 0)
+  const broadConcepts = new Set(["other_operating_inflows", "supplier_payments", "capital_expenditures"])
+  if (broadConcepts.has(llmKey)) return true
+  return Number(inferred.score || 0) >= 0.86 && llmScore < 0.98
 }
 
 function applySemanticRepair({ configCandidate, parsedRepair, rowSummaries }) {
@@ -1795,27 +1916,39 @@ function applySemanticRepair({ configCandidate, parsedRepair, rowSummaries }) {
   ;(parsedRepair?.bucketDecisions || []).forEach((decision) => {
     const bucket = (nextConfig.bucket_bindings || []).find((item) => item.bucket_key === decision.bucketKey)
     if (!bucket) return
-    const effectiveScore = effectiveDirectSemanticDecisionScore(decision, bucket)
-    if (decision.needsHumanReview || effectiveScore < SEMANTIC_REPAIR_MIN_SCORE) {
+    const inferred = inferDirectSemanticDecisionFromBucket(decision, bucket)
+    const preferInferred = shouldPreferInferredDirectSemantic({ inferred, decision })
+    const effectiveDecision = preferInferred
+      ? {
+          ...decision,
+          semanticKey: inferred.key,
+          direction: inferred.direction || decision.direction,
+          evidence: Array.from(new Set([...(decision.evidence || []), `deterministic_concept:${inferred.key}`])),
+        }
+      : decision
+    const effectiveScore = preferInferred
+      ? Math.max(Number(decision?.llmScore || 0), Number(inferred?.score || 0))
+      : effectiveDirectSemanticDecisionScore(effectiveDecision, bucket)
+    if (effectiveDecision.needsHumanReview || effectiveScore < SEMANTIC_REPAIR_MIN_SCORE) {
       needsHumanReview = true
-      issues.push(`LLM bucket decision for "${decision.bucketKey}" needs review.`)
+      issues.push(`LLM bucket decision for "${effectiveDecision.bucketKey}" needs review.`)
       return
     }
-    if (bucket.direction !== decision.direction || Boolean(bucket.fallback) !== decision.fallback) {
-      bucket.direction = decision.direction
-      bucket.fallback = decision.fallback
+    if (bucket.direction !== effectiveDecision.direction || Boolean(bucket.fallback) !== effectiveDecision.fallback) {
+      bucket.direction = effectiveDecision.direction
+      bucket.fallback = effectiveDecision.fallback
       appliedCount += 1
     }
-    if (decision.semanticKey && bucket.semantic_key !== decision.semanticKey) {
-      bucket.semantic_key = decision.semanticKey
+    if (effectiveDecision.semanticKey && bucket.semantic_key !== effectiveDecision.semanticKey) {
+      bucket.semantic_key = effectiveDecision.semanticKey
       bucket.semantic_confidence = Number(effectiveScore || 0)
-      bucket.semantic_source = "llm_semantic"
-      bucket.semantic_evidence = decision.evidence || []
+      bucket.semantic_source = preferInferred ? "deterministic_semantic_guard" : "llm_semantic"
+      bucket.semantic_evidence = effectiveDecision.evidence || []
       appliedCount += 1
-    } else if (decision.semanticKey) {
+    } else if (effectiveDecision.semanticKey) {
       bucket.semantic_confidence = Math.max(Number(bucket.semantic_confidence || 0), Number(effectiveScore || 0))
-      bucket.semantic_source = bucket.semantic_source || "llm_semantic"
-      bucket.semantic_evidence = bucket.semantic_evidence || decision.evidence || []
+      bucket.semantic_source = bucket.semantic_source || (preferInferred ? "deterministic_semantic_guard" : "llm_semantic")
+      bucket.semantic_evidence = bucket.semantic_evidence || effectiveDecision.evidence || []
     }
   })
 

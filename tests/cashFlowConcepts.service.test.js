@@ -48,4 +48,31 @@ describe("cashFlowConcepts.service", () => {
       expect.objectContaining({ key: "interest_paid" }),
     )
   })
+
+  test("classifies unfamiliar template row wording from the liquidity flight-plan fixture", () => {
+    expect(CashFlowConcepts.bestDirectCashFlowConcept("Marketplace partner settlements")).toEqual(
+      expect.objectContaining({ key: "supplier_payments", direction: "outflow" }),
+    )
+    expect(CashFlowConcepts.bestDirectCashFlowConcept("People runway spend")).toEqual(
+      expect.objectContaining({ key: "payroll", direction: "outflow" }),
+    )
+    expect(CashFlowConcepts.bestDirectCashFlowConcept("Audience acquisition cash")).toEqual(
+      expect.objectContaining({ key: "sales_marketing", direction: "outflow" }),
+    )
+    expect(CashFlowConcepts.bestDirectCashFlowConcept("Borrowing cost cash")).toEqual(
+      expect.objectContaining({ key: "interest_paid", direction: "outflow" }),
+    )
+    expect(CashFlowConcepts.bestDirectCashFlowConcept("Workshop kit purchases")).toEqual(
+      expect.objectContaining({ key: "capital_expenditures", direction: "outflow" }),
+    )
+    expect(CashFlowConcepts.bestDirectCashFlowConcept("Equipment resale receipts")).toEqual(
+      expect.objectContaining({ key: "asset_sale_proceeds", direction: "inflow" }),
+    )
+    expect(CashFlowConcepts.bestDirectCashFlowConcept("Sponsor oxygen")).toEqual(
+      expect.objectContaining({ key: "equity_injection", direction: "inflow" }),
+    )
+    expect(CashFlowConcepts.bestDirectCashFlowConcept("Owner cash sweeps")).toEqual(
+      expect.objectContaining({ key: "dividends_distributions", direction: "outflow" }),
+    )
+  })
 })

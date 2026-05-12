@@ -72,6 +72,25 @@ async function writeColumnWorkbook(filePath) {
   await workbook.xlsx.writeFile(filePath)
 }
 
+async function writeColumnWorkbookWithMetadataBeforePeriods(filePath) {
+  const workbook = new ExcelJS.Workbook()
+  const sheet = workbook.addWorksheet("Liquidity Flight Plan")
+  sheet.addRow(["Report"])
+  sheet.addRow([""])
+  sheet.addRow([""])
+  sheet.addRow([""])
+  sheet.addRow(["Signal map", "Do not type account names here", "Cash lane", "Cash behavior", "Owner", "Jan", "Feb"])
+  ;[
+    ["Runway", "anchor", "opening", "Cash at start of runway", "system", 0, 0],
+    ["Cash-in flywheel", "front door", "customer", "Customer money landed", "system", 0, 0],
+    ["Runway burn", "people", "operating", "People runway spend", "system", 0, 0],
+    ["Runway burn", "subtotal", "calc", "Operating cash drag", "formula", { formula: "SUM(F8:F8)" }, { formula: "SUM(G8:G8)" }],
+    ["Capital oxygen", "borrow", "financing", "Line-of-credit oxygen", "system", 0, 0],
+    ["Runway", "anchor", "closing", "Cash at end of runway", "system", 0, 0],
+  ].forEach((row) => sheet.addRow(row))
+  await workbook.xlsx.writeFile(filePath)
+}
+
 async function writeDirectSemanticRepairWorkbook(filePath) {
   const workbook = new ExcelJS.Workbook()
   const sheet = workbook.addWorksheet("Cash Flow")
@@ -656,13 +675,101 @@ describe("cashFlowTemplateIngestion.service", () => {
     expect(result.llm_meta_json.semantic_repair).toEqual(
       expect.objectContaining({
         attempted: true,
-        applied_count: 4,
+        applied_count: 2,
       }),
     )
     expect(buckets.get("payroll_and_benefits")?.semantic_key).toBe("payroll")
     expect(buckets.get("rent_and_facilities")?.semantic_key).toBe("rent_facilities")
     expect(httpRequestSpy).toHaveBeenCalledTimes(2)
     appConfig.ollama.maxAttempts = 2
+  })
+
+  test("guards direct semantic repair against broad high-confidence llm labels", () => {
+    const configCandidate = {
+      version: "v3",
+      sheet_name: "Liquidity Flight Plan",
+      layout_type: "columns",
+      statement_method: "direct",
+      period_axis: {
+        orientation: "column",
+        labels: [{ period_key: "m01", label: "Jan", period_type: "monthly", month: 1 }],
+        period_bindings: [{ period_key: "m01", label: "Jan", cell: "F5" }],
+      },
+      period_resolution_rules: { custom_periods: [] },
+      opening_binding: null,
+      closing_binding: null,
+      bucket_bindings: [
+        {
+          bucket_key: "workshop_kit_purchases",
+          label: "Workshop kit purchases",
+          direction: "outflow",
+          fallback: false,
+          rules: [],
+          cells: [{ period_key: "m01", label: "Jan", cell: "F20" }],
+        },
+        {
+          bucket_key: "sponsor_oxygen",
+          label: "Sponsor oxygen",
+          direction: "inflow",
+          fallback: false,
+          rules: [],
+          cells: [{ period_key: "m01", label: "Jan", cell: "F28" }],
+        },
+      ],
+      writer_policy: { preserve_formulas: true, full_recalc_on_open: true },
+      mapping_policy: { auto_create: true, high_confidence_threshold: 0.7, low_confidence_threshold: 0.35 },
+    }
+
+    const result = Ingestion.__test.applySemanticRepair({
+      configCandidate,
+      rowSummaries: [],
+      parsedRepair: {
+        bucketDecisions: [
+          {
+            bucketKey: "workshop_kit_purchases",
+            semanticKey: "supplier_payments",
+            direction: "outflow",
+            fallback: false,
+            llmScore: 0.99,
+            reasoning: "Workshop kit purchases indicates vendor payments for materials.",
+            evidence: ["Workshop kit purchases"],
+            needsHumanReview: false,
+          },
+          {
+            bucketKey: "sponsor_oxygen",
+            semanticKey: "other_operating_inflows",
+            direction: "inflow",
+            fallback: false,
+            llmScore: 0.93,
+            reasoning: "Sponsor oxygen is an inflow that best fits other operating inflows.",
+            evidence: ["Sponsor oxygen"],
+            needsHumanReview: false,
+          },
+        ],
+        rowBindingDecisions: [],
+        issues: [],
+        requiredAnchors: [],
+        needsHumanReview: false,
+      },
+    })
+    const buckets = new Map(result.config.bucket_bindings.map((bucket) => [bucket.bucket_key, bucket]))
+
+    expect(result.needsHumanReview).toBe(false)
+    expect(buckets.get("workshop_kit_purchases")).toEqual(
+      expect.objectContaining({
+        semantic_key: "capital_expenditures",
+        semantic_source: "deterministic_semantic_guard",
+      }),
+    )
+    expect(buckets.get("workshop_kit_purchases").semantic_evidence).toContain(
+      "deterministic_concept:capital_expenditures",
+    )
+    expect(buckets.get("sponsor_oxygen")).toEqual(
+      expect.objectContaining({
+        semantic_key: "equity_injection",
+        semantic_source: "deterministic_semantic_guard",
+      }),
+    )
   })
 
   test("keeps indirect llm layout decisions on the llm path and repairs missing row bindings", async () => {
@@ -890,6 +997,58 @@ describe("cashFlowTemplateIngestion.service", () => {
     expect(result.analysis_source).toBe("llm_layout_decision")
     expect(result.suggested_config_json.opening_binding.cells.map((item) => item.cell)).toEqual(["C4", "D4"])
     expect(result.suggested_config_json.bucket_bindings[0].label).toBe("Cash receipts from customers")
+  })
+
+  test("overrides an llm-selected generic metadata column with the descriptive row label column", async () => {
+    const appConfig = require("../src/config/app")
+    appConfig.ollama.maxAttempts = 1
+    appConfig.mappingAssistance.templateSemanticEnabled = false
+    const templatePath = path.join(tempDir, "template_metadata_label_column.xlsx")
+    await writeColumnWorkbookWithMetadataBeforePeriods(templatePath)
+    mockCashFlowService.analyzeTemplateWorkbook.mockResolvedValue(createDeterministicBaseline())
+
+    httpRequestSpy.mockImplementation(
+      mockOllamaJsonResponse({
+        model: "gpt-oss:20b",
+        message: {
+          content: JSON.stringify({
+            detected_layout_type: "columns",
+            statement_method: "direct",
+            confidence: 0.86,
+            sheet_name: "Liquidity Flight Plan",
+            period_orientation: "column",
+            period_header_row: 5,
+            period_label_column: 5,
+            first_period_column: 6,
+            last_period_column: 7,
+            opening_row: null,
+            closing_row: null,
+            issues: [],
+            required_anchors: [],
+          }),
+        },
+      }),
+    )
+
+    const result = await Ingestion.ingestTemplateSchema({
+      templatePath,
+      sourceFileName: "template_metadata_label_column.xlsx",
+      forceLlm: true,
+    })
+    const labels = result.suggested_config_json.bucket_bindings.map((bucket) => bucket.label)
+    const buckets = new Map(result.suggested_config_json.bucket_bindings.map((bucket) => [bucket.bucket_key, bucket]))
+
+    expect(result.analysis_source).toBe("llm_layout_decision")
+    expect(result.suggested_config_json.opening_binding.cells.map((item) => item.cell)).toEqual(["F6", "G6"])
+    expect(result.suggested_config_json.closing_binding.cells.map((item) => item.cell)).toEqual(["F11", "G11"])
+    expect(labels).toContain("Customer money landed")
+    expect(labels).toContain("People runway spend")
+    expect(labels).toContain("Line-of-credit oxygen")
+    expect(labels).not.toContain("system")
+    expect(labels).not.toContain("Operating cash drag")
+    expect(buckets.get("people_runway_spend")?.direction).toBe("outflow")
+    expect(buckets.get("line_of_credit_oxygen")?.direction).toBe("inflow")
+    appConfig.mappingAssistance.templateSemanticEnabled = true
   })
 
   test("does not allow llm decisions to shrink a high-confidence deterministic period range", async () => {

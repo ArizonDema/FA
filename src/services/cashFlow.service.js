@@ -97,6 +97,8 @@ const DIRECT_CASH_FLOW_CONCEPTS = [
       /\bvendor disbursements?\b/,
       /\btrade vendor(s)?\b/,
       /\bpartner payouts?\b/,
+      /\bpartner settlements?\b/,
+      /\bmarketplace partner settlements?\b/,
       /\bpartner operating payouts?\b/,
       /\bexternal partner payouts?\b/,
       /\boperating payouts?\b/,
@@ -122,12 +124,24 @@ const DIRECT_CASH_FLOW_CONCEPTS = [
       /\bpeople costs?\b/,
       /\bteam costs?\b/,
       /\bteam compensation\b/,
+      /\bpeople runway spend\b/,
+      /\bpeople .*spend\b/,
     ],
   },
   {
     key: "rent_facilities",
     direction: "outflow",
-    patterns: [/\brent\b/, /\bpremises?\b/, /\bfacilit(y|ies) costs?\b/, /\blease\b/, /\boccupancy\b/, /\bspace commitments?\b/, /\bworkplace\b/],
+    patterns: [
+      /\brent\b/,
+      /\bpremises?\b/,
+      /\bfacilit(y|ies) costs?\b/,
+      /\blease\b/,
+      /\boccupancy\b/,
+      /\bspace commitments?\b/,
+      /\bspace commitment cash\b/,
+      /\bstudio and space\b/,
+      /\bworkplace\b/,
+    ],
   },
   {
     key: "sales_marketing",
@@ -144,6 +158,8 @@ const DIRECT_CASH_FLOW_CONCEPTS = [
       /\bgrowth campaign(s)?\b/,
       /\bcampaign spend\b/,
       /\bcampaign expense\b/,
+      /\baudience acquisition\b/,
+      /\bacquisition cash\b/,
     ],
   },
   {
@@ -163,12 +179,14 @@ const DIRECT_CASH_FLOW_CONCEPTS = [
       /\bbank charges?\b/,
       /\bsoftware subscription(s)?\b/,
       /\bsaas\b/,
+      /\boperating backbone\b/,
+      /\bbackbone cash\b/,
     ],
   },
   {
     key: "income_taxes",
     direction: "outflow",
-    patterns: [/\bincome taxes?\b/, /\btaxes paid\b/, /\btax payment(s)?\b/],
+    patterns: [/\bincome taxes?\b/, /\btaxes paid\b/, /\btax payment(s)?\b/, /\bgovernment remittance\b/],
   },
   {
     key: "capital_expenditures",
@@ -184,17 +202,24 @@ const DIRECT_CASH_FLOW_CONCEPTS = [
       /\bplant\b/,
       /\bppe\b/,
       /\bleasehold improvements?\b/,
+      /\bworkshop kit\b/,
+      /\bkit purchases?\b/,
     ],
   },
   {
     key: "capitalized_software",
     direction: "outflow",
-    patterns: [/\bcapitali[sz]ed software\b/, /\bsoftware development capitalization\b/, /\bdevelopment capitalization\b/],
+    patterns: [
+      /\bcapitali[sz]ed software\b/,
+      /\bsoftware development capitalization\b/,
+      /\bdevelopment capitalization\b/,
+      /\bcode asset capitalization\b/,
+    ],
   },
   {
     key: "asset_sale_proceeds",
     direction: "inflow",
-    patterns: [/\basset sale\b/, /\bdisposal proceeds?\b/, /\bsale proceeds?\b/, /\binvestment sale\b/],
+    patterns: [/\basset sale\b/, /\bdisposal proceeds?\b/, /\bsale proceeds?\b/, /\binvestment sale\b/, /\bequipment resale\b/, /\bresale receipts?\b/],
   },
   {
     key: "debt_drawdown",
@@ -222,12 +247,14 @@ const DIRECT_CASH_FLOW_CONCEPTS = [
       /\bloan payments?\b/,
       /\bnote repayments?\b/,
       /\bcredit facilit(y|ies) repayments?\b/,
+      /\bprincipal sendback\b/,
+      /\blender principal sendback\b/,
     ],
   },
   {
     key: "interest_paid",
     direction: "outflow",
-    patterns: [/\binterest paid\b/, /\binterest expense\b/, /\bfinance costs?\b/, /\bfinance charges? paid\b/, /\bfinance charges?\b/],
+    patterns: [/\binterest paid\b/, /\binterest expense\b/, /\bfinance costs?\b/, /\bfinance charges? paid\b/, /\bfinance charges?\b/, /\bborrowing cost cash\b/, /\bborrowing cost\b/],
   },
   {
     key: "equity_injection",
@@ -246,12 +273,13 @@ const DIRECT_CASH_FLOW_CONCEPTS = [
       /\binvestor cash\b/,
       /\bcapital calls?\b/,
       /\bsubscriptions?\b/,
+      /\bsponsor oxygen\b/,
     ],
   },
   {
     key: "dividends_distributions",
     direction: "outflow",
-    patterns: [/\bdividends? paid\b/, /\bdistributions?\b/, /\bredemptions?\b/, /\bowner drawings?\b/, /\bpartner drawings?\b/],
+    patterns: [/\bdividends? paid\b/, /\bdistributions?\b/, /\bredemptions?\b/, /\bowner drawings?\b/, /\bpartner drawings?\b/, /\bowner cash sweeps?\b/, /\bcash sweeps?\b/],
   },
 ]
 
@@ -268,6 +296,13 @@ const DIRECT_OUTFLOW_TEXT_HINTS = [
   /\bcapex\b/,
   /\bexpenditures?\b/,
   /\bpurchases?\b/,
+  /\bspend\b/,
+  /\bsettlements?\b/,
+  /\bcommitments?\b/,
+  /\bremittance\b/,
+  /\bcapitalization\b/,
+  /\bsendback\b/,
+  /\bsweeps?\b/,
   /\bpayroll\b/,
   /\brent\b/,
   /\bmarketing\b/,
@@ -2119,25 +2154,85 @@ function getCellNumericSignal(value, options = {}) {
   return false
 }
 
+const CASH_FLOW_LABEL_HINTS = [
+  /\bcash\b/i,
+  /\breceipts?\b/i,
+  /\bpayments?\b/i,
+  /\bsettlements?\b/i,
+  /\bspend\b/i,
+  /\bpurchases?\b/i,
+  /\bcustomers?\b/i,
+  /\bpeople\b/i,
+  /\bpayroll\b/i,
+  /\brent\b/i,
+  /\bspace\b/i,
+  /\bmarketing\b/i,
+  /\bacquisition\b/i,
+  /\bequipment\b/i,
+  /\bborrow/i,
+  /\blender\b/i,
+  /\bprincipal\b/i,
+  /\bsponsor\b/i,
+  /\bowner\b/i,
+  /\bdebt\b/i,
+  /\bequity\b/i,
+]
+
+const GENERIC_LABEL_VALUES = new Set([
+  "system",
+  "formula",
+  "input",
+  "manual",
+  "actual",
+  "budget",
+  "forecast",
+  "owner",
+  "calc",
+])
+
+function scoreColumnLabelQuality({ headerText, labels }) {
+  const normalizedHeader = normalizeHeader(headerText)
+  const normalizedLabels = (labels || []).map((label) => normalizeText(label)).filter(Boolean)
+  const uniqueLabels = new Set(normalizedLabels)
+  const preferredHeaderHints = ["line item", "lineitem", "description", "account", "label", "name", "cash behavior", "behavior", "activity"]
+  const rejectedHeaderHints = ["section", "category", "class", "owner", "status", "source"]
+  const preferred = preferredHeaderHints.some((hint) => normalizedHeader.includes(hint))
+  const rejected = rejectedHeaderHints.some((hint) => normalizedHeader.includes(hint))
+  const repeatedPenalty =
+    normalizedLabels.length && uniqueLabels.size <= Math.max(2, Math.ceil(normalizedLabels.length * 0.25)) ? 12 : 0
+  const genericCount = normalizedLabels.filter((label) => GENERIC_LABEL_VALUES.has(label)).length
+  const multiWordCount = normalizedLabels.filter((label) => label.split(/\s+/).filter(Boolean).length >= 2).length
+  const openingClosingCount = normalizedLabels.filter((label) => isOpeningLabel(label) || isClosingLabel(label)).length
+  const cashFlowHintCount = normalizedLabels.filter((label) => CASH_FLOW_LABEL_HINTS.some((pattern) => pattern.test(label))).length
+  const shortGenericCount = normalizedLabels.filter((label) => label.length <= 8 && !CASH_FLOW_LABEL_HINTS.some((pattern) => pattern.test(label))).length
+
+  return (
+    uniqueLabels.size * 1.1 +
+    normalizedLabels.length * 0.12 +
+    multiWordCount * 0.65 +
+    cashFlowHintCount * 0.9 +
+    openingClosingCount * 5 +
+    (preferred ? 16 : 0) -
+    (rejected ? 9 : 0) -
+    repeatedPenalty -
+    genericCount * 4 -
+    shortGenericCount * 0.3
+  )
+}
+
 function chooseColumnLayoutLabelColumn({ worksheet, headerRowIndex, firstPeriodCol, maxRows }) {
-  const preferredHeaderHints = ["line item", "lineitem", "description", "account", "label", "name"]
-  const rejectedHeaderHints = ["section", "category", "class"]
   const headerRow = worksheet.getRow(headerRowIndex)
   let best = null
 
   for (let candidate = 1; candidate < firstPeriodCol; candidate += 1) {
-    const headerText = normalizeHeader(readCellText(headerRow.getCell(candidate).value))
+    const headerText = readCellText(headerRow.getCell(candidate).value)
     const labels = []
     for (let scanRow = headerRowIndex + 1; scanRow <= Math.min(maxRows, headerRowIndex + 140); scanRow += 1) {
       const label = normalizeText(readCellText(worksheet.getRow(scanRow).getCell(candidate).value))
       if (label) labels.push(label)
     }
 
-    const uniqueLabels = new Set(labels)
-    const preferred = preferredHeaderHints.some((hint) => headerText.includes(hint))
-    const rejected = rejectedHeaderHints.some((hint) => headerText.includes(hint))
-    const repeatedPenalty = labels.length && uniqueLabels.size <= Math.max(2, Math.ceil(labels.length * 0.25)) ? 2 : 0
-    const score = uniqueLabels.size * 1.25 + labels.length * 0.15 + (preferred ? 20 : 0) - (rejected ? 6 : 0) - repeatedPenalty
+    const score = scoreColumnLabelQuality({ headerText, labels })
 
     if (!best || score > best.score) {
       best = {

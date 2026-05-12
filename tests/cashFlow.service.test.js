@@ -139,6 +139,25 @@ async function writeDirectColumnCashFlowWorkbook(filePath) {
   await workbook.xlsx.writeFile(filePath)
 }
 
+async function writeColumnTemplateWithMetadataBeforePeriods(filePath) {
+  const workbook = new ExcelJS.Workbook()
+  const sheet = workbook.addWorksheet("Liquidity Flight Plan")
+  sheet.addRow(["Title"])
+  sheet.addRow([""])
+  sheet.addRow([""])
+  sheet.addRow([""])
+  sheet.addRow(["Signal map", "Do not type account names here", "Cash lane", "Cash behavior", "Owner", "Jan", "Feb", "Mar"])
+  ;[
+    ["Runway", "anchor", "opening", "Cash at start of runway", "system", 0, 0, 0],
+    ["Cash-in flywheel", "front door", "customer", "Customer money landed", "system", 0, 0, 0],
+    ["Runway burn", "people", "operating", "People runway spend", "system", 0, 0, 0],
+    ["Runway burn", "subtotal", "calc", "Operating cash drag", "formula", { formula: "SUM(F8:F8)" }, { formula: "SUM(G8:G8)" }, { formula: "SUM(H8:H8)" }],
+    ["Capital oxygen", "borrow", "financing", "Line-of-credit oxygen", "system", 0, 0, 0],
+    ["Runway", "anchor", "closing", "Cash at end of runway", "system", 0, 0, 0],
+  ].forEach((row) => sheet.addRow(row))
+  await workbook.xlsx.writeFile(filePath)
+}
+
 function addSpreadsheetPrefix(xml) {
   let normalized = String(xml || "")
   normalized = normalized.replace(`xmlns="${SPREADSHEETML_NS}"`, `xmlns:x="${SPREADSHEETML_NS}"`)
@@ -856,6 +875,25 @@ describe("cashFlow.service", () => {
     expect(analysis.suggested_config_json.version).toBe("v3")
     expect(analysis.suggested_config_json.period_axis.labels.length).toBe(12)
     expect(analysis.suggested_config_json.bucket_bindings.length).toBeGreaterThan(0)
+  })
+
+  test("chooses the descriptive cash behavior column over generic metadata before periods", async () => {
+    const templatePath = path.join(tempDir, "metadata_before_periods_template.xlsx")
+    await writeColumnTemplateWithMetadataBeforePeriods(templatePath)
+
+    const analysis = await CashFlowService.analyzeTemplateWorkbook({ templatePath })
+    const bucketLabels = analysis.suggested_config_json.bucket_bindings.map((bucket) => bucket.label)
+    const buckets = new Map(analysis.suggested_config_json.bucket_bindings.map((bucket) => [bucket.bucket_key, bucket]))
+
+    expect(analysis.suggested_config_json.period_axis.labels.length).toBe(3)
+    expect(analysis.suggested_config_json.opening_binding.cells.map((cell) => cell.cell)).toEqual(["F6", "G6", "H6"])
+    expect(analysis.suggested_config_json.closing_binding.cells.map((cell) => cell.cell)).toEqual(["F11", "G11", "H11"])
+    expect(bucketLabels).toContain("Customer money landed")
+    expect(bucketLabels).toContain("People runway spend")
+    expect(bucketLabels).toContain("Line-of-credit oxygen")
+    expect(bucketLabels).not.toContain("system")
+    expect(buckets.get("people_runway_spend")?.direction).toBe("outflow")
+    expect(buckets.get("line_of_credit_oxygen")?.direction).toBe("inflow")
   })
 
   test("calibrates direct template confidence and detects cash-flow row directions semantically", async () => {
