@@ -673,6 +673,66 @@ describe("cashFlow.service", () => {
     )
   })
 
+  test("does not force strong profile concepts into unrelated same-direction buckets", () => {
+    const buckets = [
+      { bucket_key: "crew_disbursements", label: "Rostered crew disbursements", direction: "outflow", fallback: false, rules: [] },
+      { bucket_key: "vendor_passage", label: "Vendor passage", direction: "outflow", fallback: false, rules: [] },
+    ]
+    const movements = [
+      {
+        account_name: "Marketing Expense",
+        description: "Paid campaign media buy",
+        amount: -1250,
+        date: new Date("2026-03-10"),
+        je_no: "JE-MKT",
+      },
+    ]
+    const accountProfile = CashFlowService.__test.buildRuntimeAccountProfile({
+      trialBalance: {
+        cashAccountName: "Cash",
+        rows: [
+          { account: "Cash", endingDebit: 10000, endingCredit: 0, endingBalance: 10000 },
+          { account: "Marketing Expense", endingDebit: 1250, endingCredit: 0, endingBalance: 1250 },
+        ],
+      },
+      generalLedger: {
+        rows: movements.map((movement) => ({
+          account_name: movement.account_name,
+          date: movement.date,
+          je_no: movement.je_no,
+          description: movement.description,
+        })),
+        movements,
+      },
+    })
+
+    const mapped = CashFlowService.mapMovementsToBuckets(movements, buckets, {
+      mappingPolicy: { auto_create: true, high_confidence_threshold: 0.7, low_confidence_threshold: 0.35 },
+      accountProfile,
+      learnedMappings: [
+        {
+          normalized_account: "marketing expense",
+          direction: "outflow",
+          bucket_key: "crew_disbursements",
+          confidence: 0.99,
+          source: "auto_semantic",
+          status: "suggested",
+        },
+      ],
+    })
+
+    expect(mapped.mappedMovements).toEqual([])
+    expect(mapped.finalBucketAssignments).toEqual([])
+    expect(mapped.autoCreatedMappings).toEqual([])
+    expect(mapped.unmapped).toEqual([
+      expect.objectContaining({
+        account_name: "Marketing Expense",
+        mapping_review_reason: "missing_supported_template_target",
+        expected_semantic_keys: expect.arrayContaining(["sales_marketing"]),
+      }),
+    ])
+  })
+
   test("builds fiscal-year rollforward from TB and GL movement", () => {
     const monthNet = [99450, 47520, 7505, 29525, 27495, 17080, 0, 0, 0, 0, 0, 0]
     const movements = monthNet
@@ -1345,9 +1405,171 @@ describe("cashFlow.service", () => {
       }),
     )
     expect(result.preview.mapping_summary.account_profile).toEqual(result.mapping.account_profile_summary)
+    expect(result.mapping.coverage_summary).toEqual(
+      expect.objectContaining({
+        status: "ready",
+        can_generate: true,
+        missing_concepts_count: 0,
+      }),
+    )
+    expect(result.preview.mapping_summary.coverage).toEqual(result.mapping.coverage_summary)
   })
 
-  test("deterministic verification against provided sample files", async () => {
+  test("cash-flow coverage gate reports missing company concepts with human display fields", () => {
+    const movements = [
+      {
+        account_name: "Clearing 14",
+        description: "Paid growth campaign media buy",
+        amount: -2500,
+        date: new Date("2026-01-10"),
+        je_no: "JE-MKT",
+      },
+    ]
+    const accountProfile = CashFlowService.__test.buildRuntimeAccountProfile({
+      trialBalance: {
+        cashAccountName: "Cash",
+        rows: [
+          { account: "Cash", endingDebit: 10000, endingCredit: 0, endingBalance: 10000 },
+          { account: "Clearing 14", endingDebit: 2500, endingCredit: 0, endingBalance: 2500 },
+        ],
+      },
+      generalLedger: {
+        rows: movements.map((movement) => ({
+          account_name: movement.account_name,
+          date: movement.date,
+          je_no: movement.je_no,
+          description: movement.description,
+        })),
+        movements,
+      },
+    })
+
+    const coverage = CashFlowService.__test.evaluateCashFlowTemplateCoverage({
+      config: {
+        version: "v3",
+        statement_method: "direct",
+        period_axis: {
+          labels: [{ period_key: "jan", label: "Jan", period_type: "monthly" }],
+          period_bindings: [{ period_key: "jan", label: "Jan", cell: "A2" }],
+        },
+        bucket_bindings: [
+          {
+            bucket_key: "team_costs",
+            label: "Team costs",
+            direction: "outflow",
+            semantic_key: "payroll",
+            cells: [{ period_key: "jan", label: "Jan", cell: "B2" }],
+          },
+          {
+            bucket_key: "other_outflows",
+            label: "Other outflows",
+            direction: "outflow",
+            fallback: true,
+            cells: [{ period_key: "jan", label: "Jan", cell: "C2" }],
+          },
+        ],
+      },
+      movements,
+      accountProfile,
+      resolvedRange: { start: new Date("2026-01-01"), end: new Date("2026-01-31") },
+    })
+
+    expect(coverage.can_generate).toBe(false)
+    expect(coverage.code).toBe("cash_flow_template_coverage_failed")
+    expect(coverage.title).toBe("Template needs rows before this report can run")
+    expect(coverage.message).toContain("Marketing spend")
+    expect(coverage.missing_items).toEqual([
+      expect.objectContaining({
+        concept_key: "sales_marketing",
+        display_name: "Marketing spend",
+        suggested_template_row_label: "Marketing spend",
+        total_amount: 2500,
+        accounts: [expect.objectContaining({ account_name: "Clearing 14", total_amount: 2500 })],
+        sample_gl_descriptions: ["Paid growth campaign media buy"],
+      }),
+    ])
+    expect(coverage.next_actions.join(" ")).toContain("Marketing spend")
+    expect(coverage.diagnostics.missing_semantic_keys).toEqual(["sales_marketing"])
+  })
+
+  test("cash-flow coverage gate blocks report generation before workbook writing", async () => {
+    const templatePath = path.join(tempDir, "coverage_gate_template.xlsx")
+    const tbPath = path.join(tempDir, "coverage_gate_tb.xlsx")
+    const glPath = path.join(tempDir, "coverage_gate_gl.xlsx")
+    const outputPath = path.join(tempDir, "coverage_gate_output.xlsx")
+
+    await writeTemplateWorkbook(templatePath)
+    await writeTrialBalanceWorkbook(tbPath, [
+      { account: "Cash", asOfDate: "2026-01-31", endingDebit: 5000 },
+      { account: "Marketing Expense", asOfDate: "2026-01-31", endingDebit: 1200 },
+    ])
+    await writeGeneralLedgerWorkbook(glPath, [
+      {
+        account: "Cash",
+        date: "2026-01-15",
+        jeNo: "JE-MKT",
+        debit: 0,
+        credit: 1200,
+        description: "Paid demand generation campaign",
+      },
+      {
+        account: "Marketing Expense",
+        date: "2026-01-15",
+        jeNo: "JE-MKT",
+        debit: 1200,
+        credit: 0,
+        description: "Paid demand generation campaign",
+      },
+    ])
+
+    await expect(
+      CashFlowService.generateCashFlowReport({
+        templatePath,
+        templateConfig: {
+          sheet_name: "Cash Flow",
+          header_row: 1,
+          month_column_header: "Month",
+          opening_column_header: "Opening Balance",
+          closing_column_header: "Closing Balance",
+          buckets: [
+            {
+              bucket_key: "salaries",
+              label: "Salaries",
+              direction: "outflow",
+              column_header: "Salaries",
+              fallback: false,
+              rules: [],
+            },
+            {
+              bucket_key: "other_outflows",
+              label: "Other Outflows",
+              direction: "outflow",
+              column_header: "Other Outflows",
+              fallback: true,
+              rules: [],
+            },
+          ],
+        },
+        tbFilePath: tbPath,
+        glFilePath: glPath,
+        fiscalYear: 2026,
+        outputFilePath: outputPath,
+      }),
+    ).rejects.toMatchObject({
+      name: "CashFlowValidationError",
+      details: expect.objectContaining({
+        code: "cash_flow_template_coverage_failed",
+        missing_items: [
+          expect.objectContaining({
+            display_name: "Marketing spend",
+          }),
+        ],
+      }),
+    })
+    expect(fs.existsSync(outputPath)).toBe(false)
+  })
+
+  test("coverage gate blocks the incomplete provided sample template instead of misusing fallback rows", async () => {
     const sampleTB = "C:\\Users\\Mano PC\\OneDrive\\Documents\\Samples;Data\\Trial_Balance_GLC_Services.xlsx"
     const sampleGL = "C:\\Users\\Mano PC\\OneDrive\\Documents\\Samples;Data\\General_Ledger_GLC_Services.xlsx"
     const sampleTemplate = "C:\\Users\\Mano PC\\OneDrive\\Documents\\Samples;Data\\simple_cash_flow_template.xlsx"
@@ -1358,66 +1580,73 @@ describe("cashFlow.service", () => {
     }
 
     const outputPath = path.join(tempDir, "sample_output.xlsx")
-    const result = await CashFlowService.generateCashFlowReport({
-      templatePath: sampleTemplate,
-      templateConfig: {
-        sheet_name: "Cash Flow",
-        header_row: 1,
-        month_column_header: "Month",
-        opening_column_header: "Opening Balance",
-        closing_column_header: "Closing Balance",
-        buckets: [
-          {
-            bucket_key: "sales_inflow",
-            label: "Sales Inflow",
-            direction: "inflow",
-            column_header: "Sales Inflow",
-            fallback: false,
-            rules: [{ match_type: "exact", pattern: "Accounts Receivable", priority: 1 }],
-          },
-          {
-            bucket_key: "other_inflow",
-            label: "Other Inflow",
-            direction: "inflow",
-            column_header: "Other Inflow",
-            fallback: true,
-            rules: [],
-          },
-          {
-            bucket_key: "rent_outflow",
-            label: "Rent",
-            direction: "outflow",
-            column_header: "Rent",
-            fallback: false,
-            rules: [{ match_type: "exact", pattern: "Rent Expense", priority: 1 }],
-          },
-          {
-            bucket_key: "salaries_outflow",
-            label: "Salaries",
-            direction: "outflow",
-            column_header: "Salaries",
-            fallback: false,
-            rules: [{ match_type: "exact", pattern: "Salaries Expense", priority: 1 }],
-          },
-          {
-            bucket_key: "other_outflow",
-            label: "Other Outflows",
-            direction: "outflow",
-            column_header: "Other Outflows",
-            fallback: true,
-            rules: [],
-          },
-        ],
-      },
-      tbFilePath: sampleTB,
-      glFilePath: sampleGL,
-      fiscalYear: 2025,
-      outputFilePath: outputPath,
+    await expect(
+      CashFlowService.generateCashFlowReport({
+        templatePath: sampleTemplate,
+        templateConfig: {
+          sheet_name: "Cash Flow",
+          header_row: 1,
+          month_column_header: "Month",
+          opening_column_header: "Opening Balance",
+          closing_column_header: "Closing Balance",
+          buckets: [
+            {
+              bucket_key: "sales_inflow",
+              label: "Sales Inflow",
+              direction: "inflow",
+              column_header: "Sales Inflow",
+              fallback: false,
+              rules: [{ match_type: "exact", pattern: "Accounts Receivable", priority: 1 }],
+            },
+            {
+              bucket_key: "other_inflow",
+              label: "Other Inflow",
+              direction: "inflow",
+              column_header: "Other Inflow",
+              fallback: true,
+              rules: [],
+            },
+            {
+              bucket_key: "rent_outflow",
+              label: "Rent",
+              direction: "outflow",
+              column_header: "Rent",
+              fallback: false,
+              rules: [{ match_type: "exact", pattern: "Rent Expense", priority: 1 }],
+            },
+            {
+              bucket_key: "salaries_outflow",
+              label: "Salaries",
+              direction: "outflow",
+              column_header: "Salaries",
+              fallback: false,
+              rules: [{ match_type: "exact", pattern: "Salaries Expense", priority: 1 }],
+            },
+            {
+              bucket_key: "other_outflow",
+              label: "Other Outflows",
+              direction: "outflow",
+              column_header: "Other Outflows",
+              fallback: true,
+              rules: [],
+            },
+          ],
+        },
+        tbFilePath: sampleTB,
+        glFilePath: sampleGL,
+        fiscalYear: 2025,
+        outputFilePath: outputPath,
+      }),
+    ).rejects.toMatchObject({
+      details: expect.objectContaining({
+        code: "cash_flow_template_coverage_failed",
+        missing_items: expect.arrayContaining([
+          expect.objectContaining({ display_name: "Interest paid" }),
+          expect.objectContaining({ display_name: "Owner funding" }),
+        ]),
+      }),
     })
-
-    expect(result.preview.monthly[5].closing_balance).toBe(228575)
-    expect(result.preview.monthly[11].closing_balance).toBe(228575)
-    expect(result.preview.totals.closing_balance_end).toBe(228575)
+    expect(fs.existsSync(outputPath)).toBe(false)
   })
 
   test("2026 indirect template regression matches TB cash and maps all movements", async () => {

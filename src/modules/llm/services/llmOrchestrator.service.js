@@ -39,7 +39,24 @@ function buildOllamaEndpoint(baseUrl, endpointPath = "/api/chat") {
   return `${normalizedBaseUrl}${normalizedPath}`
 }
 
-function requestJsonOverHttp({ endpoint, method = "GET", body = null, timeoutMs }) {
+function isOllamaCloudEndpoint(endpoint) {
+  try {
+    const url = new URL(endpoint)
+    return url.hostname === "ollama.com" || url.hostname.endsWith(".ollama.com")
+  } catch (error) {
+    return false
+  }
+}
+
+function buildOllamaAuthHeaders({ endpoint, apiKey }) {
+  const normalizedApiKey = normalizeText(apiKey)
+  if (!normalizedApiKey || !isOllamaCloudEndpoint(endpoint)) return {}
+  return {
+    Authorization: `Bearer ${normalizedApiKey}`,
+  }
+}
+
+function requestJsonOverHttp({ endpoint, method = "GET", body = null, timeoutMs, headers: extraHeaders = null }) {
   return new Promise((resolve, reject) => {
     let targetUrl = null
     try {
@@ -55,6 +72,7 @@ function requestJsonOverHttp({ endpoint, method = "GET", body = null, timeoutMs 
       Accept: "application/json",
       ...(serializedBody !== null ? { "Content-Type": "application/json" } : {}),
       ...(serializedBody !== null ? { "Content-Length": Buffer.byteLength(serializedBody) } : {}),
+      ...(extraHeaders || {}),
     }
 
     let settled = false
@@ -142,15 +160,18 @@ function uniqueModels(primaryModel, candidates = []) {
   return models
 }
 
-function classifyOllamaError(error, { timeoutMs }) {
+function classifyOllamaError(error, { timeoutMs, endpoint = null, model = null } = {}) {
   const rawMessage = normalizeText(error?.failure_reason || error?.message || "Unknown Ollama error")
   const rawCode = String(error?.code || error?.failure_code || "").trim().toUpperCase()
   const statusCode = Number(error?.statusCode || error?.status_code || 0)
+  const isCloud = isOllamaCloudEndpoint(endpoint || "")
+  const serviceLabel = isCloud ? "Ollama Cloud" : "Ollama"
+  const configuredModel = model || config.mappingAssistance?.model || config.ollama?.model
 
   if (String(error?.name || "").includes("Timeout") || /timed out|timeout|aborted/i.test(rawMessage)) {
     return {
       code: "timeout",
-      reason: `Ollama request timed out after ${timeoutMs}ms`,
+      reason: `${serviceLabel} request timed out after ${timeoutMs}ms`,
       details: rawMessage,
     }
   }
@@ -158,7 +179,9 @@ function classifyOllamaError(error, { timeoutMs }) {
   if (["ECONNREFUSED", "ENOTFOUND", "EHOSTUNREACH"].includes(rawCode)) {
     return {
       code: "connection_failed",
-      reason: "Cannot connect to Ollama. Ensure Ollama is running and MAPPING_LLM_BASE_URL is correct.",
+      reason: isCloud
+        ? "Cannot connect to Ollama Cloud. Check network access and MAPPING_LLM_BASE_URL."
+        : "Cannot connect to Ollama. Ensure Ollama is running and MAPPING_LLM_BASE_URL is correct.",
       details: rawMessage,
     }
   }
@@ -166,7 +189,37 @@ function classifyOllamaError(error, { timeoutMs }) {
   if (rawCode === "ETIMEDOUT") {
     return {
       code: "network_timeout",
-      reason: "Network timeout while connecting to Ollama.",
+      reason: `Network timeout while connecting to ${serviceLabel}.`,
+      details: rawMessage,
+    }
+  }
+
+  if (statusCode === 401) {
+    return {
+      code: "auth_required",
+      reason: isCloud
+        ? "Ollama Cloud authentication failed or is missing. Set MAPPING_LLM_API_KEY or OLLAMA_API_KEY."
+        : "Ollama authentication failed or is missing.",
+      details: rawMessage,
+    }
+  }
+
+  if (statusCode === 403) {
+    return {
+      code: "access_denied",
+      reason: isCloud
+        ? "Ollama Cloud denied the request. The model may require a paid plan or the account may be out of allowed usage."
+        : "Ollama denied the request.",
+      details: rawMessage,
+    }
+  }
+
+  if (statusCode === 429) {
+    return {
+      code: "usage_limited",
+      reason: isCloud
+        ? "Ollama Cloud usage or concurrency limit was reached. Wait for the limit window to reset or reduce request volume."
+        : "Ollama request rate limit was reached.",
       details: rawMessage,
     }
   }
@@ -174,7 +227,9 @@ function classifyOllamaError(error, { timeoutMs }) {
   if (statusCode === 404) {
     return {
       code: "model_not_found",
-      reason: `Configured mapping model "${config.mappingAssistance?.model}" is not installed.`,
+      reason: isCloud
+        ? `Configured mapping model "${configuredModel}" was not found in Ollama Cloud.`
+        : `Configured mapping model "${configuredModel}" is not installed.`,
       details: rawMessage,
     }
   }
@@ -182,7 +237,7 @@ function classifyOllamaError(error, { timeoutMs }) {
   if (statusCode >= 400) {
     return {
       code: "http_error",
-      reason: `Ollama returned HTTP ${statusCode}.`,
+      reason: `${serviceLabel} returned HTTP ${statusCode}.`,
       details: rawMessage,
     }
   }
@@ -235,6 +290,7 @@ class LlmOrchestratorService {
         ? overrides.modelCandidates
         : config.mappingAssistance?.modelCandidates || config.ollama?.modelCandidates || [],
       baseUrl: overrides.baseUrl || config.mappingAssistance?.baseUrl || config.ollama?.baseUrl,
+      apiKey: overrides.apiKey || config.mappingAssistance?.apiKey || config.ollama?.apiKey || "",
       chatPath: overrides.chatPath || config.mappingAssistance?.chatPath || config.ollama?.chatPath || "/api/chat",
       timeoutMs: Number(overrides.timeoutMs || config.mappingAssistance?.timeoutMs || config.ollama?.timeoutMs || 120000),
       maxAttempts: Math.max(
@@ -279,6 +335,7 @@ class LlmOrchestratorService {
       modelCandidates,
     })
     const endpoint = buildOllamaEndpoint(llmConfig.baseUrl, llmConfig.chatPath)
+    const requestHeaders = buildOllamaAuthHeaders({ endpoint, apiKey: llmConfig.apiKey })
     const attempts = []
     const models = uniqueModels(llmConfig.model, modelCandidates || llmConfig.modelCandidates)
 
@@ -321,6 +378,7 @@ class LlmOrchestratorService {
           method: "POST",
           body: requestPayload,
           timeoutMs: llmConfig.timeoutMs,
+          headers: requestHeaders,
         })
 
         if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -394,7 +452,11 @@ class LlmOrchestratorService {
           attempts,
         }
       } catch (error) {
-        const failure = classifyOllamaError(error, { timeoutMs: llmConfig.timeoutMs })
+        const failure = classifyOllamaError(error, {
+          timeoutMs: llmConfig.timeoutMs,
+          endpoint,
+          model: modelName,
+        })
         attempts.push({
           attempt,
           status: "failed",
@@ -433,8 +495,10 @@ class LlmOrchestratorService {
 }
 
 LlmOrchestratorService.__test = {
+  buildOllamaAuthHeaders,
   buildOllamaEndpoint,
   classifyOllamaError,
+  isOllamaCloudEndpoint,
   parseJsonObject,
 }
 

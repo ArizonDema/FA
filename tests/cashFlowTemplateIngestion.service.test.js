@@ -2,6 +2,7 @@ const fs = require("fs")
 const os = require("os")
 const path = require("path")
 const http = require("http")
+const https = require("https")
 const { EventEmitter } = require("events")
 const ExcelJS = require("exceljs")
 
@@ -19,7 +20,9 @@ jest.mock("../src/config/app", () => ({
   },
   ollama: {
     baseUrl: "http://localhost:11434",
+    apiKey: "",
     chatPath: "/api/chat",
+    healthPath: "/api/tags",
     model: "qwen3:14b",
     modelCandidates: [],
     timeoutMs: 1000,
@@ -264,6 +267,10 @@ describe("cashFlowTemplateIngestion.service", () => {
   beforeEach(() => {
     jest.clearAllMocks()
     const appConfig = require("../src/config/app")
+    appConfig.ollama.baseUrl = "http://localhost:11434"
+    appConfig.ollama.apiKey = ""
+    appConfig.ollama.chatPath = "/api/chat"
+    appConfig.ollama.healthPath = "/api/tags"
     appConfig.ollama.model = "qwen3:14b"
     appConfig.ollama.modelCandidates = []
     appConfig.ollama.maxAttempts = 2
@@ -313,6 +320,84 @@ describe("cashFlowTemplateIngestion.service", () => {
   afterEach(() => {
     httpRequestSpy?.mockRestore()
     fs.rmSync(tempDir, { recursive: true, force: true })
+  })
+
+  test("builds Ollama Cloud auth headers only for ollama.com endpoints", () => {
+    expect(
+      Ingestion.__test.buildOllamaAuthHeaders({
+        endpoint: "https://ollama.com/api/chat",
+        apiKey: "cloud-key",
+      }),
+    ).toEqual({ Authorization: "Bearer cloud-key" })
+
+    expect(
+      Ingestion.__test.buildOllamaAuthHeaders({
+        endpoint: "http://localhost:11434/api/chat",
+        apiKey: "local-key",
+      }),
+    ).toEqual({})
+  })
+
+  test("reports direct Ollama Cloud health as degraded when api key is missing", async () => {
+    const appConfig = require("../src/config/app")
+    appConfig.ollama.baseUrl = "https://ollama.com"
+    appConfig.ollama.apiKey = ""
+    appConfig.ollama.model = "gpt-oss:20b"
+
+    const httpsSpy = jest.spyOn(https, "request").mockImplementation(
+      mockOllamaJsonResponse({
+        models: [{ name: "gpt-oss:20b", model: "gpt-oss:20b" }],
+      }),
+    )
+
+    try {
+      const result = await Ingestion.checkOllamaHealth()
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          mode: "cloud",
+          status: "degraded",
+          reachable: true,
+          model_available: true,
+          auth_configured: false,
+          failure_code: "auth_required",
+        }),
+      )
+      expect(result.failure_reason).toContain("OLLAMA_API_KEY")
+    } finally {
+      httpsSpy.mockRestore()
+    }
+  })
+
+  test("sends Ollama Cloud api key on health probes when configured", async () => {
+    const appConfig = require("../src/config/app")
+    appConfig.ollama.baseUrl = "https://ollama.com"
+    appConfig.ollama.apiKey = "cloud-key"
+    appConfig.ollama.model = "gpt-oss:20b"
+    let requestOptions = null
+
+    const httpsSpy = jest.spyOn(https, "request").mockImplementation((options, callback) => {
+      requestOptions = options
+      return mockOllamaJsonResponse({
+        models: [{ name: "gpt-oss:20b", model: "gpt-oss:20b" }],
+      })(options, callback)
+    })
+
+    try {
+      const result = await Ingestion.checkOllamaHealth()
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          mode: "cloud",
+          status: "ok",
+          auth_configured: true,
+          model_available: true,
+        }),
+      )
+      expect(requestOptions.headers.Authorization).toBe("Bearer cloud-key")
+    } finally {
+      httpsSpy.mockRestore()
+    }
   })
 
   test("auto-approves deterministic fallback when llm times out and anchors are complete", async () => {
@@ -587,7 +672,7 @@ describe("cashFlowTemplateIngestion.service", () => {
     )
   })
 
-  test("runs semantic repair for complex direct templates and applies safe bucket direction fixes", async () => {
+  test("uses deterministic semantics before direct llm repair when labels are clear", async () => {
     const appConfig = require("../src/config/app")
     appConfig.ollama.maxAttempts = 1
     const templatePath = path.join(tempDir, "template_direct_semantic_repair.xlsx")
@@ -674,13 +759,13 @@ describe("cashFlowTemplateIngestion.service", () => {
     expect(buckets.get("rent_and_facilities")?.direction).toBe("outflow")
     expect(result.llm_meta_json.semantic_repair).toEqual(
       expect.objectContaining({
-        attempted: true,
-        applied_count: 2,
+        attempted: false,
+        applied_count: 0,
       }),
     )
     expect(buckets.get("payroll_and_benefits")?.semantic_key).toBe("payroll")
     expect(buckets.get("rent_and_facilities")?.semantic_key).toBe("rent_facilities")
-    expect(httpRequestSpy).toHaveBeenCalledTimes(2)
+    expect(httpRequestSpy).toHaveBeenCalledTimes(1)
     appConfig.ollama.maxAttempts = 2
   })
 
@@ -770,6 +855,147 @@ describe("cashFlowTemplateIngestion.service", () => {
         semantic_source: "deterministic_semantic_guard",
       }),
     )
+  })
+
+  test("guards direct semantic repair against llm direction flips", () => {
+    const configCandidate = {
+      version: "v3",
+      sheet_name: "Challenge",
+      layout_type: "columns",
+      statement_method: "direct",
+      period_axis: {
+        orientation: "column",
+        labels: [{ period_key: "m01", label: "Jan", period_type: "monthly", month: 1 }],
+        period_bindings: [{ period_key: "m01", label: "Jan", cell: "F5" }],
+      },
+      period_resolution_rules: { custom_periods: [] },
+      opening_binding: null,
+      closing_binding: null,
+      bucket_bindings: [
+        {
+          bucket_key: "bank_facility_principal_retired",
+          label: "Bank facility principal retired",
+          direction: "outflow",
+          fallback: false,
+          rules: [],
+          cells: [{ period_key: "m01", label: "Jan", cell: "F20" }],
+        },
+        {
+          bucket_key: "ambiguous_bridge",
+          label: "Bridge packet",
+          direction: "outflow",
+          fallback: false,
+          rules: [],
+          cells: [{ period_key: "m01", label: "Jan", cell: "F21" }],
+        },
+      ],
+      writer_policy: { preserve_formulas: true, full_recalc_on_open: true },
+      mapping_policy: { auto_create: true, high_confidence_threshold: 0.7, low_confidence_threshold: 0.35 },
+    }
+
+    const result = Ingestion.__test.applySemanticRepair({
+      configCandidate,
+      rowSummaries: [],
+      parsedRepair: {
+        bucketDecisions: [
+          {
+            bucketKey: "bank_facility_principal_retired",
+            semanticKey: "debt_drawdown",
+            direction: "inflow",
+            fallback: false,
+            llmScore: 0.98,
+            reasoning: "The model incorrectly treated retired principal as new debt funding.",
+            evidence: ["Bank facility principal retired"],
+            needsHumanReview: false,
+          },
+          {
+            bucketKey: "ambiguous_bridge",
+            semanticKey: "debt_drawdown",
+            direction: "inflow",
+            fallback: false,
+            llmScore: 0.99,
+            reasoning: "The model changed direction without enough row evidence.",
+            evidence: ["Bridge packet"],
+            needsHumanReview: false,
+          },
+        ],
+        rowBindingDecisions: [],
+        issues: [],
+        requiredAnchors: [],
+        needsHumanReview: false,
+      },
+    })
+    const buckets = new Map(result.config.bucket_bindings.map((bucket) => [bucket.bucket_key, bucket]))
+
+    expect(buckets.get("bank_facility_principal_retired")).toEqual(
+      expect.objectContaining({
+        direction: "outflow",
+        semantic_key: "debt_repayment",
+        semantic_source: "deterministic_semantic_guard",
+      }),
+    )
+    expect(buckets.get("ambiguous_bridge")?.direction).toBe("outflow")
+    expect(buckets.get("ambiguous_bridge")?.semantic_key).toBeUndefined()
+    expect(result.needsHumanReview).toBe(true)
+    expect(result.issues).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('LLM bucket decision for "ambiguous_bridge" changed direction'),
+      ]),
+    )
+  })
+
+  test("prelabels direct buckets deterministically before llm semantic repair", () => {
+    const configCandidate = {
+      version: "v3",
+      sheet_name: "Challenge",
+      layout_type: "columns",
+      statement_method: "direct",
+      period_axis: {
+        orientation: "column",
+        labels: [{ period_key: "m01", label: "Jan", period_type: "monthly", month: 1 }],
+        period_bindings: [{ period_key: "m01", label: "Jan", cell: "C4" }],
+      },
+      period_resolution_rules: { custom_periods: [] },
+      opening_binding: null,
+      closing_binding: null,
+      bucket_bindings: [
+        {
+          bucket_key: "receipts_settlement_lagged_trade_takings",
+          label: "Receipts: settlement-lagged trade takings",
+          direction: "inflow",
+          fallback: false,
+          rules: [],
+          cells: [{ period_key: "m01", label: "Jan", cell: "C6" }],
+        },
+        {
+          bucket_key: "lender_principal_retirements",
+          label: "Lender principal retirements",
+          direction: "outflow",
+          fallback: false,
+          rules: [],
+          cells: [{ period_key: "m01", label: "Jan", cell: "C27" }],
+        },
+      ],
+      writer_policy: { preserve_formulas: true, full_recalc_on_open: true },
+      mapping_policy: { auto_create: true, high_confidence_threshold: 0.7, low_confidence_threshold: 0.35 },
+    }
+
+    const result = Ingestion.__test.applyDeterministicDirectSemanticBindings(configCandidate)
+    const buckets = new Map(result.bucket_bindings.map((bucket) => [bucket.bucket_key, bucket]))
+
+    expect(buckets.get("receipts_settlement_lagged_trade_takings")).toEqual(
+      expect.objectContaining({
+        semantic_key: "customer_receipts",
+        semantic_source: "deterministic_semantic",
+      }),
+    )
+    expect(buckets.get("lender_principal_retirements")).toEqual(
+      expect.objectContaining({
+        semantic_key: "debt_repayment",
+        semantic_source: "deterministic_semantic",
+      }),
+    )
+    expect(Ingestion.__test.shouldRunSemanticRepair({ configCandidate: result, deterministicSuggestion: {} })).toBe(false)
   })
 
   test("keeps indirect llm layout decisions on the llm path and repairs missing row bindings", async () => {
@@ -1392,7 +1618,7 @@ describe("cashFlowTemplateIngestion.service", () => {
       sourceFileName: "template_model_chain.xlsx",
     })
 
-    expect(requestedModels).toEqual(["qwen3:14b", "gpt-oss:20b", "gpt-oss:20b"])
+    expect(requestedModels).toEqual(["qwen3:14b", "gpt-oss:20b"])
     expect(result.analysis_source).toBe("llm_layout_decision")
     expect(result.llm_meta_json.model).toBe("gpt-oss:20b")
     appConfig.ollama.modelCandidates = []

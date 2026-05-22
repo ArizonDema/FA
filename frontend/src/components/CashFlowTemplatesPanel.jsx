@@ -84,9 +84,136 @@ function toDisplayText(value, fallback = "") {
   }
 }
 
+function humanizeTemplateMessage(value, fallback = "") {
+  return toDisplayText(value, fallback)
+    .replace(/bucket_targets/gi, "cash-flow categories")
+    .replace(/row_bindings/gi, "indirect cash-flow rows")
+    .replace(/semantic_key/gi, "category")
+    .replace(/bucket values/gi, "category values")
+    .replace(/cash flow buckets/gi, "cash-flow categories")
+    .replace(/cash-flow buckets/gi, "cash-flow categories")
+    .replace(/cash flow bucket/gi, "cash-flow category")
+    .replace(/\bbuckets\b/gi, "categories")
+    .replace(/\bbucket\b/gi, "category")
+}
+
 function normalizeMessageList(values) {
   const list = Array.isArray(values) ? values : values ? [values] : []
-  return list.map((value) => toDisplayText(value).trim()).filter(Boolean)
+  return list.map((value) => humanizeTemplateMessage(value).trim()).filter(Boolean)
+}
+
+const DIRECT_CASH_FLOW_CATEGORIES = [
+  { key: "customer_receipts", label: "Customer receipts", direction: "inflow" },
+  { key: "other_operating_inflows", label: "Other operating receipts", direction: "inflow" },
+  { key: "supplier_payments", label: "Supplier payments", direction: "outflow" },
+  { key: "payroll", label: "Payroll and team costs", direction: "outflow" },
+  { key: "rent_facilities", label: "Rent and facilities", direction: "outflow" },
+  { key: "sales_marketing", label: "Marketing spend", direction: "outflow" },
+  { key: "general_admin", label: "General and admin", direction: "outflow" },
+  { key: "income_taxes", label: "Taxes paid", direction: "outflow" },
+  { key: "other_operating_outflows", label: "Other operating payments", direction: "outflow" },
+  { key: "capital_expenditures", label: "Equipment and capex", direction: "outflow" },
+  { key: "capitalized_software", label: "Capitalized software", direction: "outflow" },
+  { key: "asset_sale_proceeds", label: "Asset sale proceeds", direction: "inflow" },
+  { key: "debt_drawdown", label: "Debt proceeds", direction: "inflow" },
+  { key: "debt_repayment", label: "Debt repayments", direction: "outflow" },
+  { key: "interest_paid", label: "Interest paid", direction: "outflow" },
+  { key: "equity_injection", label: "Owner funding", direction: "inflow" },
+  { key: "dividends_distributions", label: "Dividends and distributions", direction: "outflow" },
+]
+
+const INDIRECT_CASH_FLOW_CATEGORIES = [
+  { key: "net_income", label: "Net income", role: "input", direction: "neutral" },
+  { key: "depreciation_amortization", label: "Depreciation and amortization", role: "input", direction: "neutral" },
+  { key: "change_in_receivables", label: "Change in receivables", role: "input", direction: "neutral" },
+  { key: "change_in_inventory", label: "Change in inventory", role: "input", direction: "neutral" },
+  { key: "change_in_payables", label: "Change in payables", role: "input", direction: "neutral" },
+  { key: "other_working_capital_changes", label: "Other working capital changes", role: "input", direction: "neutral" },
+  { key: "operating_cash_flow", label: "Cash flow from operations", role: "summary", direction: "mixed" },
+  { key: "capital_expenditures", label: "Capital expenditures", role: "input", direction: "outflow" },
+  { key: "asset_sales", label: "Asset sales", role: "input", direction: "inflow" },
+  { key: "investing_cash_flow", label: "Cash flow from investing", role: "summary", direction: "mixed" },
+  { key: "capital_contributions", label: "Capital contributions", role: "input", direction: "inflow" },
+  { key: "debt_issued", label: "Debt issued", role: "input", direction: "inflow" },
+  { key: "debt_repaid", label: "Debt repaid", role: "input", direction: "outflow" },
+  { key: "interest_paid", label: "Interest paid", role: "input", direction: "outflow" },
+  { key: "dividends_paid", label: "Dividends paid", role: "input", direction: "outflow" },
+  { key: "financing_cash_flow", label: "Cash flow from financing", role: "summary", direction: "mixed" },
+  { key: "net_change_in_cash", label: "Net change in cash", role: "summary", direction: "mixed" },
+  { key: "opening_cash", label: "Opening cash", role: "input", direction: "neutral" },
+  { key: "closing_cash", label: "Closing cash", role: "summary", direction: "neutral" },
+]
+
+const DIRECT_COVERAGE_LABELS = Object.fromEntries(DIRECT_CASH_FLOW_CATEGORIES.map((category) => [category.key, category.label]))
+const INDIRECT_COVERAGE_LABELS = Object.fromEntries(INDIRECT_CASH_FLOW_CATEGORIES.map((category) => [category.key, category.label]))
+const DIRECT_CATEGORY_LOOKUP = new Map(DIRECT_CASH_FLOW_CATEGORIES.map((category) => [category.key, category]))
+const INDIRECT_CATEGORY_LOOKUP = new Map(INDIRECT_CASH_FLOW_CATEGORIES.map((category) => [category.key, category]))
+
+const REVIEW_ANCHOR_LABELS = {
+  period_axis: "Confirm where the workbook lists periods.",
+  period_ranges: "Confirm the date range for each custom period.",
+  bucket_targets: "Confirm where cash-flow category values should be written.",
+  row_bindings: "Confirm the indirect cash-flow rows.",
+}
+
+function getCoverageLabel(value, fallback = "") {
+  const key = normalizeKey(value)
+  if (DIRECT_COVERAGE_LABELS[key] || INDIRECT_COVERAGE_LABELS[key]) {
+    return DIRECT_COVERAGE_LABELS[key] || INDIRECT_COVERAGE_LABELS[key]
+  }
+  const display = toDisplayText(value, "").replace(/_/g, " ").trim()
+  return display || fallback
+}
+
+function getReviewTaskLabel(value) {
+  const key = normalizeKey(value)
+  return REVIEW_ANCHOR_LABELS[key] || toDisplayText(value, "Review this template item.").replace(/_/g, " ")
+}
+
+function deriveSemanticCoverageFromConfig(config = {}) {
+  const buckets = toArray(config.bucket_bindings)
+  const rows = toArray(config.row_bindings)
+  const labels = []
+
+  buckets.forEach((bucket) => {
+    if (bucket?.fallback) return
+    if (bucket?.semantic_key) labels.push(getCoverageLabel(bucket.semantic_key, bucket.label))
+    else if (bucket?.label) labels.push(toDisplayText(bucket.label))
+  })
+  rows.forEach((row) => {
+    if (row?.label) labels.push(toDisplayText(row.label))
+    else if (row?.semantic_key) labels.push(getCoverageLabel(row.semantic_key))
+  })
+
+  const categories = Array.from(new Set(labels.filter(Boolean))).map((display_name) => ({ display_name }))
+  const unlabeledTargets =
+    buckets.filter((bucket) => !bucket?.fallback && !bucket?.semantic_key).length +
+    rows.filter((row) => !row?.semantic_key).length
+
+  return {
+    writable_categories: categories.length,
+    unlabeled_targets: unlabeledTargets,
+    message:
+      categories.length > 0
+        ? `This template can write to ${categories.length} cash-flow ${categories.length === 1 ? "category" : "categories"}.`
+        : "This template needs cash-flow category labels before it can be checked against company activity.",
+    categories,
+    review_tasks: unlabeledTargets
+      ? [{ title: "Confirm what this row represents", message: `${unlabeledTargets} writable row(s) need readable category labels.` }]
+      : [],
+  }
+}
+
+function normalizeSemanticCoverage(rawCoverage, config = {}) {
+  const coverage = rawCoverage && typeof rawCoverage === "object" ? rawCoverage : deriveSemanticCoverageFromConfig(config)
+  return {
+    ...coverage,
+    categories: toArray(coverage.categories).map((item) => ({
+      ...item,
+      display_name: item.display_name || getCoverageLabel(item.concept_key || item.semantic_key, "Cash-flow category"),
+    })),
+    review_tasks: toArray(coverage.review_tasks),
+  }
 }
 
 function toArray(value) {
@@ -205,7 +332,7 @@ function normalizeAnchorStatuses(statuses) {
       key: toDisplayText(status.key, `anchor_${index + 1}`),
       label: toDisplayText(status.label, status.key || `Anchor ${index + 1}`),
       status: toDisplayText(status.status, "needs_review"),
-      message: toDisplayText(status.message, ""),
+      message: humanizeTemplateMessage(status.message, ""),
     }
   })
 }
@@ -215,7 +342,7 @@ function parseTemplateConfig(rawText) {
   try {
     parsed = JSON.parse(rawText || "{}")
   } catch {
-    throw new Error("Config JSON is invalid. Please fix JSON formatting first.")
+    throw new Error("Template settings are invalid. Open Advanced workbook setup and check the developer JSON.")
   }
 
   const isV3 = String(parsed?.version || "").toLowerCase() === "v3" || parsed?.period_axis
@@ -241,12 +368,12 @@ function parseTemplateConfig(rawText) {
 function formatApiError(error) {
   const details = error?.errors || error?.payload?.errors || null
   const anchorMessage = details?.activation_block_reason || details?.review?.activation_block_reason
-  if (anchorMessage) return toDisplayText(anchorMessage, "Request failed.")
+  if (anchorMessage) return humanizeTemplateMessage(anchorMessage, "Request failed.")
   if (Array.isArray(details?.anchor_statuses)) {
     const firstOpen = details.anchor_statuses.find((status) => status.status !== "ready")
-    if (firstOpen?.message) return toDisplayText(firstOpen.message, "Request failed.")
+    if (firstOpen?.message) return humanizeTemplateMessage(firstOpen.message, "Request failed.")
   }
-  return toDisplayText(error?.message, "Request failed.")
+  return humanizeTemplateMessage(error?.message, "Request failed.")
 }
 
 function periodKey(value, fallback = "period_1") {
@@ -339,7 +466,7 @@ function mergeReviewPayload(target, payload) {
     required_anchors: normalizeMessageList(payload.required_anchors || target.required_anchors),
     review_state: payload.review_state || target.review_state,
     can_activate: payload.can_activate,
-    activation_block_reason: toDisplayText(payload.activation_block_reason, ""),
+    activation_block_reason: humanizeTemplateMessage(payload.activation_block_reason, ""),
     anchor_statuses: normalizeAnchorStatuses(payload.anchor_statuses || target.anchor_statuses),
   }
 }
@@ -347,6 +474,209 @@ function mergeReviewPayload(target, payload) {
 function getFileSignature(file) {
   if (!file) return null
   return `${file.name || ""}::${file.size || 0}::${file.lastModified || 0}`
+}
+
+function getStatementMethodForUi(config = {}) {
+  const explicit = String(config?.statement_method || "").trim().toLowerCase()
+  if (explicit === "indirect" || explicit === "direct") return explicit
+  return toArray(config?.row_bindings).length > 0 ? "indirect" : "direct"
+}
+
+function getCategoryChoices(config = {}) {
+  return getStatementMethodForUi(config) === "indirect" ? INDIRECT_CASH_FLOW_CATEGORIES : DIRECT_CASH_FLOW_CATEGORIES
+}
+
+function getCategoryLookup(config = {}) {
+  return getStatementMethodForUi(config) === "indirect" ? INDIRECT_CATEGORY_LOOKUP : DIRECT_CATEGORY_LOOKUP
+}
+
+function formatDirection(value) {
+  const normalized = String(value || "").toLowerCase()
+  if (normalized === "inflow") return "Cash in"
+  if (normalized === "outflow") return "Cash out"
+  if (normalized === "mixed") return "Summary"
+  return "Reference row"
+}
+
+function confidenceFromBinding(binding = {}) {
+  const raw =
+    binding.semantic_confidence ??
+    binding.semanticConfidence ??
+    binding.confidence ??
+    binding.confidence_score ??
+    null
+  const numeric = Number(raw)
+  return Number.isFinite(numeric) ? Math.max(0, Math.min(1, numeric)) : null
+}
+
+function confidenceLabel(score) {
+  if (score === null || score === undefined) return "Not scored"
+  if (score >= 0.9) return "High"
+  if (score >= 0.7) return "Good"
+  if (score >= 0.45) return "Needs a quick check"
+  return "Needs review"
+}
+
+function confidencePercent(score) {
+  if (score === null || score === undefined) return ""
+  return `${Math.round(score * 100)}%`
+}
+
+function isKnownReviewCategory(config, semanticKey) {
+  if (!semanticKey) return false
+  return getCategoryLookup(config).has(normalizeKey(semanticKey))
+}
+
+function reviewReasonForBinding({ binding, category, confidence, knownCategory }) {
+  if (!knownCategory) return "The analyzer could not match this row to a cash-flow category."
+  if (confidence !== null && confidence < 0.7) {
+    return `The analyzer suggested ${category?.label || "this category"}, but confidence is low.`
+  }
+  if (binding?.semantic_source === "user_override") return "You changed this category."
+  if (binding?.semantic_source === "user_confirmed") return "You confirmed this category."
+  if (binding?.semantic_source === "llm_semantic_repair") return "The local LLM matched this row by meaning."
+  if (binding?.semantic_source === "label_inferred") return "Matched from the template row label."
+  return "Matched from the template row meaning."
+}
+
+function buildTemplateReviewItems(config = {}) {
+  const method = getStatementMethodForUi(config)
+  if (method === "indirect") {
+    return toArray(config.row_bindings).map((row, index) => {
+      const semanticKey = normalizeKey(row?.semantic_key || "")
+      const category = INDIRECT_CATEGORY_LOOKUP.get(semanticKey) || null
+      const confidence = confidenceFromBinding(row)
+      const knownCategory = Boolean(category)
+      const userConfirmed = ["user_confirmed", "user_override"].includes(String(row?.semantic_source || ""))
+      return {
+        type: "row",
+        anchorKey: "row_bindings",
+        index,
+        rowLabel: toDisplayText(row?.label || row?.semantic_key, `Row ${index + 1}`),
+        categoryKey: semanticKey,
+        categoryLabel: category?.label || getCoverageLabel(semanticKey, "Choose category"),
+        confidence,
+        confidenceLabel: confidenceLabel(confidence),
+        directionLabel: formatDirection(row?.cash_direction || category?.direction),
+        userConfirmed,
+        needsReview: !knownCategory || (confidence !== null && confidence < 0.7),
+        reason: reviewReasonForBinding({ binding: row, category, confidence, knownCategory }),
+      }
+    })
+  }
+
+  return toArray(config.bucket_bindings)
+    .map((bucket, index) => {
+      const semanticKey = normalizeKey(bucket?.semantic_key || "")
+      const category = DIRECT_CATEGORY_LOOKUP.get(semanticKey) || null
+      const confidence = confidenceFromBinding(bucket)
+      const knownCategory = Boolean(category)
+      const userConfirmed = ["user_confirmed", "user_override"].includes(String(bucket?.semantic_source || ""))
+      return {
+        type: "bucket",
+        anchorKey: "bucket_targets",
+        index,
+        rowLabel: toDisplayText(bucket?.label || bucket?.bucket_key, `Template row ${index + 1}`),
+        categoryKey: semanticKey,
+        categoryLabel: category?.label || getCoverageLabel(semanticKey, "Choose category"),
+        confidence,
+        confidenceLabel: confidenceLabel(confidence),
+        directionLabel: formatDirection(bucket?.direction || category?.direction),
+        isFallback: Boolean(bucket?.fallback),
+        userConfirmed,
+        needsReview: !bucket?.fallback && (!knownCategory || (confidence !== null && confidence < 0.7)),
+        reason: bucket?.fallback
+          ? "Used only if an account cannot be mapped to a specific row."
+          : reviewReasonForBinding({ binding: bucket, category, confidence, knownCategory }),
+      }
+    })
+    .filter((item) => !item.isFallback)
+}
+
+function buildPlainReviewSummary(config = {}, review = null) {
+  const baseItems = buildTemplateReviewItems(config)
+  const anchorStatuses = normalizeAnchorStatuses(review?.anchor_statuses)
+  const categoryAnchorKeys = new Set(baseItems.map((item) => item.anchorKey))
+  const unresolvedAnchors = anchorStatuses.filter((status) => status.status !== "ready")
+  const categoryAnchorsNeedingConfirmation = new Set(
+    unresolvedAnchors.filter((status) => categoryAnchorKeys.has(status.key)).map((status) => status.key),
+  )
+  const items = baseItems.map((item) => {
+    if (!categoryAnchorsNeedingConfirmation.has(item.anchorKey) || item.userConfirmed || item.needsReview) {
+      return item
+    }
+    return {
+      ...item,
+      needsReview: true,
+      reason: "Please confirm this suggested category before activation.",
+    }
+  })
+  const reviewItems = items.filter((item) => item.needsReview)
+  const workbookAnchors = unresolvedAnchors.filter((status) => !categoryAnchorKeys.has(status.key))
+  const needsCategoryConfirmation = categoryAnchorsNeedingConfirmation.size > 0
+  const blockerCount = reviewItems.length + workbookAnchors.length
+  return {
+    items,
+    readyItems: items.filter((item) => !item.needsReview),
+    reviewItems,
+    unresolvedAnchors: workbookAnchors,
+    needsCategoryConfirmation,
+    blockerCount,
+    canActivate: Boolean(review?.can_activate) && blockerCount === 0,
+  }
+}
+
+function getTemplateConfig(template = {}) {
+  return template?.activeVersion?.config_json || template?.config_json || {}
+}
+
+function getTemplateListReview(template = {}) {
+  const summary = buildPlainReviewSummary(getTemplateConfig(template), template)
+  const backendBlocked = template?.can_activate === false
+  const backendMessage = humanizeTemplateMessage(template?.activation_block_reason, "")
+  if (summary.blockerCount > 0) {
+    return {
+      canActivate: false,
+      label: `Review ${summary.blockerCount} ${summary.blockerCount === 1 ? "item" : "items"}`,
+    }
+  }
+  if (backendBlocked) {
+    return {
+      canActivate: false,
+      label: backendMessage || "Needs review",
+    }
+  }
+  return {
+    canActivate: true,
+    label: "Ready",
+  }
+}
+
+function updateReviewBinding(config, item, updater) {
+  const next = clone(config)
+  const collectionName = item.type === "row" ? "row_bindings" : "bucket_bindings"
+  const collection = toArray(next[collectionName])
+  next[collectionName] = collection.map((binding, index) => (index === item.index ? updater(binding || {}) : binding))
+  return next
+}
+
+function removeReviewBinding(config, item) {
+  const next = clone(config)
+  const collectionName = item.type === "row" ? "row_bindings" : "bucket_bindings"
+  next[collectionName] = toArray(next[collectionName]).filter((_, index) => index !== item.index)
+  return next
+}
+
+function canConfirmReviewAnchor(config, review, anchorKey) {
+  const items = buildTemplateReviewItems(config).filter((item) => item.anchorKey === anchorKey)
+  if (!items.length) return false
+  const anchorStillOpen = normalizeAnchorStatuses(review?.anchor_statuses).some(
+    (status) => status.key === anchorKey && status.status !== "ready",
+  )
+  if (anchorStillOpen) {
+    return items.every((item) => item.userConfirmed && !item.needsReview)
+  }
+  return items.every((item) => !item.needsReview)
 }
 
 function BucketGrid({ config, onChange }) {
@@ -760,6 +1090,296 @@ function AnchorReviewWorkspace({ config, review, editorContext, onConfigChange, 
   )
 }
 
+function TemplateReviewPanel({ config, review, onConfigChange, onReviewChange }) {
+  const summary = useMemo(() => buildPlainReviewSummary(config, review), [config, review])
+  const choices = useMemo(() => getCategoryChoices(config), [config])
+
+  const applyReviewedConfig = (nextConfig, anchorKey) => {
+    let finalConfig = nextConfig
+    let finalReview = review
+    if (canConfirmReviewAnchor(nextConfig, review, anchorKey)) {
+      finalConfig = withConfirmedAnchor(nextConfig, anchorKey)
+      finalReview = confirmAnchorInReview(review, anchorKey)
+    }
+    onConfigChange(finalConfig)
+    if (finalReview && finalReview !== review) onReviewChange(finalReview)
+  }
+
+  const acceptItem = (item) => {
+    if (!isKnownReviewCategory(config, item.categoryKey)) return
+    const nextConfig = updateReviewBinding(config, item, (binding) => ({
+      ...binding,
+      semantic_confidence: 1,
+      semantic_source: "user_confirmed",
+    }))
+    applyReviewedConfig(nextConfig, item.anchorKey)
+  }
+
+  const changeItemCategory = (item, categoryKey) => {
+    const category = choices.find((choice) => choice.key === categoryKey)
+    if (!category) return
+    const nextConfig = updateReviewBinding(config, item, (binding) => ({
+      ...binding,
+      semantic_key: category.key,
+      semantic_confidence: 1,
+      semantic_source: "user_override",
+      ...(item.type === "bucket"
+        ? { direction: category.direction === "inflow" ? "inflow" : "outflow", fallback: false }
+        : { role: category.role || binding.role || "input", cash_direction: category.direction }),
+    }))
+    applyReviewedConfig(nextConfig, item.anchorKey)
+  }
+
+  const removeItem = (item) => {
+    const nextConfig = removeReviewBinding(config, item)
+    applyReviewedConfig(nextConfig, item.anchorKey)
+  }
+
+  const renderItem = (item) => (
+    <article className={`template-review-row ${item.needsReview ? "needs-review" : "ready"}`} key={`${item.type}_${item.index}_${item.rowLabel}`}>
+      <div>
+        <p className="kicker">Template row</p>
+        <h4>{item.rowLabel}</h4>
+        <p className="muted small">{item.reason}</p>
+      </div>
+      <div>
+        <p className="kicker">Cash-flow category</p>
+        <strong>{item.categoryLabel}</strong>
+        <p className="muted small">{item.directionLabel}</p>
+      </div>
+      <div>
+        <p className="kicker">Confidence</p>
+        <strong>{item.confidenceLabel}</strong>
+        {confidencePercent(item.confidence) && <p className="muted small">{confidencePercent(item.confidence)}</p>}
+      </div>
+      <div className="template-review-actions">
+        <label>
+          Change category
+          <select
+            value={item.categoryKey || ""}
+            onChange={(event) => changeItemCategory(item, event.target.value)}
+          >
+            <option value="">Choose category</option>
+            {choices.map((choice) => (
+              <option key={choice.key} value={choice.key}>
+                {choice.label} ({formatDirection(choice.direction)})
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="inline-actions">
+          <button type="button" onClick={() => acceptItem(item)} disabled={!isKnownReviewCategory(config, item.categoryKey)}>
+            Accept
+          </button>
+          <button type="button" onClick={() => removeItem(item)}>
+            Not a cash-flow row
+          </button>
+        </div>
+      </div>
+    </article>
+  )
+
+  return (
+    <div className="template-review-panel stack">
+      <div className={summary.blockerCount ? "alert warn" : "alert ok"}>
+        <strong>
+          {summary.blockerCount
+            ? `Review ${summary.blockerCount} ${summary.blockerCount === 1 ? "item" : "items"} before activation.`
+            : "This template is ready to activate."}
+        </strong>
+        <p className="small">
+          You can save this template as a draft at any time. Reports will only use it after the review items are resolved
+          and the template is activated.
+        </p>
+      </div>
+
+      {summary.reviewItems.length > 0 && (
+        <section className="template-review-section stack">
+          <div>
+            <p className="kicker">Needs your review</p>
+            <h3>Confirm what these rows mean</h3>
+          </div>
+          <div className="template-review-list">{summary.reviewItems.map(renderItem)}</div>
+        </section>
+      )}
+
+      {summary.readyItems.length > 0 && (
+        <section className="template-review-section stack">
+          <div>
+            <p className="kicker">What we understood</p>
+            <h3>{summary.readyItems.length} cash-flow {summary.readyItems.length === 1 ? "row" : "rows"} mapped</h3>
+            {summary.needsCategoryConfirmation && (
+              <p className="muted small">Press Accept on the rows you agree with, or change any category that looks wrong.</p>
+            )}
+          </div>
+          <div className="template-review-list compact">{summary.readyItems.map(renderItem)}</div>
+        </section>
+      )}
+
+      {summary.items.length === 0 && (
+        <div className="alert warn">
+          <strong>No writable cash-flow rows were detected.</strong>
+          <p className="small">Save this as a draft only if you plan to finish the template setup in Advanced workbook setup.</p>
+        </div>
+      )}
+
+      {summary.unresolvedAnchors.length > 0 && (
+        <section className="template-review-section stack">
+          <div>
+            <p className="kicker">Workbook setup still needed</p>
+            <h3>Fix these before activation</h3>
+          </div>
+          <ul className="simple-list">
+            {summary.unresolvedAnchors.map((status) => (
+              <li key={status.key}>{status.message || getReviewTaskLabel(status.key)}</li>
+            ))}
+          </ul>
+          <p className="muted small">Open Advanced workbook setup below to adjust cells or custom date ranges.</p>
+        </section>
+      )}
+    </div>
+  )
+}
+
+function AdvancedTemplateTools({
+  config,
+  review,
+  editorContext,
+  onConfigChange,
+  onReviewChange,
+  rawConfigText,
+  onRawConfigTextChange,
+}) {
+  const bindingSummary = {
+    periods: Array.isArray(config.period_axis?.labels) ? config.period_axis.labels.length : 0,
+    opening: Array.isArray(config.opening_binding?.cells) ? config.opening_binding.cells.length : 0,
+    closing: Array.isArray(config.closing_binding?.cells) ? config.closing_binding.cells.length : 0,
+    categories:
+      getStatementMethodForUi(config) === "indirect"
+        ? toArray(config.row_bindings).length
+        : toArray(config.bucket_bindings).filter((bucket) => !bucket?.fallback).length,
+  }
+
+  return (
+    <details className="mini-card advanced-template-tools">
+      <summary>Advanced workbook setup</summary>
+      <div className="stack">
+        <p className="muted small">
+          Use this only when the analyzer picked the wrong workbook cells, periods, or low-level rules.
+        </p>
+
+        <AnchorReviewWorkspace
+          config={config}
+          review={review}
+          editorContext={editorContext}
+          onConfigChange={onConfigChange}
+          onReviewChange={onReviewChange}
+        />
+
+        <div className="form-grid">
+          <label>
+            Sheet Name
+            <input
+              value={config.sheet_name || ""}
+              onChange={(event) => onConfigChange({ ...config, sheet_name: event.target.value })}
+            />
+          </label>
+          <label>
+            Layout Type
+            <select
+              value={config.layout_type || "freeform"}
+              onChange={(event) => onConfigChange({ ...config, layout_type: event.target.value })}
+            >
+              <option value="rows">Rows</option>
+              <option value="columns">Columns</option>
+              <option value="sectioned">Sectioned</option>
+              <option value="freeform">Freeform</option>
+            </select>
+          </label>
+          <label>
+            Period Granularity
+            <select
+              value={config.period_granularity || "custom"}
+              onChange={(event) => onConfigChange({ ...config, period_granularity: event.target.value })}
+            >
+              <option value="monthly">Monthly</option>
+              <option value="quarterly">Quarterly</option>
+              <option value="yearly">Yearly</option>
+              <option value="custom">Custom</option>
+            </select>
+          </label>
+          <label>
+            Axis Orientation
+            <select
+              value={config.period_axis?.orientation || "row"}
+              onChange={(event) =>
+                onConfigChange({
+                  ...config,
+                  period_axis: {
+                    ...(config.period_axis || {}),
+                    orientation: event.target.value,
+                  },
+                })
+              }
+            >
+              <option value="row">Row</option>
+              <option value="column">Column</option>
+            </select>
+          </label>
+        </div>
+
+        <p className="muted small">
+          Technical coverage: Periods {bindingSummary.periods}, Opening {bindingSummary.opening}, Closing{" "}
+          {bindingSummary.closing}, Categories {bindingSummary.categories}
+        </p>
+
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Period</th>
+                <th>Type</th>
+                <th>Key</th>
+              </tr>
+            </thead>
+            <tbody>
+              {toArray(config.period_axis?.labels).map((label, index) => {
+                const period = normalizePeriodLabel(label, index)
+                return (
+                  <tr key={period.period_key}>
+                    <td>{period.label}</td>
+                    <td>{period.period_type || "custom"}</td>
+                    <td>{period.period_key}</td>
+                  </tr>
+                )
+              })}
+              {toArray(config.period_axis?.labels).length === 0 && (
+                <tr>
+                  <td colSpan={3}>No periods detected yet.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {getStatementMethodForUi(config) === "direct" && <BucketGrid config={config} onChange={onConfigChange} />}
+
+        <details className="advanced-config-json">
+          <summary>Developer config JSON</summary>
+          <label>
+            Expert fallback
+            <textarea
+              rows={12}
+              value={rawConfigText}
+              onChange={(event) => onRawConfigTextChange(event.target.value)}
+            />
+          </label>
+        </details>
+      </div>
+    </details>
+  )
+}
+
 export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote }) {
   const [loading, setLoading] = useState(false)
   const [analyzing, setAnalyzing] = useState(false)
@@ -770,7 +1390,6 @@ export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote 
   const [uploadForm, setUploadForm] = useState({
     name: "",
     version: "",
-    is_active: true,
     template_file: null,
   })
   const [analysis, setAnalysis] = useState(null)
@@ -809,7 +1428,7 @@ export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote 
     setEditingTemplate(null)
     setConfigDraft(createEmptyV3Config())
     setRawConfigText(JSON.stringify(createEmptyV3Config(), null, 2))
-    setUploadForm({ name: "", version: "", is_active: true, template_file: null })
+    setUploadForm({ name: "", version: "", template_file: null })
     if (!selectedFundId) {
       setTemplates([])
       return
@@ -860,22 +1479,22 @@ export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote 
         needs_human_review: Boolean(response.data.needs_human_review),
         review_state: response.data.review_state,
         can_activate: response.data.can_activate,
-        activation_block_reason: toDisplayText(response.data.activation_block_reason, ""),
+        activation_block_reason: humanizeTemplateMessage(response.data.activation_block_reason, ""),
         anchor_statuses: normalizeAnchorStatuses(response.data.anchor_statuses),
         schema_cache_hit: Boolean(response.data.schema_cache_hit),
         analysis_source: response.data.analysis_source || "llm",
+        semantic_coverage: response.data.semantic_coverage || response.data.coverage_summary || null,
       })
       setEditorContext(response.data.editor_context || null)
       applyDraftConfig(suggestedConfig)
       if (response.data.needs_human_review) {
-        onNote("Template analyzed. Save it as a draft now, or use the review workspace to confirm anchors.")
+        onNote("Template analyzed. Save it as a draft now, or review the highlighted rows before activation.")
       } else {
-        const sourceLabel = response.data.schema_cache_hit
-          ? "cache hit"
-          : response.data.analysis_source === "llm"
-            ? "LLM analyzed"
-            : `analysis source: ${response.data.analysis_source || "unknown"}`
-        onNote(`Template analyzed (${sourceLabel}). Review bindings and save.`)
+        onNote(
+          response.data.schema_cache_hit
+            ? "Template analyzed from a previous review. Check the suggested categories and save."
+            : "Template analyzed. Check the suggested categories and save.",
+        )
       }
     } catch (error) {
       onError(formatApiError(error))
@@ -911,6 +1530,11 @@ export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote 
       return
     }
 
+    if (activationMode !== "draft" && !buildPlainReviewSummary(parsedConfig, analysis).canActivate) {
+      onError("Save this template as a draft first, then finish the review items before activation.")
+      return
+    }
+
     try {
       setSavingUpload(true)
       const formData = new FormData()
@@ -918,7 +1542,7 @@ export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote 
       formData.append("portfolio_id", selectedFundId)
       formData.append("name", uploadForm.name || uploadForm.template_file.name)
       formData.append("version", uploadForm.version || "")
-      formData.append("is_active", uploadForm.is_active ? "true" : "false")
+      formData.append("is_active", activationMode === "draft" ? "false" : "true")
       formData.append("activation_mode", activationMode)
       formData.append("config_json", JSON.stringify(parsedConfig))
       if (analysis?.id) {
@@ -928,13 +1552,13 @@ export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote 
       const response = await apiMultipartRequest("/cash-flow/templates", { token, formData })
       onNote(
         response.data.saved_as_draft
-          ? "Template saved as a draft. It will not be used for extraction until anchors are ready and activated."
+          ? "Template saved as a draft. It will not be used for reports until the review items are finished and it is activated."
           : "Cash flow template uploaded and activated.",
       )
       setAnalysis(null)
       setEditorContext(null)
       setEditingTemplate(null)
-      setUploadForm({ name: "", version: "", is_active: true, template_file: null })
+      setUploadForm({ name: "", version: "", template_file: null })
       setConfigDraft(createEmptyV3Config())
       setRawConfigText(JSON.stringify(createEmptyV3Config(), null, 2))
       await loadTemplates()
@@ -970,14 +1594,15 @@ export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote 
         needs_human_review: Boolean(response.data.needs_human_review),
         review_state: response.data.review_state,
         can_activate: response.data.can_activate,
-        activation_block_reason: toDisplayText(response.data.activation_block_reason, ""),
+        activation_block_reason: humanizeTemplateMessage(response.data.activation_block_reason, ""),
         anchor_statuses: normalizeAnchorStatuses(response.data.anchor_statuses),
         schema_cache_hit: Boolean(response.data.schema_cache_hit),
         analysis_source: response.data.analysis_source || "llm",
+        semantic_coverage: response.data.semantic_coverage || response.data.coverage_summary || null,
       })
       setEditorContext(response.data.editor_context || null)
       applyDraftConfig(suggestedConfig)
-      onNote("Template reanalyzed. Review updated bindings.")
+      onNote("Template reanalyzed. Review the updated cash-flow categories.")
     } catch (error) {
       onError(formatApiError(error))
     } finally {
@@ -1016,6 +1641,11 @@ export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote 
       return
     }
 
+    if (activationMode !== "draft" && !buildPlainReviewSummary(parsedConfig, editorReview).canActivate) {
+      onError("Save this template as a draft first, then finish the review items before activation.")
+      return
+    }
+
     try {
       setSavingEditor(true)
       await apiRequest(`/cash-flow/templates/${editingTemplate.id}`, {
@@ -1024,7 +1654,7 @@ export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote 
         body: {
           name: editingTemplate.name,
           version: editingTemplate.version || null,
-          is_active: activationMode !== "draft" && Boolean(editingTemplate.is_active),
+          is_active: activationMode !== "draft",
           activation_mode: activationMode,
           config_json: parsedConfig,
         },
@@ -1032,7 +1662,7 @@ export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote 
       onNote(
         activationMode === "draft"
           ? "Template changes saved as a draft. Active templates remain untouched."
-          : "Template configuration updated.",
+          : "Template saved and activated.",
       )
       await loadTemplates()
     } catch (error) {
@@ -1061,12 +1691,17 @@ export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote 
     )
   }
 
-  const bindingSummary = {
-    periods: Array.isArray(configDraft.period_axis?.labels) ? configDraft.period_axis.labels.length : 0,
-    opening: Array.isArray(configDraft.opening_binding?.cells) ? configDraft.opening_binding.cells.length : 0,
-    closing: Array.isArray(configDraft.closing_binding?.cells) ? configDraft.closing_binding.cells.length : 0,
-    buckets: Array.isArray(configDraft.bucket_bindings) ? configDraft.bucket_bindings.length : 0,
-  }
+  const semanticCoverage = normalizeSemanticCoverage(
+    analysis?.semantic_coverage || analysis?.coverage_summary || editingTemplate?.semantic_coverage,
+    configDraft,
+  )
+  const uploadReview = analysis || null
+  const editorReview = editorContext?.review || editingTemplate || null
+  const uploadPlainReview = buildPlainReviewSummary(configDraft, uploadReview)
+  const editorPlainReview = buildPlainReviewSummary(configDraft, editorReview)
+  const canActivateUpload = Boolean(hasMatchingUploadAnalysis && uploadPlainReview.canActivate)
+  const canActivateEditor = Boolean(editingTemplate && editorPlainReview.canActivate)
+  const activeTemplateReview = activeTemplate ? getTemplateListReview(activeTemplate) : null
 
   return (
     <section className="panel stack">
@@ -1079,10 +1714,13 @@ export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote 
 
       <p className="muted small">
         Active template: <strong>{activeTemplate?.name || "None"}</strong>
+        {activeTemplateReview && !activeTemplateReview.canActivate ? (
+          <> ({activeTemplateReview.label.toLowerCase()} before reports can use it)</>
+        ) : null}
       </p>
 
       <form className="panel stack" onSubmit={handleUploadTemplate}>
-        <h3>Upload {"->"} Analyze {"->"} Confirm</h3>
+        <h3>Upload, Analyze, Review</h3>
         <div className="form-grid">
           <label>
             Name
@@ -1098,16 +1736,6 @@ export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote 
               value={uploadForm.version}
               onChange={(event) => setUploadForm({ ...uploadForm, version: event.target.value })}
             />
-          </label>
-          <label>
-            Activate Immediately
-            <select
-              value={uploadForm.is_active ? "yes" : "no"}
-              onChange={(event) => setUploadForm({ ...uploadForm, is_active: event.target.value === "yes" })}
-            >
-              <option value="yes">Yes</option>
-              <option value="no">No</option>
-            </select>
           </label>
           <label className="full">
             Template File (.xlsx)
@@ -1137,34 +1765,59 @@ export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote 
             onClick={(event) => handleUploadTemplate(event, "draft")}
             disabled={savingUpload || analyzing || !hasMatchingUploadAnalysis}
           >
-            {savingUpload ? "Saving..." : "Save Draft"}
+            {savingUpload ? "Saving..." : "Save Draft for Review"}
           </button>
-          <button className="primary" type="submit" disabled={savingUpload || analyzing || !hasMatchingUploadAnalysis}>
-            {savingUpload ? "Saving..." : "Activate When Ready"}
+          <button className="primary" type="submit" disabled={savingUpload || analyzing || !canActivateUpload}>
+            {savingUpload ? "Saving..." : "Activate Template"}
           </button>
         </div>
         <p className="muted small">
-          Analysis status:{" "}
+          Next step:{" "}
           {hasMatchingUploadAnalysis
-            ? "Ready for save"
+            ? canActivateUpload
+              ? "This can be activated now, or saved as a draft."
+              : "Save as draft now, then finish the review items before activation."
             : uploadForm.template_file
               ? "Run Analyze Template for this file before saving"
               : "Select a template file to begin"}
         </p>
 
         {analysis && (
-          <div className="mini-card stack">
-            <p className="muted small">
-              Layout: <strong>{analysis.detected_layout || "unknown"}</strong> | Confidence: <strong>{analysis.confidence}</strong>
-            </p>
-            <p className="muted small">
-              Source: <strong>{analysis.analysis_source || "llm"}</strong> | Cache hit:{" "}
-              <strong>{analysis.schema_cache_hit ? "yes" : "no"}</strong> | Needs human review:{" "}
-              <strong>{analysis.needs_human_review ? "yes" : "no"}</strong>
-            </p>
+          <div className="template-analysis-review stack">
+            <div className="alert ok">
+              <strong>Analysis finished.</strong>
+              <p className="small">
+                The template can be saved as a draft. Activation waits until every review item below is resolved.
+              </p>
+            </div>
             {analysis.activation_block_reason && (
               <div className={analysis.can_activate ? "alert ok" : "alert warn"}>
                 {analysis.activation_block_reason}
+              </div>
+            )}
+            {semanticCoverage && (
+              <div className={semanticCoverage.unlabeled_targets ? "alert warn" : "alert ok"}>
+                <strong>{semanticCoverage.message}</strong>
+                {toArray(semanticCoverage.categories).length > 0 && (
+                  <ul className="chip-list">
+                    {toArray(semanticCoverage.categories)
+                      .slice(0, 12)
+                      .map((category, index) => (
+                        <li key={`${category.display_name || "category"}_${index}`}>
+                          {category.display_name || "Cash-flow category"}
+                        </li>
+                      ))}
+                  </ul>
+                )}
+                {toArray(semanticCoverage.review_tasks).length > 0 && (
+                  <ul className="simple-list">
+                    {toArray(semanticCoverage.review_tasks).slice(0, 5).map((task, index) => (
+                      <li key={`${task.title || task.message || "task"}_${index}`}>
+                        {humanizeTemplateMessage(task.message || task.title, "Confirm what this row represents.")}
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             )}
             {analysis.analysis_scope === "upload" && analysis.file_signature !== currentUploadSignature && (
@@ -1177,122 +1830,47 @@ export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote 
                 <strong>Analysis Notes</strong>
                 <ul className="simple-list">
                   {toArray(analysis.issues).map((issue, index) => (
-                    <li key={`${toDisplayText(issue)}_${index}`}>{toDisplayText(issue)}</li>
+                    <li key={`${humanizeTemplateMessage(issue)}_${index}`}>{humanizeTemplateMessage(issue)}</li>
                   ))}
                 </ul>
               </div>
             )}
             {toArray(analysis.required_anchors).length > 0 && (
-              <p className="muted small">Required anchors: {toArray(analysis.required_anchors).map(toDisplayText).join(", ")}</p>
+              (() => {
+                const reviewMessages = toArray(analysis.anchor_statuses)
+                  .filter((status) => status.status !== "ready")
+                  .map((status) => status.message || status.label)
+                  .map(humanizeTemplateMessage)
+                  .filter(Boolean)
+                return (
+                  <p className="muted small">
+                    Review tasks:{" "}
+                    {reviewMessages.length
+                      ? reviewMessages.join(" ")
+                      : toArray(analysis.required_anchors).map(getReviewTaskLabel).join(" ")}
+                  </p>
+                )
+              })()
             )}
+
+            <TemplateReviewPanel
+              config={configDraft}
+              review={uploadReview}
+              onConfigChange={applyDraftConfig}
+              onReviewChange={applyReviewChange}
+            />
+
+            <AdvancedTemplateTools
+              config={configDraft}
+              review={uploadReview}
+              editorContext={editorContext}
+              onConfigChange={applyDraftConfig}
+              onReviewChange={applyReviewChange}
+              rawConfigText={rawConfigText}
+              onRawConfigTextChange={setRawConfigText}
+            />
           </div>
         )}
-
-        <AnchorReviewWorkspace
-          config={configDraft}
-          review={editorContext?.review || analysis || null}
-          editorContext={editorContext}
-          onConfigChange={applyDraftConfig}
-          onReviewChange={applyReviewChange}
-        />
-
-        <div className="form-grid">
-          <label>
-            Sheet Name
-            <input
-              value={configDraft.sheet_name || ""}
-              onChange={(event) => applyDraftConfig({ ...configDraft, sheet_name: event.target.value })}
-            />
-          </label>
-          <label>
-            Layout Type
-            <select
-              value={configDraft.layout_type || "freeform"}
-              onChange={(event) => applyDraftConfig({ ...configDraft, layout_type: event.target.value })}
-            >
-              <option value="rows">Rows</option>
-              <option value="columns">Columns</option>
-              <option value="sectioned">Sectioned</option>
-              <option value="freeform">Freeform</option>
-            </select>
-          </label>
-          <label>
-            Period Granularity
-            <select
-              value={configDraft.period_granularity || "custom"}
-              onChange={(event) => applyDraftConfig({ ...configDraft, period_granularity: event.target.value })}
-            >
-              <option value="monthly">Monthly</option>
-              <option value="quarterly">Quarterly</option>
-              <option value="yearly">Yearly</option>
-              <option value="custom">Custom</option>
-            </select>
-          </label>
-          <label>
-            Axis Orientation
-            <select
-              value={configDraft.period_axis?.orientation || "row"}
-              onChange={(event) =>
-                applyDraftConfig({
-                  ...configDraft,
-                  period_axis: {
-                    ...(configDraft.period_axis || {}),
-                    orientation: event.target.value,
-                  },
-                })
-              }
-            >
-              <option value="row">Row</option>
-              <option value="column">Column</option>
-            </select>
-          </label>
-        </div>
-
-        <p className="muted small">
-          Binding coverage: Periods {bindingSummary.periods}, Opening {bindingSummary.opening}, Closing {bindingSummary.closing}, Buckets {bindingSummary.buckets}
-        </p>
-
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Period</th>
-                <th>Type</th>
-                <th>Key</th>
-              </tr>
-            </thead>
-            <tbody>
-              {toArray(configDraft.period_axis?.labels).map((label, index) => {
-                const period = normalizePeriodLabel(label, index)
-                return (
-                <tr key={period.period_key}>
-                  <td>{period.label}</td>
-                  <td>{period.period_type || "custom"}</td>
-                  <td>{period.period_key}</td>
-                </tr>
-              )})}
-              {toArray(configDraft.period_axis?.labels).length === 0 && (
-                <tr>
-                  <td colSpan={3}>No periods detected yet.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        <BucketGrid config={configDraft} onChange={applyDraftConfig} />
-
-        <details className="mini-card">
-          <summary>Advanced Config JSON</summary>
-          <label>
-            Expert fallback
-            <textarea
-              rows={12}
-              value={rawConfigText}
-              onChange={(event) => setRawConfigText(event.target.value)}
-            />
-          </label>
-        </details>
       </form>
 
       <div className="table-wrap">
@@ -1308,45 +1886,48 @@ export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote 
             </tr>
           </thead>
           <tbody>
-            {toArray(templates).map((template) => (
-              <tr key={template.id}>
-                <td>{toDisplayText(template.name, "-")}</td>
-                <td>{toDisplayText(template.version, "-")}</td>
-                <td>{template.is_active ? "Active" : template.status || "Draft"}</td>
-                <td>{template.can_activate ? "Ready" : toDisplayText(template.activation_block_reason, "Needs review")}</td>
-                <td>{shortDate(template.created_at)}</td>
-                <td>
-                  <div className="inline-actions">
-                    <button type="button" onClick={() => loadTemplateIntoEditor(template)}>
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleReanalyzeTemplate(template)}
-                      disabled={Boolean(reanalyzingTemplateId) || template.reanalyze_available === false}
-                      title={template.reanalyze_block_reason || ""}
-                    >
-                      {reanalyzingTemplateId === template.id ? "Reanalyzing..." : "Reanalyze"}
-                    </button>
-                    {template.reanalyze_available === false && (
-                      <span className="muted small" title={template.reanalyze_block_reason || ""}>
-                        Source missing
-                      </span>
-                    )}
-                    {!template.is_active && (
+            {toArray(templates).map((template) => {
+              const listReview = getTemplateListReview(template)
+              return (
+                <tr key={template.id}>
+                  <td>{toDisplayText(template.name, "-")}</td>
+                  <td>{toDisplayText(template.version, "-")}</td>
+                  <td>{template.is_active ? "Active" : template.status || "Draft"}</td>
+                  <td>{listReview.label}</td>
+                  <td>{shortDate(template.created_at)}</td>
+                  <td>
+                    <div className="inline-actions">
+                      <button type="button" onClick={() => loadTemplateIntoEditor(template)}>
+                        Edit
+                      </button>
                       <button
                         type="button"
-                        onClick={() => handleActivate(template.id)}
-                        disabled={template.can_activate === false}
-                        title={template.activation_block_reason || ""}
+                        onClick={() => handleReanalyzeTemplate(template)}
+                        disabled={Boolean(reanalyzingTemplateId) || template.reanalyze_available === false}
+                        title={template.reanalyze_block_reason || ""}
                       >
-                        Activate
+                        {reanalyzingTemplateId === template.id ? "Reanalyzing..." : "Reanalyze"}
                       </button>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
+                      {template.reanalyze_available === false && (
+                        <span className="muted small" title={template.reanalyze_block_reason || ""}>
+                          Source missing
+                        </span>
+                      )}
+                      {!template.is_active && (
+                        <button
+                          type="button"
+                          onClick={() => handleActivate(template.id)}
+                          disabled={!listReview.canActivate}
+                          title={listReview.canActivate ? "" : listReview.label}
+                        >
+                          Activate
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              )
+            })}
             {toArray(templates).length === 0 && (
               <tr>
                 <td colSpan={6}>No templates uploaded yet.</td>
@@ -1357,8 +1938,8 @@ export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote 
       </div>
 
       <form className="panel stack" onSubmit={handleSaveEditor}>
-        <h3>Template Editor</h3>
-        {!editingTemplate && <p className="muted small">Choose Edit on a template row to update config.</p>}
+        <h3>Review Saved Template</h3>
+        {!editingTemplate && <p className="muted small">Choose Edit on a template row to review or change it.</p>}
         {editingTemplate && (
           <>
             <div className="form-grid">
@@ -1376,22 +1957,22 @@ export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote 
                   onChange={(event) => setEditingTemplate({ ...editingTemplate, version: event.target.value })}
                 />
               </label>
-              <label>
-                Keep Active
-                <select
-                  value={editingTemplate.is_active ? "yes" : "no"}
-                  onChange={(event) =>
-                    setEditingTemplate({
-                      ...editingTemplate,
-                      is_active: event.target.value === "yes",
-                    })
-                  }
-                >
-                  <option value="yes">Yes</option>
-                  <option value="no">No</option>
-                </select>
-              </label>
             </div>
+            <TemplateReviewPanel
+              config={configDraft}
+              review={editorReview}
+              onConfigChange={applyDraftConfig}
+              onReviewChange={applyReviewChange}
+            />
+            <AdvancedTemplateTools
+              config={configDraft}
+              review={editorReview}
+              editorContext={editorContext}
+              onConfigChange={applyDraftConfig}
+              onReviewChange={applyReviewChange}
+              rawConfigText={rawConfigText}
+              onRawConfigTextChange={setRawConfigText}
+            />
             <div className="inline-actions">
               <button
                 type="button"
@@ -1400,10 +1981,13 @@ export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote 
               >
                 {savingEditor ? "Saving..." : "Save Draft"}
               </button>
-              <button className="primary" type="submit" disabled={savingEditor}>
-                {savingEditor ? "Saving..." : "Activate When Ready"}
+              <button className="primary" type="submit" disabled={savingEditor || !canActivateEditor}>
+                {savingEditor ? "Saving..." : "Activate Template"}
               </button>
             </div>
+            {!canActivateEditor && (
+              <p className="muted small">Save the draft now, then finish the review items above before activation.</p>
+            )}
           </>
         )}
       </form>

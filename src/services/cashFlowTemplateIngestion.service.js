@@ -829,9 +829,25 @@ function shouldIgnoreLayoutBucketLabel(value) {
 
 function detectLayoutBucketDirection({ label, sectionLabel, cells }) {
   const text = normalizeText(`${sectionLabel || ""} ${label || ""}`).toLowerCase()
+  const labelText = normalizeText(label || "").toLowerCase()
+  if (
+    /^(payments?|cash paid|cash applied)\b/.test(labelText) ||
+    /\b(disbursements?|retirements?|redemptions? paid|checks?|cheques?|fees?|charges?|draw packets?)\b/.test(labelText)
+  ) {
+    return "outflow"
+  }
+  if (/\b(release of pledged|pledged .*release|restricted deposit .*release|reserve .*release)\b/.test(labelText)) {
+    return "inflow"
+  }
   const concept = CashFlowConcepts.bestDirectCashFlowConcept(text)
   if (concept?.direction === "inflow" || concept?.direction === "outflow") {
     return concept.direction
+  }
+  if (
+    /^(receipts?|proceeds?|release|member capital|borrowing draws?|cash gathered|cash supplied)\b/.test(labelText) ||
+    /\b(receipts?|takings?|deposits?|banked|releases?|drawdowns? released|proceeds?)\b/.test(labelText)
+  ) {
+    return "inflow"
   }
   if (
     text.includes("payment") ||
@@ -1689,6 +1705,28 @@ function directBucketNeedsSemanticRepair(bucket) {
   return false
 }
 
+function applyDeterministicDirectSemanticBindings(configCandidate) {
+  const nextConfig = cloneJson(configCandidate)
+  if (getStatementMethodFromConfigCandidate(nextConfig) !== "direct") return nextConfig
+  ;(nextConfig.bucket_bindings || []).forEach((bucket) => {
+    if (bucket?.fallback || bucket?.semantic_key) return
+    const direction = normalizeText(bucket?.direction || "").toLowerCase()
+    if (!["inflow", "outflow"].includes(direction)) return
+    const inferred = CashFlowConcepts.bestDirectCashFlowConcept(
+      `${bucket.label || ""} ${bucket.bucket_key || ""}`,
+      direction,
+    )
+    if (!inferred?.key || Number(inferred.score || 0) < 0.79) return
+    bucket.semantic_key = inferred.key
+    bucket.semantic_confidence = Math.max(Number(bucket.semantic_confidence || 0), Number(inferred.score || 0))
+    bucket.semantic_source = "deterministic_semantic"
+    bucket.semantic_evidence = Array.from(
+      new Set([...(Array.isArray(bucket.semantic_evidence) ? bucket.semantic_evidence : []), `label:${bucket.label || bucket.bucket_key}`]),
+    ).slice(0, 8)
+  })
+  return nextConfig
+}
+
 function compactAllowedDirectConceptsForPrompt(buckets = []) {
   const directions = new Set(
     (Array.isArray(buckets) ? buckets : [])
@@ -1916,18 +1954,39 @@ function applySemanticRepair({ configCandidate, parsedRepair, rowSummaries }) {
   ;(parsedRepair?.bucketDecisions || []).forEach((decision) => {
     const bucket = (nextConfig.bucket_bindings || []).find((item) => item.bucket_key === decision.bucketKey)
     if (!bucket) return
-    const inferred = inferDirectSemanticDecisionFromBucket(decision, bucket)
-    const preferInferred = shouldPreferInferredDirectSemantic({ inferred, decision })
+    const bucketDirection = normalizeText(bucket.direction || "").toLowerCase()
+    const decisionDirection = normalizeText(decision.direction || "").toLowerCase()
+    let repairDecision = decision
+    let forcedInferred = null
+    if (bucketDirection && decisionDirection && bucketDirection !== decisionDirection) {
+      forcedInferred = inferDirectSemanticDecisionFromBucket({ ...decision, direction: bucketDirection }, bucket)
+      if (!forcedInferred?.key || Number(forcedInferred.score || 0) < 0.79) {
+        needsHumanReview = true
+        issues.push(
+          `LLM bucket decision for "${decision.bucketKey}" changed direction from ${bucketDirection} to ${decisionDirection}.`,
+        )
+        return
+      }
+      repairDecision = {
+        ...decision,
+        semanticKey: forcedInferred.key,
+        direction: bucketDirection,
+        fallback: Boolean(bucket.fallback),
+        evidence: Array.from(new Set([...(decision.evidence || []), `deterministic_direction_guard:${forcedInferred.key}`])),
+      }
+    }
+    const inferred = forcedInferred || inferDirectSemanticDecisionFromBucket(repairDecision, bucket)
+    const preferInferred = Boolean(forcedInferred) || shouldPreferInferredDirectSemantic({ inferred, decision: repairDecision })
     const effectiveDecision = preferInferred
       ? {
-          ...decision,
+          ...repairDecision,
           semanticKey: inferred.key,
-          direction: inferred.direction || decision.direction,
-          evidence: Array.from(new Set([...(decision.evidence || []), `deterministic_concept:${inferred.key}`])),
+          direction: inferred.direction || repairDecision.direction,
+          evidence: Array.from(new Set([...(repairDecision.evidence || []), `deterministic_concept:${inferred.key}`])),
         }
-      : decision
+      : repairDecision
     const effectiveScore = preferInferred
-      ? Math.max(Number(decision?.llmScore || 0), Number(inferred?.score || 0))
+      ? Math.max(Number(repairDecision?.llmScore || 0), Number(inferred?.score || 0))
       : effectiveDirectSemanticDecisionScore(effectiveDecision, bucket)
     if (effectiveDecision.needsHumanReview || effectiveScore < SEMANTIC_REPAIR_MIN_SCORE) {
       needsHumanReview = true
@@ -2212,7 +2271,19 @@ async function maybeApplySemanticRepair({
   const llmMetas = []
 
   if (statementMethod === "direct") {
-    const directBuckets = Array.isArray(currentConfigSummary.bucket_bindings) ? currentConfigSummary.bucket_bindings : []
+    const bucketLookup = new Map((configCandidate?.bucket_bindings || []).map((bucket) => [bucket.bucket_key, bucket]))
+    const directBuckets = (Array.isArray(currentConfigSummary.bucket_bindings) ? currentConfigSummary.bucket_bindings : []).filter((bucket) =>
+      directBucketNeedsSemanticRepair(bucketLookup.get(bucket.bucket_key) || bucket),
+    )
+    if (!directBuckets.length) {
+      return {
+        config: configCandidate,
+        meta: { attempted: false, applied_count: 0, skip_reason: "deterministic_semantic_complete" },
+        issues: [],
+        requiredAnchors: [],
+        needsHumanReview: false,
+      }
+    }
     const chunks = chunkSemanticItems(directBuckets, resolveTemplateSemanticBatchSize())
     for (let index = 0; index < chunks.length; index += 1) {
       const prompt = buildSemanticRepairMessages({
@@ -2299,6 +2370,23 @@ function buildOllamaEndpoint(baseUrl, endpointPath = "/api/chat") {
   const normalizedBase = trimTrailingSlash(baseUrl || "http://localhost:11434")
   const normalizedPath = trimLeadingSlash(endpointPath || "/api/chat")
   return `${normalizedBase}/${normalizedPath}`
+}
+
+function isOllamaCloudEndpoint(endpoint) {
+  try {
+    const url = new URL(endpoint)
+    return url.hostname === "ollama.com" || url.hostname.endsWith(".ollama.com")
+  } catch (error) {
+    return false
+  }
+}
+
+function buildOllamaAuthHeaders({ endpoint, apiKey }) {
+  const normalizedApiKey = normalizeText(apiKey)
+  if (!normalizedApiKey || !isOllamaCloudEndpoint(endpoint)) return {}
+  return {
+    Authorization: `Bearer ${normalizedApiKey}`,
+  }
 }
 
 function resolveOllamaTimeoutMs() {
@@ -2505,16 +2593,19 @@ function requestJsonOverHttp({ endpoint, method = "GET", body = null, timeoutMs,
   })
 }
 
-function classifyOllamaError(error, { timeoutMs }) {
+function classifyOllamaError(error, { timeoutMs, endpoint = null, model = null } = {}) {
   const rawMessage = normalizeText(error?.failure_reason || error?.message || "Unknown Ollama error")
   const lowerMessage = rawMessage.toLowerCase()
   const causeCode = String(error?.cause?.code || "").trim().toUpperCase()
   const statusCode = Number(error?.statusCode || error?.status || NaN)
+  const isCloud = isOllamaCloudEndpoint(endpoint || "")
+  const serviceLabel = isCloud ? "Ollama Cloud" : "Ollama"
+  const configuredModel = model || config.ollama?.model
 
   if (error?.name === "AbortError" || isTimeoutLikeError(rawMessage)) {
     return {
       code: "timeout",
-      reason: `Ollama request timed out after ${timeoutMs}ms`,
+      reason: `${serviceLabel} request timed out after ${timeoutMs}ms`,
       details: rawMessage,
       isTimeout: true,
     }
@@ -2523,7 +2614,9 @@ function classifyOllamaError(error, { timeoutMs }) {
   if (causeCode === "ECONNREFUSED" || lowerMessage.includes("econnrefused")) {
     return {
       code: "connection_refused",
-      reason: "Cannot connect to Ollama. Ensure Ollama is running and OLLAMA_BASE_URL is correct.",
+      reason: isCloud
+        ? "Cannot connect to Ollama Cloud. Check network access and OLLAMA_BASE_URL."
+        : "Cannot connect to Ollama. Ensure Ollama is running and OLLAMA_BASE_URL is correct.",
       details: rawMessage,
       isTimeout: false,
     }
@@ -2532,9 +2625,42 @@ function classifyOllamaError(error, { timeoutMs }) {
   if (causeCode === "ETIMEDOUT" || causeCode === "EHOSTUNREACH") {
     return {
       code: "network_timeout",
-      reason: "Network timeout while connecting to Ollama.",
+      reason: `Network timeout while connecting to ${serviceLabel}.`,
       details: rawMessage,
       isTimeout: true,
+    }
+  }
+
+  if (statusCode === 401) {
+    return {
+      code: "auth_required",
+      reason: isCloud
+        ? "Ollama Cloud authentication failed or is missing. Set OLLAMA_API_KEY."
+        : "Ollama authentication failed or is missing.",
+      details: truncateForLog(rawMessage),
+      isTimeout: false,
+    }
+  }
+
+  if (statusCode === 403) {
+    return {
+      code: "access_denied",
+      reason: isCloud
+        ? "Ollama Cloud denied the request. The model may require a paid plan or the account may be out of allowed usage."
+        : "Ollama denied the request.",
+      details: truncateForLog(rawMessage),
+      isTimeout: false,
+    }
+  }
+
+  if (statusCode === 429) {
+    return {
+      code: "usage_limited",
+      reason: isCloud
+        ? "Ollama Cloud usage or concurrency limit was reached. Wait for the limit window to reset or reduce request volume."
+        : "Ollama request rate limit was reached.",
+      details: truncateForLog(rawMessage),
+      isTimeout: false,
     }
   }
 
@@ -2544,7 +2670,20 @@ function classifyOllamaError(error, { timeoutMs }) {
   ) {
     return {
       code: "model_not_found",
-      reason: `Configured Ollama model "${config.ollama.model}" is not installed.`,
+      reason: isCloud
+        ? `Configured Ollama model "${configuredModel}" was not found in Ollama Cloud.`
+        : `Configured Ollama model "${configuredModel}" is not installed.`,
+      details: truncateForLog(rawMessage),
+      isTimeout: false,
+    }
+  }
+
+  if (statusCode === 404) {
+    return {
+      code: "model_not_found",
+      reason: isCloud
+        ? `Configured Ollama model "${configuredModel}" was not found in Ollama Cloud.`
+        : `Configured Ollama model "${configuredModel}" is not installed.`,
       details: truncateForLog(rawMessage),
       isTimeout: false,
     }
@@ -2553,7 +2692,7 @@ function classifyOllamaError(error, { timeoutMs }) {
   if (Number.isFinite(statusCode)) {
     return {
       code: `http_${statusCode}`,
-      reason: `Ollama returned HTTP ${statusCode}.`,
+      reason: `${serviceLabel} returned HTTP ${statusCode}.`,
       details: truncateForLog(rawMessage),
       isTimeout: false,
     }
@@ -2628,6 +2767,7 @@ function resolveOllamaThinkForModel(modelName) {
 
 async function callOllamaChat({ messages, format = null, model = null, timeoutMs = null, optionsOverride = null }) {
   const endpoint = buildOllamaEndpoint(config.ollama?.baseUrl, config.ollama?.chatPath || "/api/chat")
+  const requestHeaders = buildOllamaAuthHeaders({ endpoint, apiKey: config.ollama?.apiKey })
   const requestTimeoutMs = Number.isFinite(Number(timeoutMs)) && Number(timeoutMs) > 0
     ? Math.round(Number(timeoutMs))
     : resolveOllamaTimeoutMs()
@@ -2674,6 +2814,7 @@ async function callOllamaChat({ messages, format = null, model = null, timeoutMs
       method: "POST",
       body: requestPayload,
       timeoutMs: requestTimeoutMs,
+      headers: requestHeaders,
     })
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -2741,7 +2882,11 @@ async function callOllamaChat({ messages, format = null, model = null, timeoutMs
     }
   } catch (error) {
     const durationMs = Date.now() - startedAt
-    const failure = classifyOllamaError(error, { timeoutMs: requestTimeoutMs })
+    const failure = classifyOllamaError(error, {
+      timeoutMs: requestTimeoutMs,
+      endpoint,
+      model: requestPayload.model || null,
+    })
     logger.warn("[v0] Ollama chat request failed", {
       ollama_base_url: config.ollama?.baseUrl || null,
       ollama_endpoint: endpoint,
@@ -2841,6 +2986,9 @@ async function callOpenAiStructuredChat({ messages, schema }) {
 
 async function checkOllamaHealth() {
   const endpoint = buildOllamaEndpoint(config.ollama?.baseUrl, config.ollama?.healthPath || "/api/tags")
+  const mode = isOllamaCloudEndpoint(endpoint) ? "cloud" : "local"
+  const authConfigured = Boolean(normalizeText(config.ollama?.apiKey))
+  const requestHeaders = buildOllamaAuthHeaders({ endpoint, apiKey: config.ollama?.apiKey })
   const timeoutMs = resolveOllamaHealthTimeoutMs()
   const startedAt = Date.now()
 
@@ -2849,6 +2997,7 @@ async function checkOllamaHealth() {
       endpoint,
       method: "GET",
       timeoutMs,
+      headers: requestHeaders,
     })
     if (response.statusCode < 200 || response.statusCode >= 300) {
       const error = new Error(`Ollama health check failed (${response.statusCode}): ${truncateForLog(response.bodyText)}`)
@@ -2874,14 +3023,26 @@ async function checkOllamaHealth() {
       : []
     const configuredModel = normalizeText(config.ollama?.model).toLowerCase()
     const modelAvailable = availableModels.includes(configuredModel)
+    const cloudAuthMissing = mode === "cloud" && !authConfigured
+    const status = modelAvailable && !cloudAuthMissing ? "ok" : "degraded"
+    const failureCode = cloudAuthMissing ? "auth_required" : modelAvailable ? null : "model_not_found"
+    const failureReason = cloudAuthMissing
+      ? "Ollama Cloud requires OLLAMA_API_KEY for direct API chat requests."
+      : modelAvailable
+        ? null
+        : mode === "cloud"
+          ? `Configured model "${config.ollama?.model}" was not found in Ollama Cloud`
+          : `Configured model "${config.ollama?.model}" was not found in local Ollama`
     const durationMs = Date.now() - startedAt
 
     return {
       provider: "ollama",
-      status: modelAvailable ? "ok" : "degraded",
+      mode,
+      status,
       reachable: true,
       model_available: modelAvailable,
       model: config.ollama?.model || null,
+      auth_configured: authConfigured,
       think: config.ollama?.think,
       force_json_output: Boolean(config.ollama?.forceJsonOutput),
       base_url: config.ollama?.baseUrl || null,
@@ -2890,16 +3051,23 @@ async function checkOllamaHealth() {
       timeout_ms: timeoutMs,
       request_duration_ms: durationMs,
       available_models: availableModels.slice(0, 20),
-      failure_reason: modelAvailable ? null : `Configured model "${config.ollama?.model}" was not found in local Ollama`,
+      failure_code: failureCode,
+      failure_reason: failureReason,
     }
   } catch (error) {
-    const failure = classifyOllamaError(error, { timeoutMs })
+    const failure = classifyOllamaError(error, {
+      timeoutMs,
+      endpoint,
+      model: config.ollama?.model || null,
+    })
     return {
       provider: "ollama",
+      mode,
       status: "unhealthy",
       reachable: false,
       model_available: false,
       model: config.ollama?.model || null,
+      auth_configured: authConfigured,
       think: config.ollama?.think,
       force_json_output: Boolean(config.ollama?.forceJsonOutput),
       base_url: config.ollama?.baseUrl || null,
@@ -2951,10 +3119,14 @@ async function ingestTemplateSchema({ templatePath, sourceFileName, forceLlm = f
 
   if (!forceLlm && deterministicRequiredAnchors.length === 0 && deterministicConfidence >= deterministicBypassThreshold) {
     try {
-      const normalizedDeterministicConfig = await normalizeConfigCandidate({
+      let normalizedDeterministicConfig = await normalizeConfigCandidate({
         configCandidate:
           deterministicSuggestion.suggested_config_json ||
           buildMinimalFallbackConfig(rawStructure.worksheets?.[0]?.name || "Cash Flow"),
+        templatePath,
+      })
+      normalizedDeterministicConfig = await normalizeConfigCandidate({
+        configCandidate: applyDeterministicDirectSemanticBindings(normalizedDeterministicConfig),
         templatePath,
       })
       let finalDeterministicConfig = normalizedDeterministicConfig
@@ -3140,8 +3312,12 @@ async function ingestTemplateSchema({ templatePath, sourceFileName, forceLlm = f
           layoutDecision,
           deterministicSuggestion,
         })
-        const normalizedBaseConfig = await normalizeConfigCandidate({
+        let normalizedBaseConfig = await normalizeConfigCandidate({
           configCandidate,
+          templatePath,
+        })
+        normalizedBaseConfig = await normalizeConfigCandidate({
+          configCandidate: applyDeterministicDirectSemanticBindings(normalizedBaseConfig),
           templatePath,
         })
         let semanticRepair = {
@@ -3463,8 +3639,10 @@ module.exports = {
   ingestTemplateSchema,
   checkOllamaHealth,
   __test: {
+    buildOllamaAuthHeaders,
     buildOllamaEndpoint,
     classifyOllamaError,
+    isOllamaCloudEndpoint,
     parseJsonObject,
     buildSystemPrompt,
     buildUserPrompt,
@@ -3478,6 +3656,7 @@ module.exports = {
     summarizeRawRowsForSemanticRepair,
     parseSemanticRepairResponse,
     applySemanticRepair,
+    applyDeterministicDirectSemanticBindings,
     shouldRunSemanticRepair,
     isTemplateSemanticEnabled,
     evaluateSemanticCompleteness,

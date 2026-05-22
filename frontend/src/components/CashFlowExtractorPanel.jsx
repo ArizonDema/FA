@@ -24,7 +24,164 @@ function buildPresetRange(preset, year) {
   return { start: isoDate(year, 0, 1), end: isoDate(year, 11, 31) }
 }
 
-export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote }) {
+function getCoverageErrorDetails(error) {
+  const details = error?.errors || error?.details || error?.payload?.errors || null
+  return details?.code === "cash_flow_template_coverage_failed" ? details : null
+}
+
+function normalizeKey(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+}
+
+const CASH_FLOW_TARGET_LABELS = {
+  customer_receipts: "Customer receipts",
+  other_operating_inflows: "Other operating receipts",
+  supplier_payments: "Supplier payments",
+  payroll: "Payroll and team costs",
+  rent_facilities: "Rent and facilities",
+  sales_marketing: "Marketing spend",
+  general_admin: "General and admin",
+  income_taxes: "Taxes paid",
+  other_operating_outflows: "Other operating payments",
+  capital_expenditures: "Equipment and capex",
+  capitalized_software: "Capitalized software",
+  asset_sale_proceeds: "Asset sale proceeds",
+  debt_drawdown: "Debt proceeds",
+  debt_repayment: "Debt repayments",
+  interest_paid: "Interest paid",
+  equity_injection: "Owner funding",
+  dividends_distributions: "Dividends and distributions",
+  net_income: "Net income",
+  depreciation_amortization: "Depreciation and amortization",
+  change_in_receivables: "Change in receivables",
+  change_in_inventory: "Change in inventory",
+  change_in_payables: "Change in payables",
+  other_working_capital_changes: "Other working capital changes",
+  operating_cash_flow: "Cash flow from operations",
+  asset_sales: "Asset sales",
+  investing_cash_flow: "Cash flow from investing",
+  capital_contributions: "Capital contributions",
+  debt_issued: "Debt issued",
+  debt_repaid: "Debt repaid",
+  dividends_paid: "Dividends paid",
+  financing_cash_flow: "Cash flow from financing",
+  net_change_in_cash: "Net change in cash",
+  opening_cash: "Opening cash",
+  closing_cash: "Closing cash",
+}
+
+function humanizeTargetKey(value, fallback = "Cash-flow row") {
+  const key = normalizeKey(value)
+  if (!key) return fallback
+  return CASH_FLOW_TARGET_LABELS[key] || key.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase())
+}
+
+function buildTemplateTargetLabelMap(template) {
+  const config = template?.activeVersion?.config_json || template?.config_json || {}
+  const entries = []
+  if (Array.isArray(config.bucket_bindings)) {
+    config.bucket_bindings.forEach((bucket) => {
+      const key = normalizeKey(bucket?.bucket_key)
+      if (!key) return
+      entries.push([
+        key,
+        bucket?.label || CASH_FLOW_TARGET_LABELS[normalizeKey(bucket?.semantic_key)] || CASH_FLOW_TARGET_LABELS[key],
+      ])
+    })
+  }
+  if (Array.isArray(config.row_bindings)) {
+    config.row_bindings.forEach((row) => {
+      const key = normalizeKey(row?.semantic_key)
+      if (!key) return
+      entries.push([key, row?.label || CASH_FLOW_TARGET_LABELS[key]])
+    })
+  }
+  return new Map(entries.filter(([, label]) => Boolean(label)))
+}
+
+function formatTargetLabel(targetKey, targetLabels) {
+  const key = normalizeKey(targetKey)
+  return targetLabels.get(key) || humanizeTargetKey(key)
+}
+
+function formatConfidence(value) {
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) return "needs review"
+  if (numeric > 1) return `${Math.round(numeric)}%`
+  return `${Math.round(numeric * 100)}%`
+}
+
+function displayAccountList(accounts = []) {
+  const names = accounts
+    .map((account) => account?.account_name || account?.normalized_account)
+    .filter(Boolean)
+    .slice(0, 3)
+  return names.length ? names.join(", ") : "No account names available"
+}
+
+function CoveragePreflightCard({ coverage, onOpenTemplates }) {
+  const missingItems = Array.isArray(coverage?.missing_items) ? coverage.missing_items : []
+  const nextActions = Array.isArray(coverage?.next_actions) ? coverage.next_actions : []
+
+  return (
+    <div className="panel stack">
+      <div className="alert warn">
+        <strong>{coverage?.title || "Template needs rows before this report can run"}</strong>
+        <p>{coverage?.message || "Add or map the missing cash-flow rows before generating this report."}</p>
+      </div>
+
+      {missingItems.length > 0 && (
+        <div className="cards-grid">
+          {missingItems.map((item, index) => (
+            <div className="mini-card stack" key={`${item.display_name || "missing"}_${index}`}>
+              <p className="kicker">Missing Category</p>
+              <h3>{item.display_name || "Cash-flow category"}</h3>
+              {item.plain_description && <p className="muted small">{item.plain_description}</p>}
+              <p className="muted small">
+                Amount found: <strong>{currency(item.total_amount || 0)}</strong>
+              </p>
+              <p className="muted small">
+                Accounts: <strong>{displayAccountList(item.accounts)}</strong>
+              </p>
+              {Array.isArray(item.sample_gl_descriptions) && item.sample_gl_descriptions[0] && (
+                <p className="muted small">Sample GL: {item.sample_gl_descriptions[0]}</p>
+              )}
+              {item.suggested_template_row_label && (
+                <p className="muted small">Suggested row: {item.suggested_template_row_label}</p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="inline-actions">
+        <button type="button" onClick={onOpenTemplates} disabled={!onOpenTemplates}>
+          Edit template mappings
+        </button>
+        <button type="button" onClick={onOpenTemplates} disabled={!onOpenTemplates}>
+          Reanalyze template
+        </button>
+        <button type="button" onClick={onOpenTemplates} disabled={!onOpenTemplates}>
+          Upload a different template
+        </button>
+      </div>
+
+      {nextActions.length > 0 && (
+        <ul className="simple-list">
+          {nextActions.map((action, index) => (
+            <li key={`${action}_${index}`}>{action}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote, onOpenTemplates }) {
   const [loading, setLoading] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [templates, setTemplates] = useState([])
@@ -34,6 +191,7 @@ export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote 
   const [latestWarnings, setLatestWarnings] = useState([])
   const [latestAutoMappings, setLatestAutoMappings] = useState([])
   const [latestLowConfidenceMappings, setLatestLowConfidenceMappings] = useState([])
+  const [coveragePreflight, setCoveragePreflight] = useState(null)
   const [downloadingRunId, setDownloadingRunId] = useState(null)
   const tbInputRef = useRef(null)
   const glInputRef = useRef(null)
@@ -58,12 +216,18 @@ export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote 
     () => templates.filter((template) => template.is_active && template.can_activate !== false),
     [templates],
   )
+  const canUseTemplate = Boolean(form.template_id || activeTemplate)
 
   const previewRows = useMemo(() => latestPreview?.periods || [], [latestPreview])
   const previewBucketKeys = useMemo(() => {
     if (!previewRows.length) return []
     return Object.keys(previewRows[0].buckets || {})
   }, [previewRows])
+  const selectedTemplate = useMemo(
+    () => templates.find((template) => template.id === form.template_id) || activeTemplate || null,
+    [activeTemplate, form.template_id, templates],
+  )
+  const targetLabels = useMemo(() => buildTemplateTargetLabelMap(selectedTemplate), [selectedTemplate])
 
   const loadData = useCallback(async () => {
     if (!selectedFundId) return
@@ -102,6 +266,7 @@ export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote 
     setLatestWarnings([])
     setLatestAutoMappings([])
     setLatestLowConfidenceMappings([])
+    setCoveragePreflight(null)
     setForm({
       preset: "FY",
       year: String(year),
@@ -162,6 +327,7 @@ export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote 
       setLatestWarnings([])
       setLatestAutoMappings([])
       setLatestLowConfidenceMappings([])
+      setCoveragePreflight(null)
       const formData = new FormData()
       formData.append("portfolio_id", selectedFundId)
       formData.append("date_start", form.date_start)
@@ -186,7 +352,14 @@ export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote 
       if (glInputRef.current) glInputRef.current.value = ""
       await loadData()
     } catch (error) {
-      onError(error.message)
+      const coverageDetails = getCoverageErrorDetails(error)
+      if (coverageDetails) {
+        setCoveragePreflight(coverageDetails)
+        onNote("Report stopped before workbook writing because the template needs rows.")
+        await loadData()
+      } else {
+        onError(error.message)
+      }
     } finally {
       setGenerating(false)
     }
@@ -238,6 +411,18 @@ export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote 
       <p className="muted small">
         Active template: <strong>{activeTemplate?.name || "None"}</strong>
       </p>
+
+      {!canUseTemplate && (
+        <div className="alert warn">
+          <strong>No ready cash-flow template is active.</strong>
+          <p className="small">Review and activate a template before generating reports for this fund.</p>
+          {onOpenTemplates && (
+            <button type="button" onClick={onOpenTemplates}>
+              Edit template mappings
+            </button>
+          )}
+        </div>
+      )}
 
       <form className="panel stack" onSubmit={handleRun}>
         <h3>Run Cash Flow Report</h3>
@@ -317,7 +502,7 @@ export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote 
           </label>
         </div>
 
-        <button className="primary" type="submit" disabled={generating}>
+        <button className="primary" type="submit" disabled={generating || !canUseTemplate}>
           {generating ? "Generating..." : "Generate XLSX Report"}
         </button>
         {generating && (
@@ -326,6 +511,10 @@ export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote 
           </p>
         )}
       </form>
+
+      {coveragePreflight && (
+        <CoveragePreflightCard coverage={coveragePreflight} onOpenTemplates={onOpenTemplates} />
+      )}
 
       {latestRun && (
         <div className="panel stack">
@@ -369,7 +558,7 @@ export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote 
                   <li key={`${item.normalized_account}_${index}`}>
                     {item.account_name || item.normalized_account}
                     {" -> "}
-                    {item.bucket_key} ({item.confidence})
+                    {formatTargetLabel(item.bucket_key || item.semantic_key, targetLabels)} ({formatConfidence(item.confidence)})
                   </li>
                 ))}
               </ul>
@@ -384,7 +573,7 @@ export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote 
                     <th>Period</th>
                     <th>Opening</th>
                     {previewBucketKeys.map((bucketKey) => (
-                      <th key={bucketKey}>{bucketKey}</th>
+                      <th key={bucketKey}>{formatTargetLabel(bucketKey, targetLabels)}</th>
                     ))}
                     <th>Net</th>
                     <th>Closing</th>

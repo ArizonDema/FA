@@ -110,6 +110,33 @@ class CashFlowReportService {
     const templatePathForRun = activeVersion?.source_file_path || template.template_file_path
     let autoCorrectedSheetName = null
     let result = null
+    const persistPreflightFailure = async (generationError) => {
+      const details = generationError?.details || null
+      if (
+        !(generationError instanceof CashFlowService.CashFlowValidationError) ||
+        details?.code !== "cash_flow_template_coverage_failed"
+      ) {
+        return false
+      }
+
+      await run.update({
+        status: "failed_preflight",
+        readiness_status: "not_ready",
+        error_json: details,
+        inputs_json: {
+          ...(run.inputs_json || {}),
+          tb_file_path: tbFilePath,
+          gl_file_path: glFilePath,
+          coverage_summary: details,
+        },
+        input_artifacts_json: {
+          tb_file_path: tbFilePath,
+          gl_file_path: glFilePath,
+        },
+        output_artifacts_json: {},
+      })
+      return true
+    }
 
     try {
       result = await CashFlowService.generateCashFlowReport({
@@ -125,6 +152,10 @@ class CashFlowReportService {
         learnedMappings,
       })
     } catch (generationError) {
+      if (await persistPreflightFailure(generationError)) {
+        throw generationError
+      }
+
       const availableSheets = Array.isArray(generationError?.details?.available_sheets)
         ? generationError.details.available_sheets.filter(Boolean)
         : []
@@ -152,18 +183,23 @@ class CashFlowReportService {
         templatePath: templatePathForRun,
       })
 
-      result = await CashFlowService.generateCashFlowReport({
-        templatePath: templatePathForRun,
-        templateConfig: correctedConfig,
-        tbFilePath,
-        glFilePath,
-        dateStart: resolvedRange.start.toISOString().slice(0, 10),
-        dateEnd: resolvedRange.end.toISOString().slice(0, 10),
-        preset: rangeInput.preset || null,
-        fiscalYear: rangeInput.fiscalYear || null,
-        outputFilePath,
-        learnedMappings,
-      })
+      try {
+        result = await CashFlowService.generateCashFlowReport({
+          templatePath: templatePathForRun,
+          templateConfig: correctedConfig,
+          tbFilePath,
+          glFilePath,
+          dateStart: resolvedRange.start.toISOString().slice(0, 10),
+          dateEnd: resolvedRange.end.toISOString().slice(0, 10),
+          preset: rangeInput.preset || null,
+          fiscalYear: rangeInput.fiscalYear || null,
+          outputFilePath,
+          learnedMappings,
+        })
+      } catch (retryError) {
+        await persistPreflightFailure(retryError)
+        throw retryError
+      }
       templateConfigForRun = correctedConfig
       autoCorrectedSheetName = fallbackSheetName
     }
@@ -295,6 +331,7 @@ class CashFlowReportService {
         final_bucket_assignments: result.mapping?.final_bucket_assignments || [],
         assistance_summary: result.mapping?.assistance_summary || null,
         account_profile_summary: result.mapping?.account_profile_summary || null,
+        coverage_summary: result.mapping?.coverage_summary || null,
         reliability_summary: result.mapping?.reliability_summary || null,
       },
       output_paths: {
@@ -306,6 +343,7 @@ class CashFlowReportService {
         final_bucket_assignments: result.mapping?.final_bucket_assignments || [],
         assistance_summary: result.mapping?.assistance_summary || null,
         account_profile_summary: result.mapping?.account_profile_summary || null,
+        coverage_summary: result.mapping?.coverage_summary || null,
         reliability_summary: result.mapping?.reliability_summary || null,
       },
       input_artifacts_json: {
@@ -347,6 +385,7 @@ class CashFlowReportService {
       final_bucket_assignments: result.mapping?.final_bucket_assignments || [],
       assistance_summary: result.mapping?.assistance_summary || null,
       account_profile_summary: result.mapping?.account_profile_summary || null,
+      coverage_summary: result.mapping?.coverage_summary || null,
       reliability_summary: result.mapping?.reliability_summary || null,
     }
   }

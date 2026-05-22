@@ -21,6 +21,9 @@ describe("cashFlowConcepts.service", () => {
         "interest_paid",
         "equity_injection",
         "dividends_distributions",
+        "other_operating_outflows",
+        "restricted_cash_investment",
+        "restricted_cash_release",
       ]),
     )
   })
@@ -73,6 +76,45 @@ describe("cashFlowConcepts.service", () => {
     )
     expect(CashFlowConcepts.bestDirectCashFlowConcept("Owner cash sweeps")).toEqual(
       expect.objectContaining({ key: "dividends_distributions", direction: "outflow" }),
+    )
+  })
+
+  test("classifies independent agent challenge wording without relying on exact app labels", () => {
+    expect(CashFlowConcepts.bestDirectCashFlowConcept("Receipts: settlement-lagged trade takings")).toEqual(
+      expect.objectContaining({ key: "customer_receipts", direction: "inflow" }),
+    )
+    expect(CashFlowConcepts.bestDirectCashFlowConcept("Receipts: insurance recovery cash")).toEqual(
+      expect.objectContaining({ key: "other_operating_inflows", direction: "inflow" }),
+    )
+    expect(CashFlowConcepts.bestDirectCashFlowConcept("Payments: rostered crew disbursements")).toEqual(
+      expect.objectContaining({ key: "payroll", direction: "outflow" }),
+    )
+    expect(CashFlowConcepts.bestDirectCashFlowConcept("Payments: premises and yard occupancy")).toEqual(
+      expect.objectContaining({ key: "rent_facilities", direction: "outflow" }),
+    )
+    expect(CashFlowConcepts.bestDirectCashFlowConcept("Borrowing draws booked at treasury")).toEqual(
+      expect.objectContaining({ key: "debt_drawdown", direction: "inflow" }),
+    )
+    expect(CashFlowConcepts.bestDirectCashFlowConcept("Lender principal retirements")).toEqual(
+      expect.objectContaining({ key: "debt_repayment", direction: "outflow" }),
+    )
+    expect(CashFlowConcepts.bestDirectCashFlowConcept("Member capital subscriptions banked")).toEqual(
+      expect.objectContaining({ key: "equity_injection", direction: "inflow" }),
+    )
+    expect(CashFlowConcepts.bestDirectCashFlowConcept("Partner preference redemptions paid")).toEqual(
+      expect.objectContaining({ key: "dividends_distributions", direction: "outflow" }),
+    )
+    expect(CashFlowConcepts.bestDirectCashFlowConcept("Payments: tax authority sweeps")).toEqual(
+      expect.objectContaining({ key: "income_taxes", direction: "outflow" }),
+    )
+    expect(CashFlowConcepts.bestDirectCashFlowConcept("Payments: claims, refunds, and make-good credits", "outflow")).toEqual(
+      expect.objectContaining({ key: "other_operating_outflows", direction: "outflow" }),
+    )
+    expect(CashFlowConcepts.bestDirectCashFlowConcept("Investment in pledged term deposits", "outflow")).toEqual(
+      expect.objectContaining({ key: "restricted_cash_investment", direction: "outflow" }),
+    )
+    expect(CashFlowConcepts.bestDirectCashFlowConcept("Release of pledged term deposits", "inflow")).toEqual(
+      expect.objectContaining({ key: "restricted_cash_release", direction: "inflow" }),
     )
   })
 })

@@ -1,0 +1,1793 @@
+{
+  "status": "failed",
+  "generated_at": "2026-05-12T16:28:01.966Z",
+  "failures": [
+    "template analyzer needs review: Several direct bucket labels need semantic review: Topline cash generated, Marketplace partner settlements, People runway spend, Audience acquisition cash.; The direction for code_asset_capitalization may be incorrect; it likely represents a cash outflow for capitalizing software.; LLM bucket decision for \"code_asset_capitalization\" needs review.; LLM did not provide canonical semantic labels for direct buckets: code_asset_capitalization.; Direct cash-flow bucket bindings missing canonical semantic labels: code_asset_capitalization"
+  ],
+  "files": {
+    "template": "C:\\Users\\Mano PC\\FA\\outputs\\novel-cash-flow-template\\Liquidity_Flight_Plan_2026.xlsx",
+    "output": "C:\\Users\\Mano PC\\FA\\outputs\\novel-cash-flow-template\\analysis-2026-05-12T16-17-24-250Z\\Liquidity_Flight_Plan_output.xlsx"
+  },
+  "timings_ms": {
+    "ingestion": 485284,
+    "report": 152401
+  },
+  "expected": {
+    "totals": {
+      "total_inflows": 446500,
+      "total_outflows": 217925,
+      "net_cash_flow": 228575
+    },
+    "by_account_direction": {
+      "owner capital:inflow": 135000,
+      "office equipment:outflow": 18000,
+      "prepaid insurance:outflow": 9600,
+      "rent expense:outflow": 10200,
+      "accounts receivable:inflow": 264500,
+      "accounts payable:outflow": 28085,
+      "salaries expense:outflow": 79500,
+      "utilities expense:outflow": 18900,
+      "marketing expense:outflow": 15500,
+      "travel expense:outflow": 10000,
+      "bank fees expense:outflow": 4500,
+      "interest expense:outflow": 3180,
+      "notes payable:outflow": 14460,
+      "notes payable:inflow": 35000,
+      "owner drawings:outflow": 6000,
+      "unearned revenue:inflow": 12000
+    }
+  },
+  "ingestion": {
+    "analysis_source": "llm_layout_decision",
+    "confidence": 0.62,
+    "needs_human_review": true,
+    "issues": [
+      "Several direct bucket labels need semantic review: Topline cash generated, Marketplace partner settlements, People runway spend, Audience acquisition cash.",
+      "The direction for code_asset_capitalization may be incorrect; it likely represents a cash outflow for capitalizing software.",
+      "LLM bucket decision for \"code_asset_capitalization\" needs review.",
+      "LLM did not provide canonical semantic labels for direct buckets: code_asset_capitalization.",
+      "Direct cash-flow bucket bindings missing canonical semantic labels: code_asset_capitalization"
+    ],
+    "required_anchors": [
+      "bucket_targets",
+      "bucket_targets",
+      "bucket_targets",
+      "bucket_targets",
+      "bucket_targets",
+      "bucket_targets",
+      "bucket_targets",
+      "bucket_targets",
+      "bucket_targets"
+    ],
+    "model": "gpt-oss:20b",
+    "layout_decision": {
+      "detected_layout_type": "columns",
+      "statement_method": "direct",
+      "confidence": 0.64,
+      "sheet_name": "Liquidity Flight Plan",
+      "period_orientation": "column",
+      "period_header_row": 5,
+      "period_label_column": 5,
+      "first_period_column": 6,
+      "last_period_column": 17,
+      "opening_row": 6,
+      "closing_row": 33,
+      "issues": [
+        "Several direct bucket labels need semantic review: Topline cash generated, Marketplace partner settlements, People runway spend, Audience acquisition cash."
+      ],
+      "required_anchors": [
+        "bucket_targets"
+      ]
+    },
+    "semantic_repair": {
+      "attempted": true,
+      "applied_count": 15,
+      "response": {
+        "bucketDecisions": [
+          {
+            "bucketKey": "customer_money_landed",
+            "semanticKey": "customer_receipts",
+            "direction": "inflow",
+            "fallback": false,
+            "llmScore": 1,
+            "reasoning": "\"Customer money landed\" matches the hint \"cash receipts\" and \"customer receipts\".",
+            "evidence": [
+              "\"Customer money landed\""
+            ],
+            "needsHumanReview": false
+          },
+          {
+            "bucketKey": "refunds_rebates_and_odd_receipts",
+            "semanticKey": "other_operating_inflows",
+            "direction": "inflow",
+            "fallback": false,
+            "llmScore": 1,
+            "reasoning": "\"Refunds, rebates, and odd receipts\" aligns with the hint \"refunds\" and \"other receipts\".",
+            "evidence": [
+              "\"Refunds, rebates, and odd receipts\""
+            ],
+            "needsHumanReview": false
+          },
+          {
+            "bucketKey": "marketplace_partner_settlements",
+            "semanticKey": "other_operating_inflows",
+            "direction": "inflow",
+            "fallback": false,
+            "llmScore": 1,
+            "reasoning": "\"Marketplace partner settlements\" is an inflow that does not fit the typical customer receipt pattern, so it is best classified as other operating inflows.",
+            "evidence": [
+              "\"Marketplace partner settlements\""
+            ],
+            "needsHumanReview": false
+          },
+          {
+            "bucketKey": "people_runway_spend",
+            "semanticKey": "other_operating_inflows",
+            "direction": "inflow",
+            "fallback": false,
+            "llmScore": 1,
+            "reasoning": "\"People runway spend\" is listed as an inflow; the most appropriate concept for an inflow that is not a customer receipt is other operating inflows.",
+            "evidence": [
+              "\"People runway spend\""
+            ],
+            "needsHumanReview": false
+          },
+          {
+            "bucketKey": "studio_and_space_commitment_cash",
+            "semanticKey": "other_operating_inflows",
+            "direction": "inflow",
+            "fallback": false,
+            "llmScore": 0.92,
+            "reasoning": "\"Studio and space commitment cash\" is an inflow of cash received for studio and space commitments, which aligns with the definition of other operating inflows.",
+            "evidence": [
+              "Studio and space commitment cash"
+            ],
+            "needsHumanReview": false
+          },
+          {
+            "bucketKey": "audience_acquisition_cash",
+            "semanticKey": "other_operating_inflows",
+            "direction": "inflow",
+            "fallback": false,
+            "llmScore": 0.88,
+            "reasoning": "\"Audience acquisition cash\" represents cash received related to audience acquisition activities, fitting the other operating inflows category.",
+            "evidence": [
+              "Audience acquisition cash"
+            ],
+            "needsHumanReview": false
+          },
+          {
+            "bucketKey": "operating_backbone_cash",
+            "semanticKey": "other_operating_inflows",
+            "direction": "inflow",
+            "fallback": false,
+            "llmScore": 0.92,
+            "reasoning": "\"Operating backbone cash\" is an inflow that does not fit customer receipts or asset sale proceeds; it best matches the generic \"Other Operating Inflows\" category.",
+            "evidence": [
+              "Operating backbone cash"
+            ],
+            "needsHumanReview": false
+          },
+          {
+            "bucketKey": "government_remittance_cash",
+            "semanticKey": "other_operating_inflows",
+            "direction": "inflow",
+            "fallback": false,
+            "llmScore": 0.95,
+            "reasoning": "\"Government remittance cash\" is an inflow from a government source, fitting the generic \"Other Operating Inflows\" label.",
+            "evidence": [
+              "Government remittance cash"
+            ],
+            "needsHumanReview": false
+          },
+          {
+            "bucketKey": "workshop_kit_purchases",
+            "semanticKey": "supplier_payments",
+            "direction": "outflow",
+            "fallback": false,
+            "llmScore": 1,
+            "reasoning": "\"Workshop kit purchases\" is an outflow and matches the supplier_payments concept.",
+            "evidence": [
+              "\"Workshop kit purchases\""
+            ],
+            "needsHumanReview": false
+          },
+          {
+            "bucketKey": "code_asset_capitalization",
+            "semanticKey": "other_operating_inflows",
+            "direction": "inflow",
+            "fallback": false,
+            "llmScore": 0.6,
+            "reasoning": "\"Code asset capitalization\" is listed as an inflow; the only inflow concept that could loosely fit is other_operating_inflows.",
+            "evidence": [
+              "\"Code asset capitalization\""
+            ],
+            "needsHumanReview": true
+          },
+          {
+            "bucketKey": "equipment_resale_receipts",
+            "semanticKey": "asset_sale_proceeds",
+            "direction": "inflow",
+            "fallback": false,
+            "llmScore": 1,
+            "reasoning": "\"Equipment resale receipts\" matches the hint \"sale of assets\".",
+            "evidence": [
+              "Equipment resale receipts"
+            ],
+            "needsHumanReview": false
+          },
+          {
+            "bucketKey": "line_of_credit_oxygen",
+            "semanticKey": "debt_drawdown",
+            "direction": "inflow",
+            "fallback": false,
+            "llmScore": 1,
+            "reasoning": "\"Line-of-credit oxygen\" matches the hint \"borrowings\".",
+            "evidence": [
+              "Line-of-credit oxygen"
+            ],
+            "needsHumanReview": false
+          },
+          {
+            "bucketKey": "lender_principal_sendback",
+            "semanticKey": "debt_drawdown",
+            "direction": "inflow",
+            "fallback": false,
+            "llmScore": 0.95,
+            "reasoning": "\"Lender principal sendback\" is an inflow that represents borrowing proceeds.",
+            "evidence": [
+              "\"Lender principal sendback\""
+            ],
+            "needsHumanReview": false
+          },
+          {
+            "bucketKey": "borrowing_cost_cash",
+            "semanticKey": "other_operating_inflows",
+            "direction": "inflow",
+            "fallback": false,
+            "llmScore": 0.9,
+            "reasoning": "\"Borrowing cost cash\" is an inflow that does not fit other categories, so it is classified as other operating inflows.",
+            "evidence": [
+              "\"Borrowing cost cash\""
+            ],
+            "needsHumanReview": false
+          },
+          {
+            "bucketKey": "sponsor_oxygen",
+            "semanticKey": "other_operating_inflows",
+            "direction": "inflow",
+            "fallback": false,
+            "llmScore": 0.92,
+            "reasoning": "\"Sponsor oxygen\" is an inflow that does not fit typical customer receipts or debt/equity categories; it best aligns with other operating inflows.",
+            "evidence": [
+              "\"Sponsor oxygen\""
+            ],
+            "needsHumanReview": false
+          },
+          {
+            "bucketKey": "owner_cash_sweeps",
+            "semanticKey": "other_operating_inflows",
+            "direction": "inflow",
+            "fallback": false,
+            "llmScore": 0.88,
+            "reasoning": "\"Owner cash sweeps\" represents cash received by the owner, which is an operating inflow rather than a capital or debt transaction.",
+            "evidence": [
+              "\"Owner cash sweeps\""
+            ],
+            "needsHumanReview": false
+          }
+        ],
+        "rowBindingDecisions": [],
+        "issues": [
+          "The direction for code_asset_capitalization may be incorrect; it likely represents a cash outflow for capitalizing software."
+        ],
+        "requiredAnchors": [
+          "bucket_targets",
+          "bucket_targets",
+          "bucket_targets",
+          "bucket_targets",
+          "bucket_targets",
+          "bucket_targets",
+          "bucket_targets",
+          "bucket_targets"
+        ],
+        "needsHumanReview": true
+      },
+      "llm_meta": {
+        "model": "gpt-oss:20b",
+        "done": true,
+        "eval_count": 263,
+        "total_duration": 58552693200,
+        "endpoint": "http://localhost:11434/api/chat",
+        "timeout_ms": 120000,
+        "request_duration_ms": 58556,
+        "prompt_chars": 2393,
+        "request_bytes": 3642,
+        "think": "low",
+        "options": {
+          "num_predict": 500,
+          "temperature": 0,
+          "num_ctx": 4096
+        },
+        "batch_index": 1,
+        "batch_count": 8,
+        "bucket_count": 2,
+        "batches": [
+          {
+            "model": "gpt-oss:20b",
+            "done": true,
+            "eval_count": 263,
+            "total_duration": 58552693200,
+            "endpoint": "http://localhost:11434/api/chat",
+            "timeout_ms": 120000,
+            "request_duration_ms": 58556,
+            "prompt_chars": 2393,
+            "request_bytes": 3642,
+            "think": "low",
+            "options": {
+              "num_predict": 500,
+              "temperature": 0,
+              "num_ctx": 4096
+            },
+            "batch_index": 1,
+            "batch_count": 8,
+            "bucket_count": 2
+          },
+          {
+            "model": "gpt-oss:20b",
+            "done": true,
+            "eval_count": 278,
+            "total_duration": 57226683100,
+            "endpoint": "http://localhost:11434/api/chat",
+            "timeout_ms": 120000,
+            "request_duration_ms": 57232,
+            "prompt_chars": 2382,
+            "request_bytes": 3631,
+            "think": "low",
+            "options": {
+              "num_predict": 500,
+              "temperature": 0,
+              "num_ctx": 4096
+            },
+            "batch_index": 2,
+            "batch_count": 8,
+            "bucket_count": 2
+          },
+          {
+            "model": "gpt-oss:20b",
+            "done": true,
+            "eval_count": 188,
+            "total_duration": 47238913000,
+            "endpoint": "http://localhost:11434/api/chat",
+            "timeout_ms": 120000,
+            "request_duration_ms": 47243,
+            "prompt_chars": 2403,
+            "request_bytes": 3652,
+            "think": "low",
+            "options": {
+              "num_predict": 500,
+              "temperature": 0,
+              "num_ctx": 4096
+            },
+            "batch_index": 3,
+            "batch_count": 8,
+            "bucket_count": 2
+          },
+          {
+            "model": "gpt-oss:20b",
+            "done": true,
+            "eval_count": 191,
+            "total_duration": 41352754200,
+            "endpoint": "http://localhost:11434/api/chat",
+            "timeout_ms": 120000,
+            "request_duration_ms": 41357,
+            "prompt_chars": 2379,
+            "request_bytes": 3628,
+            "think": "low",
+            "options": {
+              "num_predict": 500,
+              "temperature": 0,
+              "num_ctx": 4096
+            },
+            "batch_index": 4,
+            "batch_count": 8,
+            "bucket_count": 2
+          },
+          {
+            "model": "gpt-oss:20b",
+            "done": true,
+            "eval_count": 286,
+            "total_duration": 83400123400,
+            "endpoint": "http://localhost:11434/api/chat",
+            "timeout_ms": 120000,
+            "request_duration_ms": 83405,
+            "prompt_chars": 4021,
+            "request_bytes": 5504,
+            "think": "low",
+            "options": {
+              "num_predict": 500,
+              "temperature": 0,
+              "num_ctx": 4096
+            },
+            "batch_index": 5,
+            "batch_count": 8,
+            "bucket_count": 2
+          },
+          {
+            "model": "gpt-oss:20b",
+            "done": true,
+            "eval_count": 162,
+            "total_duration": 26150463400,
+            "endpoint": "http://localhost:11434/api/chat",
+            "timeout_ms": 120000,
+            "request_duration_ms": 26155,
+            "prompt_chars": 2370,
+            "request_bytes": 3619,
+            "think": "low",
+            "options": {
+              "num_predict": 500,
+              "temperature": 0,
+              "num_ctx": 4096
+            },
+            "batch_index": 6,
+            "batch_count": 8,
+            "bucket_count": 2
+          },
+          {
+            "model": "gpt-oss:20b",
+            "done": true,
+            "eval_count": 260,
+            "total_duration": 58728277200,
+            "endpoint": "http://localhost:11434/api/chat",
+            "timeout_ms": 120000,
+            "request_duration_ms": 58732,
+            "prompt_chars": 2364,
+            "request_bytes": 3613,
+            "think": "low",
+            "options": {
+              "num_predict": 500,
+              "temperature": 0,
+              "num_ctx": 4096
+            },
+            "batch_index": 7,
+            "batch_count": 8,
+            "bucket_count": 2
+          },
+          {
+            "model": "gpt-oss:20b",
+            "done": true,
+            "eval_count": 196,
+            "total_duration": 51985877600,
+            "endpoint": "http://localhost:11434/api/chat",
+            "timeout_ms": 120000,
+            "request_duration_ms": 51989,
+            "prompt_chars": 2325,
+            "request_bytes": 3574,
+            "think": "low",
+            "options": {
+              "num_predict": 500,
+              "temperature": 0,
+              "num_ctx": 4096
+            },
+            "batch_index": 8,
+            "batch_count": 8,
+            "bucket_count": 2
+          }
+        ],
+        "schema_constrained": true
+      }
+    },
+    "attempts": [
+      {
+        "attempt": 1,
+        "status": "success",
+        "prompt_mode": "compact",
+        "meta": {
+          "model": "gpt-oss:20b",
+          "done": true,
+          "eval_count": 107,
+          "total_duration": 60388418500,
+          "endpoint": "http://localhost:11434/api/chat",
+          "timeout_ms": 120000,
+          "request_duration_ms": 60409,
+          "prompt_chars": 5688,
+          "request_bytes": 7465,
+          "think": "low",
+          "options": {
+            "num_predict": 1800,
+            "temperature": 0,
+            "num_ctx": 8192
+          },
+          "schema_constrained": true,
+          "skill_version": "cash-flow-template-reading.v1",
+          "prompt_mode": "compact"
+        }
+      }
+    ],
+    "raw_errors": []
+  },
+  "config_summary": {
+    "sheet_name": "Liquidity Flight Plan",
+    "layout_type": "columns",
+    "statement_method": "direct",
+    "period_orientation": "column",
+    "period_count": 12,
+    "bucket_count": 16,
+    "buckets": [
+      {
+        "bucket_key": "customer_money_landed",
+        "label": "Customer money landed",
+        "direction": "inflow",
+        "semantic_key": "customer_receipts",
+        "semantic_confidence": 1
+      },
+      {
+        "bucket_key": "refunds_rebates_and_odd_receipts",
+        "label": "Refunds, rebates, and odd receipts",
+        "direction": "inflow",
+        "semantic_key": "other_operating_inflows",
+        "semantic_confidence": 1
+      },
+      {
+        "bucket_key": "marketplace_partner_settlements",
+        "label": "Marketplace partner settlements",
+        "direction": "inflow",
+        "semantic_key": "other_operating_inflows",
+        "semantic_confidence": 1
+      },
+      {
+        "bucket_key": "people_runway_spend",
+        "label": "People runway spend",
+        "direction": "inflow",
+        "semantic_key": "other_operating_inflows",
+        "semantic_confidence": 1
+      },
+      {
+        "bucket_key": "studio_and_space_commitment_cash",
+        "label": "Studio and space commitment cash",
+        "direction": "inflow",
+        "semantic_key": "other_operating_inflows",
+        "semantic_confidence": 0.92
+      },
+      {
+        "bucket_key": "audience_acquisition_cash",
+        "label": "Audience acquisition cash",
+        "direction": "inflow",
+        "semantic_key": "other_operating_inflows",
+        "semantic_confidence": 0.88
+      },
+      {
+        "bucket_key": "operating_backbone_cash",
+        "label": "Operating backbone cash",
+        "direction": "inflow",
+        "semantic_key": "other_operating_inflows",
+        "semantic_confidence": 0.92
+      },
+      {
+        "bucket_key": "government_remittance_cash",
+        "label": "Government remittance cash",
+        "direction": "inflow",
+        "semantic_key": "other_operating_inflows",
+        "semantic_confidence": 0.95
+      },
+      {
+        "bucket_key": "workshop_kit_purchases",
+        "label": "Workshop kit purchases",
+        "direction": "outflow",
+        "semantic_key": "supplier_payments",
+        "semantic_confidence": 1
+      },
+      {
+        "bucket_key": "code_asset_capitalization",
+        "label": "Code asset capitalization",
+        "direction": "inflow",
+        "semantic_key": null,
+        "semantic_confidence": null
+      },
+      {
+        "bucket_key": "equipment_resale_receipts",
+        "label": "Equipment resale receipts",
+        "direction": "inflow",
+        "semantic_key": "asset_sale_proceeds",
+        "semantic_confidence": 1
+      },
+      {
+        "bucket_key": "line_of_credit_oxygen",
+        "label": "Line-of-credit oxygen",
+        "direction": "inflow",
+        "semantic_key": "debt_drawdown",
+        "semantic_confidence": 1
+      },
+      {
+        "bucket_key": "lender_principal_sendback",
+        "label": "Lender principal sendback",
+        "direction": "inflow",
+        "semantic_key": "debt_drawdown",
+        "semantic_confidence": 0.95
+      },
+      {
+        "bucket_key": "borrowing_cost_cash",
+        "label": "Borrowing cost cash",
+        "direction": "inflow",
+        "semantic_key": "other_operating_inflows",
+        "semantic_confidence": 0.9
+      },
+      {
+        "bucket_key": "sponsor_oxygen",
+        "label": "Sponsor oxygen",
+        "direction": "inflow",
+        "semantic_key": "other_operating_inflows",
+        "semantic_confidence": 0.92
+      },
+      {
+        "bucket_key": "owner_cash_sweeps",
+        "label": "Owner cash sweeps",
+        "direction": "inflow",
+        "semantic_key": "other_operating_inflows",
+        "semantic_confidence": 0.88
+      }
+    ]
+  },
+  "report": {
+    "totals": {
+      "total_inflows": 446500,
+      "total_outflows": 217925,
+      "net_cash_flow": 228575,
+      "opening_balance_start": 0,
+      "closing_balance_end": 228575,
+      "bucket_totals": {
+        "customer_money_landed": 411500,
+        "refunds_rebates_and_odd_receipts": 0,
+        "marketplace_partner_settlements": 0,
+        "people_runway_spend": 0,
+        "studio_and_space_commitment_cash": 0,
+        "audience_acquisition_cash": 0,
+        "operating_backbone_cash": 0,
+        "government_remittance_cash": 0,
+        "workshop_kit_purchases": 217925,
+        "code_asset_capitalization": 0,
+        "equipment_resale_receipts": 0,
+        "line_of_credit_oxygen": 35000,
+        "lender_principal_sendback": 0,
+        "borrowing_cost_cash": 0,
+        "sponsor_oxygen": 0,
+        "owner_cash_sweeps": 0
+      },
+      "opening_balance_january": 0,
+      "closing_balance_december": 228575
+    },
+    "account_profile_summary": {
+      "profiled_accounts": 20,
+      "movement_accounts": 15,
+      "direction_profiles": 16,
+      "mapped_accounts": 16,
+      "profile_auto_mappings": 1,
+      "llm_assisted_mappings": 3,
+      "review_required_mappings": 13
+    },
+    "assistance_summary": {
+      "enabled": true,
+      "statementMethod": "direct",
+      "candidatesConsidered": 4,
+      "attempted": true,
+      "acceptedCount": 3,
+      "rejectedCount": 1,
+      "failed": false,
+      "model": "gpt-oss:20b",
+      "minimumAcceptedScore": 0.7,
+      "promptVersion": "runtime.v1",
+      "skillVersion": "cash-flow-mapping.v1",
+      "batchSize": 2,
+      "batchCount": 2,
+      "candidatePoolSize": 4,
+      "notes": [
+        "The first account requires human review because the allowed mappings do not include a financing inflow category."
+      ],
+      "runtimeScope": "ambiguous_novel",
+      "confidenceCalibrationNotes": [
+        "accepted mappings require schema-valid targets, non-empty evidence, and min score",
+        "profile/llm conflicts within 0.12 are review-only",
+        "auto-created runtime mappings persist as suggested"
+      ],
+      "profileEvidenceStats": {
+        "candidates_with_profile": 4,
+        "strong_profile_candidates": 3,
+        "deterministic_profile_disagreements": 0
+      },
+      "rejectedRecommendations": [
+        {
+          "account_key": "owner capital:inflow",
+          "mapping_key": "customer_money_landed",
+          "reason": "needs_human_review",
+          "llm_score": 0,
+          "best_profile_mapping_key": null,
+          "best_profile_score": 0
+        }
+      ],
+      "acceptedMappings": [
+        {
+          "normalized_account": "accounts receivable",
+          "direction": "inflow",
+          "bucket_key": "customer_money_landed",
+          "semantic_key": "customer_receipts",
+          "confidence": 0.94,
+          "llm_score": 0.94,
+          "profile_score": 0.94,
+          "reasoning": "Accounts receivable inflow corresponds to collected customer balances, which is a customer receipt. The best profile mapping is 'customer_money_landed' with a score of 0.94.",
+          "previous_bucket_key": "customer_money_landed",
+          "changed": false
+        },
+        {
+          "normalized_account": "notes payable",
+          "direction": "inflow",
+          "bucket_key": "line_of_credit_oxygen",
+          "semantic_key": "debt_drawdown",
+          "confidence": 0.94,
+          "llm_score": 0.94,
+          "profile_score": 0.94,
+          "reasoning": "The account is a debt inflow with description 'Bank loan proceeds received', matching the debt_drawdown semantic key. The best profile mapping is 'line_of_credit_oxygen', which aligns with the provided evidence.",
+          "previous_bucket_key": "line_of_credit_oxygen",
+          "changed": false
+        },
+        {
+          "normalized_account": "unearned revenue",
+          "direction": "inflow",
+          "bucket_key": "customer_money_landed",
+          "semantic_key": "customer_receipts",
+          "confidence": 0.87,
+          "llm_score": 0.87,
+          "profile_score": 0.87,
+          "reasoning": "Unearned revenue inflow represents customer money received (e.g., retainer). The best profile mapping is 'customer_money_landed', matching the semantic key customer_receipts. The evidence includes 'Unearned retainer received' and 'operating cash flow'.",
+          "previous_bucket_key": "customer_money_landed",
+          "changed": false
+        }
+      ]
+    },
+    "final_assignments": [
+      {
+        "account_name": "Owner Capital",
+        "normalized_account": "owner capital",
+        "direction": "inflow",
+        "bucket_key": "customer_money_landed",
+        "semantic_key": "customer_receipts",
+        "confidence": 0.62,
+        "source": "auto_semantic",
+        "grounding_status": "auto_semantic",
+        "abs_amount": 135000,
+        "profile_score": 0,
+        "profile_evidence": {
+          "tb_account_class": "equity",
+          "tb_ending_balance": -135000,
+          "tb_balance_direction": "credit",
+          "movement_count": 2,
+          "total_abs_amount": 135000,
+          "net_amount": 135000,
+          "active_months": [
+            "2026-01",
+            "2026-04"
+          ],
+          "sample_descriptions": [
+            "Owner capital contribution",
+            "Additional owner contribution"
+          ],
+          "sample_je_numbers": [
+            "JE-0001",
+            "JE-0085"
+          ],
+          "evidence_tokens": [
+            "owner capital",
+            "equity",
+            "capital contribution",
+            "owner distribution",
+            "owner capital contribution",
+            "additional owner contribution",
+            "inflow"
+          ]
+        },
+        "mapping_evidence": [
+          "direction_hint"
+        ]
+      },
+      {
+        "account_name": "Office Equipment",
+        "normalized_account": "office equipment",
+        "direction": "outflow",
+        "bucket_key": "workshop_kit_purchases",
+        "semantic_key": "supplier_payments",
+        "confidence": 0.62,
+        "source": "auto_semantic",
+        "grounding_status": "auto_semantic",
+        "abs_amount": 18000,
+        "profile_score": 0,
+        "profile_evidence": {
+          "tb_account_class": "fixed_asset",
+          "tb_ending_balance": 38000,
+          "tb_balance_direction": "debit",
+          "movement_count": 1,
+          "total_abs_amount": 18000,
+          "net_amount": -18000,
+          "active_months": [
+            "2026-01"
+          ],
+          "sample_descriptions": [
+            "Purchased office equipment (cash + payable)"
+          ],
+          "sample_je_numbers": [
+            "JE-0002"
+          ],
+          "evidence_tokens": [
+            "office equipment",
+            "fixed asset",
+            "ppe",
+            "equipment",
+            "capital expenditures",
+            "capex",
+            "purchased office equipment cash  payable",
+            "outflow"
+          ]
+        },
+        "mapping_evidence": [
+          "direction_hint"
+        ]
+      },
+      {
+        "account_name": "Prepaid Insurance",
+        "normalized_account": "prepaid insurance",
+        "direction": "outflow",
+        "bucket_key": "workshop_kit_purchases",
+        "semantic_key": "supplier_payments",
+        "confidence": 0.62,
+        "source": "auto_semantic",
+        "grounding_status": "auto_semantic",
+        "abs_amount": 9600,
+        "profile_score": 0,
+        "profile_evidence": {
+          "tb_account_class": "current_asset",
+          "tb_ending_balance": 4800,
+          "tb_balance_direction": "debit",
+          "movement_count": 1,
+          "total_abs_amount": 9600,
+          "net_amount": -9600,
+          "active_months": [
+            "2026-01"
+          ],
+          "sample_descriptions": [
+            "Prepaid annual insurance"
+          ],
+          "sample_je_numbers": [
+            "JE-0003"
+          ],
+          "evidence_tokens": [
+            "prepaid insurance",
+            "current asset",
+            "operating cash flow",
+            "prepaid annual insurance",
+            "insurance expense recognition",
+            "outflow"
+          ]
+        },
+        "mapping_evidence": [
+          "direction_hint"
+        ]
+      },
+      {
+        "account_name": "Rent Expense",
+        "normalized_account": "rent expense",
+        "direction": "outflow",
+        "bucket_key": "workshop_kit_purchases",
+        "semantic_key": "supplier_payments",
+        "confidence": 0.62,
+        "source": "auto_semantic",
+        "grounding_status": "auto_semantic",
+        "abs_amount": 10200,
+        "profile_score": 0,
+        "profile_evidence": {
+          "tb_account_class": "rent_expense",
+          "tb_ending_balance": 10200,
+          "tb_balance_direction": "debit",
+          "movement_count": 7,
+          "total_abs_amount": 10200,
+          "net_amount": -10200,
+          "active_months": [
+            "2026-01",
+            "2026-02",
+            "2026-03",
+            "2026-04",
+            "2026-05",
+            "2026-06"
+          ],
+          "sample_descriptions": [
+            "Paid office rent for January",
+            "Monthly rent"
+          ],
+          "sample_je_numbers": [
+            "JE-0004",
+            "JE-0014",
+            "JE-0027",
+            "JE-0040"
+          ],
+          "evidence_tokens": [
+            "rent expense",
+            "rent",
+            "facilities",
+            "lease",
+            "paid office rent for january",
+            "monthly rent",
+            "outflow"
+          ]
+        },
+        "mapping_evidence": [
+          "direction_hint"
+        ]
+      },
+      {
+        "account_name": "Accounts Receivable",
+        "normalized_account": "accounts receivable",
+        "direction": "inflow",
+        "bucket_key": "customer_money_landed",
+        "semantic_key": "customer_receipts",
+        "confidence": 0.94,
+        "source": "llm_assisted",
+        "grounding_status": "suggested",
+        "abs_amount": 264500,
+        "profile_score": 0,
+        "profile_evidence": {
+          "tb_account_class": "receivable",
+          "tb_ending_balance": 145500,
+          "tb_balance_direction": "debit",
+          "movement_count": 6,
+          "total_abs_amount": 264500,
+          "net_amount": 264500,
+          "active_months": [
+            "2026-01",
+            "2026-02",
+            "2026-03",
+            "2026-04",
+            "2026-05",
+            "2026-06"
+          ],
+          "sample_descriptions": [
+            "Collected customer balances"
+          ],
+          "sample_je_numbers": [
+            "JE-0006",
+            "JE-0019",
+            "JE-0032",
+            "JE-0045"
+          ],
+          "evidence_tokens": [
+            "accounts receivable",
+            "receivable",
+            "customer receipts",
+            "revenue",
+            "service revenue billed to clients",
+            "collected customer balances",
+            "inflow"
+          ]
+        },
+        "mapping_evidence": []
+      },
+      {
+        "account_name": "Accounts Payable",
+        "normalized_account": "accounts payable",
+        "direction": "outflow",
+        "bucket_key": "workshop_kit_purchases",
+        "semantic_key": "supplier_payments",
+        "confidence": 0.94,
+        "source": "profile_auto",
+        "grounding_status": "suggested",
+        "abs_amount": 28085,
+        "profile_score": 0.94,
+        "profile_evidence": {
+          "tb_account_class": "payable",
+          "tb_ending_balance": -14815,
+          "tb_balance_direction": "credit",
+          "movement_count": 6,
+          "total_abs_amount": 28085,
+          "net_amount": -28085,
+          "active_months": [
+            "2026-01",
+            "2026-02",
+            "2026-03",
+            "2026-04",
+            "2026-05",
+            "2026-06"
+          ],
+          "sample_descriptions": [
+            "Paid suppliers"
+          ],
+          "sample_je_numbers": [
+            "JE-0008",
+            "JE-0021",
+            "JE-0034",
+            "JE-0047"
+          ],
+          "evidence_tokens": [
+            "accounts payable",
+            "payable",
+            "supplier payments",
+            "vendor payments",
+            "purchased office equipment cash  payable",
+            "purchased office supplies on account",
+            "paid suppliers",
+            "outflow"
+          ]
+        },
+        "mapping_evidence": [
+          "shared_concept:supplier_payments",
+          "profile_evidence_concept"
+        ]
+      },
+      {
+        "account_name": "Salaries Expense",
+        "normalized_account": "salaries expense",
+        "direction": "outflow",
+        "bucket_key": "workshop_kit_purchases",
+        "semantic_key": "supplier_payments",
+        "confidence": 0.62,
+        "source": "auto_semantic",
+        "grounding_status": "auto_semantic",
+        "abs_amount": 79500,
+        "profile_score": 0,
+        "profile_evidence": {
+          "tb_account_class": "payroll_expense",
+          "tb_ending_balance": 79500,
+          "tb_balance_direction": "debit",
+          "movement_count": 6,
+          "total_abs_amount": 79500,
+          "net_amount": -79500,
+          "active_months": [
+            "2026-01",
+            "2026-02",
+            "2026-03",
+            "2026-04",
+            "2026-05",
+            "2026-06"
+          ],
+          "sample_descriptions": [
+            "Payroll processing"
+          ],
+          "sample_je_numbers": [
+            "JE-0009",
+            "JE-0022",
+            "JE-0035",
+            "JE-0048"
+          ],
+          "evidence_tokens": [
+            "salaries expense",
+            "payroll expense",
+            "payroll",
+            "wages",
+            "salaries",
+            "payroll processing",
+            "outflow"
+          ]
+        },
+        "mapping_evidence": [
+          "direction_hint"
+        ]
+      },
+      {
+        "account_name": "Utilities Expense",
+        "normalized_account": "utilities expense",
+        "direction": "outflow",
+        "bucket_key": "workshop_kit_purchases",
+        "semantic_key": "supplier_payments",
+        "confidence": 0.62,
+        "source": "auto_semantic",
+        "grounding_status": "auto_semantic",
+        "abs_amount": 18900,
+        "profile_score": 0,
+        "profile_evidence": {
+          "tb_account_class": "admin_expense",
+          "tb_ending_balance": 18900,
+          "tb_balance_direction": "debit",
+          "movement_count": 6,
+          "total_abs_amount": 18900,
+          "net_amount": -18900,
+          "active_months": [
+            "2026-01",
+            "2026-02",
+            "2026-03",
+            "2026-04",
+            "2026-05",
+            "2026-06"
+          ],
+          "sample_descriptions": [
+            "Utilities payment"
+          ],
+          "sample_je_numbers": [
+            "JE-0010",
+            "JE-0023",
+            "JE-0036",
+            "JE-0049"
+          ],
+          "evidence_tokens": [
+            "utilities expense",
+            "admin expense",
+            "general admin",
+            "professional fees",
+            "operating expenses",
+            "utilities payment",
+            "outflow"
+          ]
+        },
+        "mapping_evidence": [
+          "direction_hint"
+        ]
+      },
+      {
+        "account_name": "Marketing Expense",
+        "normalized_account": "marketing expense",
+        "direction": "outflow",
+        "bucket_key": "workshop_kit_purchases",
+        "semantic_key": "supplier_payments",
+        "confidence": 0.62,
+        "source": "auto_semantic",
+        "grounding_status": "auto_semantic",
+        "abs_amount": 15500,
+        "profile_score": 0,
+        "profile_evidence": {
+          "tb_account_class": "marketing_expense",
+          "tb_ending_balance": 15500,
+          "tb_balance_direction": "debit",
+          "movement_count": 6,
+          "total_abs_amount": 15500,
+          "net_amount": -15500,
+          "active_months": [
+            "2026-01",
+            "2026-02",
+            "2026-03",
+            "2026-04",
+            "2026-05",
+            "2026-06"
+          ],
+          "sample_descriptions": [
+            "Marketing campaign expense"
+          ],
+          "sample_je_numbers": [
+            "JE-0011",
+            "JE-0024",
+            "JE-0037",
+            "JE-0050"
+          ],
+          "evidence_tokens": [
+            "marketing expense",
+            "marketing",
+            "advertising",
+            "promotion",
+            "marketing campaign expense",
+            "outflow"
+          ]
+        },
+        "mapping_evidence": [
+          "direction_hint"
+        ]
+      },
+      {
+        "account_name": "Travel Expense",
+        "normalized_account": "travel expense",
+        "direction": "outflow",
+        "bucket_key": "workshop_kit_purchases",
+        "semantic_key": "supplier_payments",
+        "confidence": 0.62,
+        "source": "auto_semantic",
+        "grounding_status": "auto_semantic",
+        "abs_amount": 10000,
+        "profile_score": 0,
+        "profile_evidence": {
+          "tb_account_class": "admin_expense",
+          "tb_ending_balance": 10000,
+          "tb_balance_direction": "debit",
+          "movement_count": 6,
+          "total_abs_amount": 10000,
+          "net_amount": -10000,
+          "active_months": [
+            "2026-01",
+            "2026-02",
+            "2026-03",
+            "2026-04",
+            "2026-05",
+            "2026-06"
+          ],
+          "sample_descriptions": [
+            "Travel reimbursement"
+          ],
+          "sample_je_numbers": [
+            "JE-0012",
+            "JE-0025",
+            "JE-0038",
+            "JE-0051"
+          ],
+          "evidence_tokens": [
+            "travel expense",
+            "admin expense",
+            "general admin",
+            "professional fees",
+            "operating expenses",
+            "travel reimbursement",
+            "outflow"
+          ]
+        },
+        "mapping_evidence": [
+          "direction_hint"
+        ]
+      },
+      {
+        "account_name": "Bank Fees Expense",
+        "normalized_account": "bank fees expense",
+        "direction": "outflow",
+        "bucket_key": "workshop_kit_purchases",
+        "semantic_key": "supplier_payments",
+        "confidence": 0.62,
+        "source": "auto_semantic",
+        "grounding_status": "auto_semantic",
+        "abs_amount": 4500,
+        "profile_score": 0,
+        "profile_evidence": {
+          "tb_account_class": "admin_expense",
+          "tb_ending_balance": 4500,
+          "tb_balance_direction": "debit",
+          "movement_count": 6,
+          "total_abs_amount": 4500,
+          "net_amount": -4500,
+          "active_months": [
+            "2026-01",
+            "2026-02",
+            "2026-03",
+            "2026-04",
+            "2026-05",
+            "2026-06"
+          ],
+          "sample_descriptions": [
+            "Bank charges"
+          ],
+          "sample_je_numbers": [
+            "JE-0013",
+            "JE-0026",
+            "JE-0039",
+            "JE-0052"
+          ],
+          "evidence_tokens": [
+            "bank fees expense",
+            "admin expense",
+            "general admin",
+            "professional fees",
+            "operating expenses",
+            "bank charges",
+            "outflow"
+          ]
+        },
+        "mapping_evidence": [
+          "direction_hint"
+        ]
+      },
+      {
+        "account_name": "Interest Expense",
+        "normalized_account": "interest expense",
+        "direction": "outflow",
+        "bucket_key": "workshop_kit_purchases",
+        "semantic_key": "supplier_payments",
+        "confidence": 0.62,
+        "source": "auto_semantic",
+        "grounding_status": "auto_semantic",
+        "abs_amount": 3180,
+        "profile_score": 0,
+        "profile_evidence": {
+          "tb_account_class": "interest_expense",
+          "tb_ending_balance": 3180,
+          "tb_balance_direction": "debit",
+          "movement_count": 6,
+          "total_abs_amount": 3180,
+          "net_amount": -3180,
+          "active_months": [
+            "2026-01",
+            "2026-02",
+            "2026-03",
+            "2026-04",
+            "2026-05",
+            "2026-06"
+          ],
+          "sample_descriptions": [
+            "Loan repayment (principal + interest)"
+          ],
+          "sample_je_numbers": [
+            "JE-0015",
+            "JE-0028",
+            "JE-0041",
+            "JE-0054"
+          ],
+          "evidence_tokens": [
+            "interest expense",
+            "interest paid",
+            "loan repayment principal  interest",
+            "outflow"
+          ]
+        },
+        "mapping_evidence": [
+          "direction_hint"
+        ]
+      },
+      {
+        "account_name": "Notes Payable",
+        "normalized_account": "notes payable",
+        "direction": "outflow",
+        "bucket_key": "workshop_kit_purchases",
+        "semantic_key": "supplier_payments",
+        "confidence": 0.62,
+        "source": "auto_semantic",
+        "grounding_status": "auto_semantic",
+        "abs_amount": 14460,
+        "profile_score": 0,
+        "profile_evidence": {
+          "tb_account_class": "debt",
+          "tb_ending_balance": -20540,
+          "tb_balance_direction": "credit",
+          "movement_count": 6,
+          "total_abs_amount": 14460,
+          "net_amount": -14460,
+          "active_months": [
+            "2026-01",
+            "2026-02",
+            "2026-03",
+            "2026-04",
+            "2026-05",
+            "2026-06"
+          ],
+          "sample_descriptions": [
+            "Loan repayment (principal + interest)"
+          ],
+          "sample_je_numbers": [
+            "JE-0015",
+            "JE-0028",
+            "JE-0041",
+            "JE-0054"
+          ],
+          "evidence_tokens": [
+            "notes payable",
+            "debt",
+            "loan",
+            "borrowings",
+            "principal repayment",
+            "loan repayment principal  interest",
+            "bank loan proceeds received",
+            "outflow"
+          ]
+        },
+        "mapping_evidence": [
+          "direction_hint"
+        ]
+      },
+      {
+        "account_name": "Notes Payable",
+        "normalized_account": "notes payable",
+        "direction": "inflow",
+        "bucket_key": "line_of_credit_oxygen",
+        "semantic_key": "debt_drawdown",
+        "confidence": 0.94,
+        "source": "llm_assisted",
+        "grounding_status": "suggested",
+        "abs_amount": 35000,
+        "profile_score": 0,
+        "profile_evidence": {
+          "tb_account_class": "debt",
+          "tb_ending_balance": -20540,
+          "tb_balance_direction": "credit",
+          "movement_count": 1,
+          "total_abs_amount": 35000,
+          "net_amount": 35000,
+          "active_months": [
+            "2026-02"
+          ],
+          "sample_descriptions": [
+            "Bank loan proceeds received"
+          ],
+          "sample_je_numbers": [
+            "JE-0083"
+          ],
+          "evidence_tokens": [
+            "notes payable",
+            "debt",
+            "loan",
+            "borrowings",
+            "principal repayment",
+            "loan repayment principal  interest",
+            "bank loan proceeds received",
+            "outflow",
+            "inflow"
+          ]
+        },
+        "mapping_evidence": []
+      },
+      {
+        "account_name": "Owner Drawings",
+        "normalized_account": "owner drawings",
+        "direction": "outflow",
+        "bucket_key": "workshop_kit_purchases",
+        "semantic_key": "supplier_payments",
+        "confidence": 0.62,
+        "source": "auto_semantic",
+        "grounding_status": "auto_semantic",
+        "abs_amount": 6000,
+        "profile_score": 0,
+        "profile_evidence": {
+          "tb_account_class": "equity",
+          "tb_ending_balance": 6000,
+          "tb_balance_direction": "debit",
+          "movement_count": 1,
+          "total_abs_amount": 6000,
+          "net_amount": -6000,
+          "active_months": [
+            "2026-03"
+          ],
+          "sample_descriptions": [
+            "Owner drawing"
+          ],
+          "sample_je_numbers": [
+            "JE-0084"
+          ],
+          "evidence_tokens": [
+            "owner drawings",
+            "equity",
+            "capital contribution",
+            "owner distribution",
+            "owner drawing",
+            "outflow"
+          ]
+        },
+        "mapping_evidence": [
+          "direction_hint"
+        ]
+      },
+      {
+        "account_name": "Unearned Revenue",
+        "normalized_account": "unearned revenue",
+        "direction": "inflow",
+        "bucket_key": "customer_money_landed",
+        "semantic_key": "customer_receipts",
+        "confidence": 0.87,
+        "source": "llm_assisted",
+        "grounding_status": "suggested",
+        "abs_amount": 12000,
+        "profile_score": 0,
+        "profile_evidence": {
+          "tb_account_class": "current_liability",
+          "tb_ending_balance": -8000,
+          "tb_balance_direction": "credit",
+          "movement_count": 1,
+          "total_abs_amount": 12000,
+          "net_amount": 12000,
+          "active_months": [
+            "2026-05"
+          ],
+          "sample_descriptions": [
+            "Unearned retainer received"
+          ],
+          "sample_je_numbers": [
+            "JE-0086"
+          ],
+          "evidence_tokens": [
+            "unearned revenue",
+            "current liability",
+            "operating cash flow",
+            "unearned retainer received",
+            "recognized part of unearned retainer",
+            "inflow"
+          ]
+        },
+        "mapping_evidence": []
+      }
+    ],
+    "low_confidence_mappings": [
+      {
+        "account_name": "Owner Capital",
+        "normalized_account": "owner capital",
+        "direction": "inflow",
+        "bucket_key": "customer_money_landed",
+        "confidence": 0.62
+      },
+      {
+        "account_name": "Office Equipment",
+        "normalized_account": "office equipment",
+        "direction": "outflow",
+        "bucket_key": "workshop_kit_purchases",
+        "confidence": 0.62
+      },
+      {
+        "account_name": "Prepaid Insurance",
+        "normalized_account": "prepaid insurance",
+        "direction": "outflow",
+        "bucket_key": "workshop_kit_purchases",
+        "confidence": 0.62
+      },
+      {
+        "account_name": "Rent Expense",
+        "normalized_account": "rent expense",
+        "direction": "outflow",
+        "bucket_key": "workshop_kit_purchases",
+        "confidence": 0.62
+      },
+      {
+        "account_name": "Salaries Expense",
+        "normalized_account": "salaries expense",
+        "direction": "outflow",
+        "bucket_key": "workshop_kit_purchases",
+        "confidence": 0.62
+      },
+      {
+        "account_name": "Utilities Expense",
+        "normalized_account": "utilities expense",
+        "direction": "outflow",
+        "bucket_key": "workshop_kit_purchases",
+        "confidence": 0.62
+      },
+      {
+        "account_name": "Marketing Expense",
+        "normalized_account": "marketing expense",
+        "direction": "outflow",
+        "bucket_key": "workshop_kit_purchases",
+        "confidence": 0.62
+      },
+      {
+        "account_name": "Travel Expense",
+        "normalized_account": "travel expense",
+        "direction": "outflow",
+        "bucket_key": "workshop_kit_purchases",
+        "confidence": 0.62
+      },
+      {
+        "account_name": "Bank Fees Expense",
+        "normalized_account": "bank fees expense",
+        "direction": "outflow",
+        "bucket_key": "workshop_kit_purchases",
+        "confidence": 0.62
+      },
+      {
+        "account_name": "Interest Expense",
+        "normalized_account": "interest expense",
+        "direction": "outflow",
+        "bucket_key": "workshop_kit_purchases",
+        "confidence": 0.62
+      },
+      {
+        "account_name": "Notes Payable",
+        "normalized_account": "notes payable",
+        "direction": "outflow",
+        "bucket_key": "workshop_kit_purchases",
+        "confidence": 0.62
+      },
+      {
+        "account_name": "Owner Drawings",
+        "normalized_account": "owner drawings",
+        "direction": "outflow",
+        "bucket_key": "workshop_kit_purchases",
+        "confidence": 0.62
+      }
+    ],
+    "auto_mappings_created": [
+      {
+        "normalized_account": "accounts payable",
+        "direction": "outflow",
+        "bucket_key": "workshop_kit_purchases",
+        "confidence": 0.94,
+        "source": "profile_auto",
+        "status": "suggested",
+        "semantic_key": "supplier_payments",
+        "profile_score": 0.94,
+        "llm_score": 0,
+        "deterministic_score": 0.94,
+        "evidence": [
+          "shared_concept:supplier_payments",
+          "profile_evidence_concept"
+        ],
+        "reasoning": null,
+        "previous_bucket_key": null,
+        "account_profile": {
+          "tb_account_class": "payable",
+          "tb_ending_balance": -14815,
+          "tb_balance_direction": "credit",
+          "movement_count": 6,
+          "total_abs_amount": 28085,
+          "net_amount": -28085,
+          "active_months": [
+            "2026-01",
+            "2026-02",
+            "2026-03",
+            "2026-04",
+            "2026-05",
+            "2026-06"
+          ],
+          "sample_descriptions": [
+            "Paid suppliers"
+          ],
+          "sample_je_numbers": [
+            "JE-0008",
+            "JE-0021",
+            "JE-0034",
+            "JE-0047"
+          ],
+          "evidence_tokens": [
+            "accounts payable",
+            "payable",
+            "supplier payments",
+            "vendor payments",
+            "purchased office equipment cash  payable",
+            "purchased office supplies on account",
+            "paid suppliers",
+            "outflow"
+          ]
+        }
+      },
+      {
+        "normalized_account": "accounts receivable",
+        "direction": "inflow",
+        "bucket_key": "customer_money_landed",
+        "confidence": 0.94,
+        "source": "llm_assisted",
+        "status": "suggested",
+        "semantic_key": "customer_receipts",
+        "profile_score": 0.94,
+        "llm_score": 0.94,
+        "deterministic_score": 0.94,
+        "evidence": [
+          "Collected customer balances",
+          "accounts receivable",
+          "receivable",
+          "customer receipts",
+          "revenue"
+        ],
+        "reasoning": "Accounts receivable inflow corresponds to collected customer balances, which is a customer receipt. The best profile mapping is 'customer_money_landed' with a score of 0.94.",
+        "previous_bucket_key": "customer_money_landed",
+        "account_profile": {
+          "tb_account_class": "receivable",
+          "tb_ending_balance": 145500,
+          "tb_balance_direction": "debit",
+          "movement_count": 6,
+          "total_abs_amount": 264500,
+          "net_amount": 264500,
+          "active_months": [
+            "2026-01",
+            "2026-02",
+            "2026-03",
+            "2026-04",
+            "2026-05",
+            "2026-06"
+          ],
+          "sample_descriptions": [
+            "Collected customer balances"
+          ],
+          "sample_je_numbers": [
+            "JE-0006",
+            "JE-0019",
+            "JE-0032",
+            "JE-0045"
+          ],
+          "evidence_tokens": [
+            "accounts receivable",
+            "receivable",
+            "customer receipts",
+            "revenue",
+            "service revenue billed to clients",
+            "collected customer balances",
+            "inflow"
+          ]
+        }
+      },
+      {
+        "normalized_account": "notes payable",
+        "direction": "inflow",
+        "bucket_key": "line_of_credit_oxygen",
+        "confidence": 0.94,
+        "source": "llm_assisted",
+        "status": "suggested",
+        "semantic_key": "debt_drawdown",
+        "profile_score": 0.94,
+        "llm_score": 0.94,
+        "deterministic_score": 0.94,
+        "evidence": [
+          "Bank loan proceeds received",
+          "debt",
+          "loan",
+          "borrowings",
+          "principal repayment"
+        ],
+        "reasoning": "The account is a debt inflow with description 'Bank loan proceeds received', matching the debt_drawdown semantic key. The best profile mapping is 'line_of_credit_oxygen', which aligns with the provided evidence.",
+        "previous_bucket_key": "line_of_credit_oxygen",
+        "account_profile": {
+          "tb_account_class": "debt",
+          "tb_ending_balance": -20540,
+          "tb_balance_direction": "credit",
+          "movement_count": 1,
+          "total_abs_amount": 35000,
+          "net_amount": 35000,
+          "active_months": [
+            "2026-02"
+          ],
+          "sample_descriptions": [
+            "Bank loan proceeds received"
+          ],
+          "sample_je_numbers": [
+            "JE-0083"
+          ],
+          "evidence_tokens": [
+            "notes payable",
+            "debt",
+            "loan",
+            "borrowings",
+            "principal repayment",
+            "loan repayment principal  interest",
+            "bank loan proceeds received",
+            "outflow",
+            "inflow"
+          ]
+        }
+      },
+      {
+        "normalized_account": "unearned revenue",
+        "direction": "inflow",
+        "bucket_key": "customer_money_landed",
+        "confidence": 0.87,
+        "source": "llm_assisted",
+        "status": "suggested",
+        "semantic_key": "customer_receipts",
+        "profile_score": 0.87,
+        "llm_score": 0.87,
+        "deterministic_score": 0.87,
+        "evidence": [
+          "Unearned retainer received",
+          "operating cash flow",
+          "customer_money_landed"
+        ],
+        "reasoning": "Unearned revenue inflow represents customer money received (e.g., retainer). The best profile mapping is 'customer_money_landed', matching the semantic key customer_receipts. The evidence includes 'Unearned retainer received' and 'operating cash flow'.",
+        "previous_bucket_key": "customer_money_landed",
+        "account_profile": {
+          "tb_account_class": "current_liability",
+          "tb_ending_balance": -8000,
+          "tb_balance_direction": "credit",
+          "movement_count": 1,
+          "total_abs_amount": 12000,
+          "net_amount": 12000,
+          "active_months": [
+            "2026-05"
+          ],
+          "sample_descriptions": [
+            "Unearned retainer received"
+          ],
+          "sample_je_numbers": [
+            "JE-0086"
+          ],
+          "evidence_tokens": [
+            "unearned revenue",
+            "current liability",
+            "operating cash flow",
+            "unearned retainer received",
+            "recognized part of unearned retainer",
+            "inflow"
+          ]
+        }
+      }
+    ],
+    "workbook_bucket_totals": {
+      "customer_money_landed": 411500,
+      "refunds_rebates_and_odd_receipts": 0,
+      "marketplace_partner_settlements": 0,
+      "people_runway_spend": 0,
+      "studio_and_space_commitment_cash": 0,
+      "audience_acquisition_cash": 0,
+      "operating_backbone_cash": 0,
+      "government_remittance_cash": 0,
+      "workshop_kit_purchases": 217925,
+      "code_asset_capitalization": 0,
+      "equipment_resale_receipts": 0,
+      "line_of_credit_oxygen": 35000,
+      "lender_principal_sendback": 0,
+      "borrowing_cost_cash": 0,
+      "sponsor_oxygen": 0,
+      "owner_cash_sweeps": 0
+    },
+    "warnings": [
+      "12 auto-mapped account(s) have low confidence."
+    ]
+  },
+  "report_error": null
+}

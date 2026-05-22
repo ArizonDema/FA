@@ -1,0 +1,1069 @@
+{
+  "status": "failed",
+  "generated_at": "2026-05-11T18:29:31.736Z",
+  "failures": [
+    "template semantic repair failed: Ollama request timed out after 120000ms",
+    "template ingestion needs human review: Several direct bucket labels need semantic review: Buyer money received, People engine cash, Space commitments, Demand creation spend.; LLM semantic repair failed; deterministic semantic bindings were preserved.; Direct cash-flow bucket bindings missing canonical semantic labels: buyer_money_received, service_credits_and_odd_receipts, partner_operating_payouts, people_engine_cash, space_commitments, demand_creation_spend, back_office_platform_costs, treasury_tax_cash_out, long_life_asset_buildout, product_build_capitalization, equipment_exit_cash, credit_line_cash_in, lender_principal_return, cost_of_borrowing_cash, sponsor_cash_support, owner_cash_takeouts",
+    "runtime LLM did not accept or confirm any mapping",
+    "wrong concept for accounts receivable:inflow: expected customer_receipts, got none (service_credits_and_odd_receipts)",
+    "wrong concept for unearned revenue:inflow: expected customer_receipts, got none (service_credits_and_odd_receipts)",
+    "wrong concept for salaries expense:outflow: expected payroll, got none (back_office_platform_costs)",
+    "wrong concept for rent expense:outflow: expected rent_facilities, got none (back_office_platform_costs)",
+    "wrong concept for marketing expense:outflow: expected sales_marketing, got none (back_office_platform_costs)",
+    "wrong concept for bank fees expense:outflow: expected general_admin, got none (back_office_platform_costs)",
+    "wrong concept for prepaid insurance:outflow: expected general_admin, got none (back_office_platform_costs)",
+    "wrong concept for travel expense:outflow: expected general_admin, got none (back_office_platform_costs)",
+    "wrong concept for utilities expense:outflow: expected general_admin, got none (back_office_platform_costs)",
+    "wrong concept for office equipment:outflow: expected capital_expenditures, got none (back_office_platform_costs)",
+    "wrong concept for notes payable:inflow: expected debt_drawdown, got none (service_credits_and_odd_receipts)",
+    "wrong concept for notes payable:outflow: expected debt_repayment, got none (back_office_platform_costs)",
+    "wrong concept for interest expense:outflow: expected interest_paid, got none (back_office_platform_costs)",
+    "wrong concept for owner capital:inflow: expected equity_injection, got none (service_credits_and_odd_receipts)",
+    "wrong concept for owner drawings:outflow: expected dividends_distributions, got none (back_office_platform_costs)"
+  ],
+  "ingestion_latency_ms": 181654,
+  "report_latency_ms": 252473,
+  "template_model": "gpt-oss:20b",
+  "runtime_model": "gpt-oss:20b",
+  "analysis_source": "llm_layout_decision",
+  "confidence": 0.62,
+  "issues": [
+    "Several direct bucket labels need semantic review: Buyer money received, People engine cash, Space commitments, Demand creation spend.",
+    "LLM semantic repair failed; deterministic semantic bindings were preserved.",
+    "Direct cash-flow bucket bindings missing canonical semantic labels: buyer_money_received, service_credits_and_odd_receipts, partner_operating_payouts, people_engine_cash, space_commitments, demand_creation_spend, back_office_platform_costs, treasury_tax_cash_out, long_life_asset_buildout, product_build_capitalization, equipment_exit_cash, credit_line_cash_in, lender_principal_return, cost_of_borrowing_cash, sponsor_cash_support, owner_cash_takeouts"
+  ],
+  "required_anchors": [
+    "bucket_targets"
+  ],
+  "template_semantic_repair": {
+    "attempted": true,
+    "applied_count": 0,
+    "failure_code": "timeout",
+    "failure_reason": "Ollama request timed out after 120000ms"
+  },
+  "runtime_assistance": {
+    "enabled": true,
+    "statementMethod": "direct",
+    "candidatesConsidered": 6,
+    "attempted": true,
+    "acceptedCount": 0,
+    "rejectedCount": 6,
+    "failed": false,
+    "model": "gpt-oss:20b",
+    "minimumAcceptedScore": 0.7,
+    "promptVersion": "runtime.v1",
+    "skillVersion": "cash-flow-mapping.v1",
+    "batchSize": 2,
+    "batchCount": 3,
+    "candidatePoolSize": 16,
+    "notes": [],
+    "runtimeScope": "ambiguous_novel",
+    "confidenceCalibrationNotes": [
+      "accepted mappings require schema-valid targets, non-empty evidence, and min score",
+      "profile/llm conflicts within 0.12 are review-only",
+      "auto-created runtime mappings persist as suggested"
+    ],
+    "profileEvidenceStats": {
+      "candidates_with_profile": 16,
+      "strong_profile_candidates": 1,
+      "deterministic_profile_disagreements": 0
+    },
+    "rejectedRecommendations": [
+      {
+        "account_key": "accounts receivable:inflow",
+        "mapping_key": "service_credits_and_odd_receipts",
+        "reason": "score_below_threshold",
+        "llm_score": 0.62,
+        "best_profile_mapping_key": null,
+        "best_profile_score": 0
+      },
+      {
+        "account_key": "owner capital:inflow",
+        "mapping_key": "sponsor_cash_support",
+        "reason": "score_below_threshold",
+        "llm_score": 0.62,
+        "best_profile_mapping_key": null,
+        "best_profile_score": 0
+      },
+      {
+        "account_key": "salaries expense:outflow",
+        "mapping_key": "back_office_platform_costs",
+        "reason": "score_below_threshold",
+        "llm_score": 0.62,
+        "best_profile_mapping_key": null,
+        "best_profile_score": 0
+      },
+      {
+        "account_key": "notes payable:inflow",
+        "mapping_key": "credit_line_cash_in",
+        "reason": "score_below_threshold",
+        "llm_score": 0.07,
+        "best_profile_mapping_key": null,
+        "best_profile_score": 0
+      },
+      {
+        "account_key": "utilities expense:outflow",
+        "mapping_key": "back_office_platform_costs",
+        "reason": "score_below_threshold",
+        "llm_score": 0.62,
+        "best_profile_mapping_key": null,
+        "best_profile_score": 0
+      },
+      {
+        "account_key": "office equipment:outflow",
+        "mapping_key": "long_life_asset_buildout",
+        "reason": "score_below_threshold",
+        "llm_score": 0.06,
+        "best_profile_mapping_key": null,
+        "best_profile_score": 0
+      }
+    ],
+    "acceptedMappings": []
+  },
+  "account_profile_summary": {
+    "profiled_accounts": 20,
+    "movement_accounts": 15,
+    "direction_profiles": 16,
+    "mapped_accounts": 16,
+    "profile_auto_mappings": 1,
+    "llm_assisted_mappings": 0,
+    "review_required_mappings": 21
+  },
+  "final_assignments": [
+    {
+      "account_name": "Owner Capital",
+      "normalized_account": "owner capital",
+      "direction": "inflow",
+      "bucket_key": "service_credits_and_odd_receipts",
+      "semantic_key": null,
+      "confidence": 0.62,
+      "source": "auto_semantic",
+      "grounding_status": "auto_semantic",
+      "abs_amount": 135000,
+      "profile_score": 0,
+      "profile_evidence": {
+        "tb_account_class": "equity",
+        "tb_ending_balance": -135000,
+        "tb_balance_direction": "credit",
+        "movement_count": 2,
+        "total_abs_amount": 135000,
+        "net_amount": 135000,
+        "active_months": [
+          "2026-01",
+          "2026-04"
+        ],
+        "sample_descriptions": [
+          "Owner capital contribution",
+          "Additional owner contribution"
+        ],
+        "sample_je_numbers": [
+          "JE-0001",
+          "JE-0085"
+        ],
+        "evidence_tokens": [
+          "owner capital",
+          "equity",
+          "capital contribution",
+          "owner distribution",
+          "owner capital contribution",
+          "additional owner contribution",
+          "inflow"
+        ]
+      },
+      "mapping_evidence": [
+        "direction_hint"
+      ]
+    },
+    {
+      "account_name": "Office Equipment",
+      "normalized_account": "office equipment",
+      "direction": "outflow",
+      "bucket_key": "back_office_platform_costs",
+      "semantic_key": null,
+      "confidence": 0.62,
+      "source": "auto_semantic",
+      "grounding_status": "auto_semantic",
+      "abs_amount": 18000,
+      "profile_score": 0,
+      "profile_evidence": {
+        "tb_account_class": "fixed_asset",
+        "tb_ending_balance": 38000,
+        "tb_balance_direction": "debit",
+        "movement_count": 1,
+        "total_abs_amount": 18000,
+        "net_amount": -18000,
+        "active_months": [
+          "2026-01"
+        ],
+        "sample_descriptions": [
+          "Purchased office equipment (cash + payable)"
+        ],
+        "sample_je_numbers": [
+          "JE-0002"
+        ],
+        "evidence_tokens": [
+          "office equipment",
+          "fixed asset",
+          "ppe",
+          "equipment",
+          "capital expenditures",
+          "capex",
+          "purchased office equipment cash  payable",
+          "outflow"
+        ]
+      },
+      "mapping_evidence": [
+        "direction_hint"
+      ]
+    },
+    {
+      "account_name": "Prepaid Insurance",
+      "normalized_account": "prepaid insurance",
+      "direction": "outflow",
+      "bucket_key": "back_office_platform_costs",
+      "semantic_key": null,
+      "confidence": 0.62,
+      "source": "auto_semantic",
+      "grounding_status": "auto_semantic",
+      "abs_amount": 9600,
+      "profile_score": 0,
+      "profile_evidence": {
+        "tb_account_class": "current_asset",
+        "tb_ending_balance": 4800,
+        "tb_balance_direction": "debit",
+        "movement_count": 1,
+        "total_abs_amount": 9600,
+        "net_amount": -9600,
+        "active_months": [
+          "2026-01"
+        ],
+        "sample_descriptions": [
+          "Prepaid annual insurance"
+        ],
+        "sample_je_numbers": [
+          "JE-0003"
+        ],
+        "evidence_tokens": [
+          "prepaid insurance",
+          "current asset",
+          "operating cash flow",
+          "prepaid annual insurance",
+          "insurance expense recognition",
+          "outflow"
+        ]
+      },
+      "mapping_evidence": [
+        "direction_hint"
+      ]
+    },
+    {
+      "account_name": "Rent Expense",
+      "normalized_account": "rent expense",
+      "direction": "outflow",
+      "bucket_key": "back_office_platform_costs",
+      "semantic_key": null,
+      "confidence": 0.62,
+      "source": "auto_semantic",
+      "grounding_status": "auto_semantic",
+      "abs_amount": 10200,
+      "profile_score": 0,
+      "profile_evidence": {
+        "tb_account_class": "rent_expense",
+        "tb_ending_balance": 10200,
+        "tb_balance_direction": "debit",
+        "movement_count": 7,
+        "total_abs_amount": 10200,
+        "net_amount": -10200,
+        "active_months": [
+          "2026-01",
+          "2026-02",
+          "2026-03",
+          "2026-04",
+          "2026-05",
+          "2026-06"
+        ],
+        "sample_descriptions": [
+          "Paid office rent for January",
+          "Monthly rent"
+        ],
+        "sample_je_numbers": [
+          "JE-0004",
+          "JE-0014",
+          "JE-0027",
+          "JE-0040"
+        ],
+        "evidence_tokens": [
+          "rent expense",
+          "rent",
+          "facilities",
+          "lease",
+          "paid office rent for january",
+          "monthly rent",
+          "outflow"
+        ]
+      },
+      "mapping_evidence": [
+        "direction_hint"
+      ]
+    },
+    {
+      "account_name": "Accounts Receivable",
+      "normalized_account": "accounts receivable",
+      "direction": "inflow",
+      "bucket_key": "service_credits_and_odd_receipts",
+      "semantic_key": null,
+      "confidence": 0.62,
+      "source": "auto_semantic",
+      "grounding_status": "auto_semantic",
+      "abs_amount": 264500,
+      "profile_score": 0,
+      "profile_evidence": {
+        "tb_account_class": "receivable",
+        "tb_ending_balance": 145500,
+        "tb_balance_direction": "debit",
+        "movement_count": 6,
+        "total_abs_amount": 264500,
+        "net_amount": 264500,
+        "active_months": [
+          "2026-01",
+          "2026-02",
+          "2026-03",
+          "2026-04",
+          "2026-05",
+          "2026-06"
+        ],
+        "sample_descriptions": [
+          "Collected customer balances"
+        ],
+        "sample_je_numbers": [
+          "JE-0006",
+          "JE-0019",
+          "JE-0032",
+          "JE-0045"
+        ],
+        "evidence_tokens": [
+          "accounts receivable",
+          "receivable",
+          "customer receipts",
+          "revenue",
+          "service revenue billed to clients",
+          "collected customer balances",
+          "inflow"
+        ]
+      },
+      "mapping_evidence": [
+        "direction_hint"
+      ]
+    },
+    {
+      "account_name": "Accounts Payable",
+      "normalized_account": "accounts payable",
+      "direction": "outflow",
+      "bucket_key": "partner_operating_payouts",
+      "semantic_key": "supplier_payments",
+      "confidence": 0.94,
+      "source": "profile_auto",
+      "grounding_status": "suggested",
+      "abs_amount": 28085,
+      "profile_score": 0.94,
+      "profile_evidence": {
+        "tb_account_class": "payable",
+        "tb_ending_balance": -14815,
+        "tb_balance_direction": "credit",
+        "movement_count": 6,
+        "total_abs_amount": 28085,
+        "net_amount": -28085,
+        "active_months": [
+          "2026-01",
+          "2026-02",
+          "2026-03",
+          "2026-04",
+          "2026-05",
+          "2026-06"
+        ],
+        "sample_descriptions": [
+          "Paid suppliers"
+        ],
+        "sample_je_numbers": [
+          "JE-0008",
+          "JE-0021",
+          "JE-0034",
+          "JE-0047"
+        ],
+        "evidence_tokens": [
+          "accounts payable",
+          "payable",
+          "supplier payments",
+          "vendor payments",
+          "purchased office equipment cash  payable",
+          "purchased office supplies on account",
+          "paid suppliers",
+          "outflow"
+        ]
+      },
+      "mapping_evidence": [
+        "shared_concept:supplier_payments",
+        "profile_evidence_concept"
+      ]
+    },
+    {
+      "account_name": "Salaries Expense",
+      "normalized_account": "salaries expense",
+      "direction": "outflow",
+      "bucket_key": "back_office_platform_costs",
+      "semantic_key": null,
+      "confidence": 0.62,
+      "source": "auto_semantic",
+      "grounding_status": "auto_semantic",
+      "abs_amount": 79500,
+      "profile_score": 0,
+      "profile_evidence": {
+        "tb_account_class": "payroll_expense",
+        "tb_ending_balance": 79500,
+        "tb_balance_direction": "debit",
+        "movement_count": 6,
+        "total_abs_amount": 79500,
+        "net_amount": -79500,
+        "active_months": [
+          "2026-01",
+          "2026-02",
+          "2026-03",
+          "2026-04",
+          "2026-05",
+          "2026-06"
+        ],
+        "sample_descriptions": [
+          "Payroll processing"
+        ],
+        "sample_je_numbers": [
+          "JE-0009",
+          "JE-0022",
+          "JE-0035",
+          "JE-0048"
+        ],
+        "evidence_tokens": [
+          "salaries expense",
+          "payroll expense",
+          "payroll",
+          "wages",
+          "salaries",
+          "payroll processing",
+          "outflow"
+        ]
+      },
+      "mapping_evidence": [
+        "direction_hint"
+      ]
+    },
+    {
+      "account_name": "Utilities Expense",
+      "normalized_account": "utilities expense",
+      "direction": "outflow",
+      "bucket_key": "back_office_platform_costs",
+      "semantic_key": null,
+      "confidence": 0.62,
+      "source": "auto_semantic",
+      "grounding_status": "auto_semantic",
+      "abs_amount": 18900,
+      "profile_score": 0,
+      "profile_evidence": {
+        "tb_account_class": "admin_expense",
+        "tb_ending_balance": 18900,
+        "tb_balance_direction": "debit",
+        "movement_count": 6,
+        "total_abs_amount": 18900,
+        "net_amount": -18900,
+        "active_months": [
+          "2026-01",
+          "2026-02",
+          "2026-03",
+          "2026-04",
+          "2026-05",
+          "2026-06"
+        ],
+        "sample_descriptions": [
+          "Utilities payment"
+        ],
+        "sample_je_numbers": [
+          "JE-0010",
+          "JE-0023",
+          "JE-0036",
+          "JE-0049"
+        ],
+        "evidence_tokens": [
+          "utilities expense",
+          "admin expense",
+          "general admin",
+          "professional fees",
+          "operating expenses",
+          "utilities payment",
+          "outflow"
+        ]
+      },
+      "mapping_evidence": [
+        "direction_hint"
+      ]
+    },
+    {
+      "account_name": "Marketing Expense",
+      "normalized_account": "marketing expense",
+      "direction": "outflow",
+      "bucket_key": "back_office_platform_costs",
+      "semantic_key": null,
+      "confidence": 0.62,
+      "source": "auto_semantic",
+      "grounding_status": "auto_semantic",
+      "abs_amount": 15500,
+      "profile_score": 0,
+      "profile_evidence": {
+        "tb_account_class": "marketing_expense",
+        "tb_ending_balance": 15500,
+        "tb_balance_direction": "debit",
+        "movement_count": 6,
+        "total_abs_amount": 15500,
+        "net_amount": -15500,
+        "active_months": [
+          "2026-01",
+          "2026-02",
+          "2026-03",
+          "2026-04",
+          "2026-05",
+          "2026-06"
+        ],
+        "sample_descriptions": [
+          "Marketing campaign expense"
+        ],
+        "sample_je_numbers": [
+          "JE-0011",
+          "JE-0024",
+          "JE-0037",
+          "JE-0050"
+        ],
+        "evidence_tokens": [
+          "marketing expense",
+          "marketing",
+          "advertising",
+          "promotion",
+          "marketing campaign expense",
+          "outflow"
+        ]
+      },
+      "mapping_evidence": [
+        "direction_hint"
+      ]
+    },
+    {
+      "account_name": "Travel Expense",
+      "normalized_account": "travel expense",
+      "direction": "outflow",
+      "bucket_key": "back_office_platform_costs",
+      "semantic_key": null,
+      "confidence": 0.62,
+      "source": "auto_semantic",
+      "grounding_status": "auto_semantic",
+      "abs_amount": 10000,
+      "profile_score": 0,
+      "profile_evidence": {
+        "tb_account_class": "admin_expense",
+        "tb_ending_balance": 10000,
+        "tb_balance_direction": "debit",
+        "movement_count": 6,
+        "total_abs_amount": 10000,
+        "net_amount": -10000,
+        "active_months": [
+          "2026-01",
+          "2026-02",
+          "2026-03",
+          "2026-04",
+          "2026-05",
+          "2026-06"
+        ],
+        "sample_descriptions": [
+          "Travel reimbursement"
+        ],
+        "sample_je_numbers": [
+          "JE-0012",
+          "JE-0025",
+          "JE-0038",
+          "JE-0051"
+        ],
+        "evidence_tokens": [
+          "travel expense",
+          "admin expense",
+          "general admin",
+          "professional fees",
+          "operating expenses",
+          "travel reimbursement",
+          "outflow"
+        ]
+      },
+      "mapping_evidence": [
+        "direction_hint"
+      ]
+    },
+    {
+      "account_name": "Bank Fees Expense",
+      "normalized_account": "bank fees expense",
+      "direction": "outflow",
+      "bucket_key": "back_office_platform_costs",
+      "semantic_key": null,
+      "confidence": 0.62,
+      "source": "auto_semantic",
+      "grounding_status": "auto_semantic",
+      "abs_amount": 4500,
+      "profile_score": 0,
+      "profile_evidence": {
+        "tb_account_class": "admin_expense",
+        "tb_ending_balance": 4500,
+        "tb_balance_direction": "debit",
+        "movement_count": 6,
+        "total_abs_amount": 4500,
+        "net_amount": -4500,
+        "active_months": [
+          "2026-01",
+          "2026-02",
+          "2026-03",
+          "2026-04",
+          "2026-05",
+          "2026-06"
+        ],
+        "sample_descriptions": [
+          "Bank charges"
+        ],
+        "sample_je_numbers": [
+          "JE-0013",
+          "JE-0026",
+          "JE-0039",
+          "JE-0052"
+        ],
+        "evidence_tokens": [
+          "bank fees expense",
+          "admin expense",
+          "general admin",
+          "professional fees",
+          "operating expenses",
+          "bank charges",
+          "outflow"
+        ]
+      },
+      "mapping_evidence": [
+        "direction_hint"
+      ]
+    },
+    {
+      "account_name": "Interest Expense",
+      "normalized_account": "interest expense",
+      "direction": "outflow",
+      "bucket_key": "back_office_platform_costs",
+      "semantic_key": null,
+      "confidence": 0.62,
+      "source": "auto_semantic",
+      "grounding_status": "auto_semantic",
+      "abs_amount": 3180,
+      "profile_score": 0,
+      "profile_evidence": {
+        "tb_account_class": "interest_expense",
+        "tb_ending_balance": 3180,
+        "tb_balance_direction": "debit",
+        "movement_count": 6,
+        "total_abs_amount": 3180,
+        "net_amount": -3180,
+        "active_months": [
+          "2026-01",
+          "2026-02",
+          "2026-03",
+          "2026-04",
+          "2026-05",
+          "2026-06"
+        ],
+        "sample_descriptions": [
+          "Loan repayment (principal + interest)"
+        ],
+        "sample_je_numbers": [
+          "JE-0015",
+          "JE-0028",
+          "JE-0041",
+          "JE-0054"
+        ],
+        "evidence_tokens": [
+          "interest expense",
+          "interest paid",
+          "loan repayment principal  interest",
+          "outflow"
+        ]
+      },
+      "mapping_evidence": [
+        "direction_hint"
+      ]
+    },
+    {
+      "account_name": "Notes Payable",
+      "normalized_account": "notes payable",
+      "direction": "outflow",
+      "bucket_key": "back_office_platform_costs",
+      "semantic_key": null,
+      "confidence": 0.62,
+      "source": "auto_semantic",
+      "grounding_status": "auto_semantic",
+      "abs_amount": 14460,
+      "profile_score": 0,
+      "profile_evidence": {
+        "tb_account_class": "debt",
+        "tb_ending_balance": -20540,
+        "tb_balance_direction": "credit",
+        "movement_count": 6,
+        "total_abs_amount": 14460,
+        "net_amount": -14460,
+        "active_months": [
+          "2026-01",
+          "2026-02",
+          "2026-03",
+          "2026-04",
+          "2026-05",
+          "2026-06"
+        ],
+        "sample_descriptions": [
+          "Loan repayment (principal + interest)"
+        ],
+        "sample_je_numbers": [
+          "JE-0015",
+          "JE-0028",
+          "JE-0041",
+          "JE-0054"
+        ],
+        "evidence_tokens": [
+          "notes payable",
+          "debt",
+          "loan",
+          "borrowings",
+          "principal repayment",
+          "loan repayment principal  interest",
+          "bank loan proceeds received",
+          "outflow"
+        ]
+      },
+      "mapping_evidence": [
+        "direction_hint"
+      ]
+    },
+    {
+      "account_name": "Notes Payable",
+      "normalized_account": "notes payable",
+      "direction": "inflow",
+      "bucket_key": "service_credits_and_odd_receipts",
+      "semantic_key": null,
+      "confidence": 0.62,
+      "source": "auto_semantic",
+      "grounding_status": "auto_semantic",
+      "abs_amount": 35000,
+      "profile_score": 0,
+      "profile_evidence": {
+        "tb_account_class": "debt",
+        "tb_ending_balance": -20540,
+        "tb_balance_direction": "credit",
+        "movement_count": 1,
+        "total_abs_amount": 35000,
+        "net_amount": 35000,
+        "active_months": [
+          "2026-02"
+        ],
+        "sample_descriptions": [
+          "Bank loan proceeds received"
+        ],
+        "sample_je_numbers": [
+          "JE-0083"
+        ],
+        "evidence_tokens": [
+          "notes payable",
+          "debt",
+          "loan",
+          "borrowings",
+          "principal repayment",
+          "loan repayment principal  interest",
+          "bank loan proceeds received",
+          "outflow",
+          "inflow"
+        ]
+      },
+      "mapping_evidence": [
+        "direction_hint"
+      ]
+    },
+    {
+      "account_name": "Owner Drawings",
+      "normalized_account": "owner drawings",
+      "direction": "outflow",
+      "bucket_key": "back_office_platform_costs",
+      "semantic_key": null,
+      "confidence": 0.62,
+      "source": "auto_semantic",
+      "grounding_status": "auto_semantic",
+      "abs_amount": 6000,
+      "profile_score": 0,
+      "profile_evidence": {
+        "tb_account_class": "equity",
+        "tb_ending_balance": 6000,
+        "tb_balance_direction": "debit",
+        "movement_count": 1,
+        "total_abs_amount": 6000,
+        "net_amount": -6000,
+        "active_months": [
+          "2026-03"
+        ],
+        "sample_descriptions": [
+          "Owner drawing"
+        ],
+        "sample_je_numbers": [
+          "JE-0084"
+        ],
+        "evidence_tokens": [
+          "owner drawings",
+          "equity",
+          "capital contribution",
+          "owner distribution",
+          "owner drawing",
+          "outflow"
+        ]
+      },
+      "mapping_evidence": [
+        "direction_hint"
+      ]
+    },
+    {
+      "account_name": "Unearned Revenue",
+      "normalized_account": "unearned revenue",
+      "direction": "inflow",
+      "bucket_key": "service_credits_and_odd_receipts",
+      "semantic_key": null,
+      "confidence": 0.62,
+      "source": "auto_semantic",
+      "grounding_status": "auto_semantic",
+      "abs_amount": 12000,
+      "profile_score": 0,
+      "profile_evidence": {
+        "tb_account_class": "current_liability",
+        "tb_ending_balance": -8000,
+        "tb_balance_direction": "credit",
+        "movement_count": 1,
+        "total_abs_amount": 12000,
+        "net_amount": 12000,
+        "active_months": [
+          "2026-05"
+        ],
+        "sample_descriptions": [
+          "Unearned retainer received"
+        ],
+        "sample_je_numbers": [
+          "JE-0086"
+        ],
+        "evidence_tokens": [
+          "unearned revenue",
+          "current liability",
+          "operating cash flow",
+          "unearned retainer received",
+          "recognized part of unearned retainer",
+          "inflow"
+        ]
+      },
+      "mapping_evidence": [
+        "direction_hint"
+      ]
+    }
+  ],
+  "auto_mappings_created": [
+    {
+      "normalized_account": "accounts payable",
+      "direction": "outflow",
+      "bucket_key": "partner_operating_payouts",
+      "semantic_key": "supplier_payments",
+      "confidence": 0.94,
+      "source": "profile_auto",
+      "status": "suggested",
+      "profile_score": 0.94,
+      "deterministic_score": 0.94,
+      "evidence": [
+        "shared_concept:supplier_payments",
+        "profile_evidence_concept"
+      ],
+      "account_profile": {
+        "tb_account_class": "payable",
+        "tb_ending_balance": -14815,
+        "tb_balance_direction": "credit",
+        "movement_count": 6,
+        "total_abs_amount": 28085,
+        "net_amount": -28085,
+        "active_months": [
+          "2026-01",
+          "2026-02",
+          "2026-03",
+          "2026-04",
+          "2026-05",
+          "2026-06"
+        ],
+        "sample_descriptions": [
+          "Paid suppliers"
+        ],
+        "sample_je_numbers": [
+          "JE-0008",
+          "JE-0021",
+          "JE-0034",
+          "JE-0047"
+        ],
+        "evidence_tokens": [
+          "accounts payable",
+          "payable",
+          "supplier payments",
+          "vendor payments",
+          "purchased office equipment cash  payable",
+          "purchased office supplies on account",
+          "paid suppliers",
+          "outflow"
+        ]
+      }
+    }
+  ],
+  "low_confidence_mappings": [
+    {
+      "account_name": "Owner Capital",
+      "normalized_account": "owner capital",
+      "direction": "inflow",
+      "bucket_key": "service_credits_and_odd_receipts",
+      "confidence": 0.62
+    },
+    {
+      "account_name": "Office Equipment",
+      "normalized_account": "office equipment",
+      "direction": "outflow",
+      "bucket_key": "back_office_platform_costs",
+      "confidence": 0.62
+    },
+    {
+      "account_name": "Prepaid Insurance",
+      "normalized_account": "prepaid insurance",
+      "direction": "outflow",
+      "bucket_key": "back_office_platform_costs",
+      "confidence": 0.62
+    },
+    {
+      "account_name": "Rent Expense",
+      "normalized_account": "rent expense",
+      "direction": "outflow",
+      "bucket_key": "back_office_platform_costs",
+      "confidence": 0.62
+    },
+    {
+      "account_name": "Accounts Receivable",
+      "normalized_account": "accounts receivable",
+      "direction": "inflow",
+      "bucket_key": "service_credits_and_odd_receipts",
+      "confidence": 0.62
+    },
+    {
+      "account_name": "Salaries Expense",
+      "normalized_account": "salaries expense",
+      "direction": "outflow",
+      "bucket_key": "back_office_platform_costs",
+      "confidence": 0.62
+    },
+    {
+      "account_name": "Utilities Expense",
+      "normalized_account": "utilities expense",
+      "direction": "outflow",
+      "bucket_key": "back_office_platform_costs",
+      "confidence": 0.62
+    },
+    {
+      "account_name": "Marketing Expense",
+      "normalized_account": "marketing expense",
+      "direction": "outflow",
+      "bucket_key": "back_office_platform_costs",
+      "confidence": 0.62
+    },
+    {
+      "account_name": "Travel Expense",
+      "normalized_account": "travel expense",
+      "direction": "outflow",
+      "bucket_key": "back_office_platform_costs",
+      "confidence": 0.62
+    },
+    {
+      "account_name": "Bank Fees Expense",
+      "normalized_account": "bank fees expense",
+      "direction": "outflow",
+      "bucket_key": "back_office_platform_costs",
+      "confidence": 0.62
+    },
+    {
+      "account_name": "Interest Expense",
+      "normalized_account": "interest expense",
+      "direction": "outflow",
+      "bucket_key": "back_office_platform_costs",
+      "confidence": 0.62
+    },
+    {
+      "account_name": "Notes Payable",
+      "normalized_account": "notes payable",
+      "direction": "outflow",
+      "bucket_key": "back_office_platform_costs",
+      "confidence": 0.62
+    },
+    {
+      "account_name": "Notes Payable",
+      "normalized_account": "notes payable",
+      "direction": "inflow",
+      "bucket_key": "service_credits_and_odd_receipts",
+      "confidence": 0.62
+    },
+    {
+      "account_name": "Owner Drawings",
+      "normalized_account": "owner drawings",
+      "direction": "outflow",
+      "bucket_key": "back_office_platform_costs",
+      "confidence": 0.62
+    },
+    {
+      "account_name": "Unearned Revenue",
+      "normalized_account": "unearned revenue",
+      "direction": "inflow",
+      "bucket_key": "service_credits_and_odd_receipts",
+      "confidence": 0.62
+    }
+  ],
+  "totals": {
+    "total_inflows": 446500,
+    "total_outflows": 217925,
+    "net_cash_flow": 228575,
+    "opening_balance_start": 0,
+    "closing_balance_end": 228575,
+    "bucket_totals": {
+      "buyer_money_received": 0,
+      "service_credits_and_odd_receipts": 446500,
+      "partner_operating_payouts": 28085,
+      "people_engine_cash": 0,
+      "space_commitments": 0,
+      "demand_creation_spend": 0,
+      "back_office_platform_costs": 189840,
+      "treasury_tax_cash_out": 0,
+      "long_life_asset_buildout": 0,
+      "product_build_capitalization": 0,
+      "equipment_exit_cash": 0,
+      "credit_line_cash_in": 0,
+      "lender_principal_return": 0,
+      "cost_of_borrowing_cash": 0,
+      "sponsor_cash_support": 0,
+      "owner_cash_takeouts": 0
+    },
+    "opening_balance_january": 0,
+    "closing_balance_december": 228575
+  },
+  "warnings": [
+    "15 auto-mapped account(s) have low confidence."
+  ],
+  "files": {
+    "source_template": "C:\\Users\\Mano PC\\FA\\uploads\\cash-flow\\template-analyses\\1777558116725_Testing_Template_2.xlsx",
+    "renamed_template": "C:\\Users\\Mano PC\\FA\\uploads\\cash-flow\\testing-template-2-adversarial\\2026-05-11T18-22-17-552Z\\Testing_Template_2_adversarial_names.xlsx",
+    "trial_balance": "C:\\Users\\Mano PC\\OneDrive\\Documents\\Samples;Data\\Trial_Balance_2026.xlsx",
+    "general_ledger": "C:\\Users\\Mano PC\\OneDrive\\Documents\\Samples;Data\\General_Ledger_2026.xlsx",
+    "report_output": "C:\\Users\\Mano PC\\FA\\uploads\\cash-flow\\testing-template-2-adversarial\\2026-05-11T18-22-17-552Z\\cash_flow_output.xlsx"
+  }
+}

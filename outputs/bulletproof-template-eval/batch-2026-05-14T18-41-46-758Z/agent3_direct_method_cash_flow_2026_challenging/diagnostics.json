@@ -1,0 +1,21 @@
+{
+  "status": "failed",
+  "template_path": "C:\\Users\\Mano PC\\FA\\outputs\\bulletproof-template-agent-3\\agent3_direct_method_cash_flow_2026_challenging.xlsx",
+  "output_path": null,
+  "failures": [
+    "template ingestion failed: 22:84: disallowed character in closing tag."
+  ],
+  "timings_ms": {
+    "ingestion": 4,
+    "report": 0
+  },
+  "ingestion": {
+    "error": {
+      "message": "22:84: disallowed character in closing tag.",
+      "details": null
+    }
+  },
+  "config_summary": null,
+  "report": null,
+  "report_error": null
+}

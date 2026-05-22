@@ -63,6 +63,106 @@ const STATEMENT_METHODS = {
   INDIRECT: "indirect",
 }
 
+const CASH_FLOW_TEMPLATE_COVERAGE_ERROR_CODE = "cash_flow_template_coverage_failed"
+
+const DIRECT_CASH_FLOW_COVERAGE_COPY = {
+  customer_receipts: {
+    display_name: "Customer receipts",
+    plain_description: "Cash collected from customers, clients, receivables, invoices, or sales activity.",
+    suggested_template_row_label: "Customer receipts",
+  },
+  other_operating_inflows: {
+    display_name: "Other operating receipts",
+    plain_description: "Cash received from refunds, rebates, recoveries, vendor credits, or other operating activity.",
+    suggested_template_row_label: "Other operating receipts",
+  },
+  supplier_payments: {
+    display_name: "Supplier payments",
+    plain_description: "Cash paid to vendors, suppliers, partners, inventory providers, freight, or cost-of-sales activity.",
+    suggested_template_row_label: "Supplier payments",
+  },
+  payroll: {
+    display_name: "Payroll and team costs",
+    plain_description: "Cash paid for wages, salaries, benefits, bonuses, commissions, or other people costs.",
+    suggested_template_row_label: "Payroll and team costs",
+  },
+  rent_facilities: {
+    display_name: "Rent and facilities",
+    plain_description: "Cash paid for rent, leases, premises, occupancy, workplace, or facilities costs.",
+    suggested_template_row_label: "Rent and facilities",
+  },
+  sales_marketing: {
+    display_name: "Marketing spend",
+    plain_description: "Cash paid for advertising, campaigns, brand, demand generation, or customer acquisition.",
+    suggested_template_row_label: "Marketing spend",
+  },
+  general_admin: {
+    display_name: "General and admin",
+    plain_description: "Cash paid for overhead, legal, accounting, insurance, utilities, bank charges, or software subscriptions.",
+    suggested_template_row_label: "General and admin",
+  },
+  income_taxes: {
+    display_name: "Taxes paid",
+    plain_description: "Cash paid for income taxes or tax authority remittances.",
+    suggested_template_row_label: "Taxes paid",
+  },
+  other_operating_outflows: {
+    display_name: "Other operating payments",
+    plain_description: "Cash paid for other operating outflows that do not fit the standard operating categories.",
+    suggested_template_row_label: "Other operating payments",
+  },
+  capital_expenditures: {
+    display_name: "Equipment and capex",
+    plain_description: "Cash paid for equipment, fixed assets, property, plant, hardware, or leasehold improvements.",
+    suggested_template_row_label: "Equipment and capex",
+  },
+  capitalized_software: {
+    display_name: "Capitalized software",
+    plain_description: "Cash paid for capitalized software, development capitalization, or long-lived software implementation.",
+    suggested_template_row_label: "Capitalized software",
+  },
+  asset_sale_proceeds: {
+    display_name: "Asset sale proceeds",
+    plain_description: "Cash received from selling equipment, fixed assets, investments, or other long-lived assets.",
+    suggested_template_row_label: "Asset sale proceeds",
+  },
+  restricted_cash_investment: {
+    display_name: "Restricted cash investment",
+    plain_description: "Cash placed into restricted deposits, pledged deposits, reserves, or similar restricted cash arrangements.",
+    suggested_template_row_label: "Restricted cash investment",
+  },
+  restricted_cash_release: {
+    display_name: "Restricted cash release",
+    plain_description: "Cash released from restricted deposits, pledged deposits, reserves, or similar restricted cash arrangements.",
+    suggested_template_row_label: "Restricted cash release",
+  },
+  debt_drawdown: {
+    display_name: "Debt proceeds",
+    plain_description: "Cash received from borrowings, loan proceeds, notes, credit facilities, or other debt issuance.",
+    suggested_template_row_label: "Debt proceeds",
+  },
+  debt_repayment: {
+    display_name: "Debt repayments",
+    plain_description: "Cash paid for principal repayments, loan payments, note repayments, or facility amortization.",
+    suggested_template_row_label: "Debt repayments",
+  },
+  interest_paid: {
+    display_name: "Interest paid",
+    plain_description: "Cash paid for interest expense, finance charges, borrowing costs, or finance costs.",
+    suggested_template_row_label: "Interest paid",
+  },
+  equity_injection: {
+    display_name: "Owner funding",
+    plain_description: "Cash received from owner contributions, founder funding, member funding, capital calls, or investor contributions.",
+    suggested_template_row_label: "Owner funding",
+  },
+  dividends_distributions: {
+    display_name: "Dividends and distributions",
+    plain_description: "Cash paid for dividends, distributions, redemptions, owner drawings, or partner drawings.",
+    suggested_template_row_label: "Dividends and distributions",
+  },
+}
+
 const DIRECT_CASH_FLOW_CONCEPTS = [
   {
     key: "customer_receipts",
@@ -81,12 +181,33 @@ const DIRECT_CASH_FLOW_CONCEPTS = [
       /\bcash sales\b/,
       /\bsales receipts?\b/,
       /\bmerchant\b/,
+      /\btrade takings?\b/,
+      /\btakings?\b/,
+      /\bsettlement-lagged trade\b/,
+      /\bretainer drawdowns?\b/,
+      /\bretainer .*released\b/,
+      /\binvoice .*deposits?\b/,
+      /\blockbox\b/,
+      /\bfulfilled invoice\b/,
+      /\btill sweeps?\b/,
+      /\bcard-batch releases?\b/,
     ],
   },
   {
     key: "other_operating_inflows",
     direction: "inflow",
-    patterns: [/\brefunds?\b/, /\brebates?\b/, /\bother operating inflows?\b/, /\boperating inflows?\b/],
+    patterns: [
+      /\brefunds?\b/,
+      /\brebates?\b/,
+      /\brecover(y|ies|ed)\b/,
+      /\binsurance recovery\b/,
+      /\bmerchant service rebates?\b/,
+      /\bpublic incentive\b/,
+      /\bauthority paybacks?\b/,
+      /\bvendor credits?\b/,
+      /\bother operating inflows?\b/,
+      /\boperating inflows?\b/,
+    ],
   },
   {
     key: "supplier_payments",
@@ -108,6 +229,12 @@ const DIRECT_CASH_FLOW_CONCEPTS = [
       /\bcost of sales\b/,
       /\binventory\b/,
       /\bmaterials?\b/,
+      /\bstock replenishment\b/,
+      /\bfreight\b/,
+      /\bduties\b/,
+      /\blanding charges?\b/,
+      /\bfulfillment lane charges?\b/,
+      /\bvendor passage\b/,
     ],
   },
   {
@@ -126,6 +253,9 @@ const DIRECT_CASH_FLOW_CONCEPTS = [
       /\bteam compensation\b/,
       /\bpeople runway spend\b/,
       /\bpeople .*spend\b/,
+      /\brostered crew\b/,
+      /\bcrew disbursements?\b/,
+      /\bteam stipend\b/,
     ],
   },
   {
@@ -141,6 +271,8 @@ const DIRECT_CASH_FLOW_CONCEPTS = [
       /\bspace commitment cash\b/,
       /\bstudio and space\b/,
       /\bworkplace\b/,
+      /\bpremises? and yard occupancy\b/,
+      /\bworkspace occupancy\b/,
     ],
   },
   {
@@ -181,12 +313,39 @@ const DIRECT_CASH_FLOW_CONCEPTS = [
       /\bsaas\b/,
       /\boperating backbone\b/,
       /\bbackbone cash\b/,
+      /\butility and connectivity\b/,
+      /\bprofessional bench\b/,
+      /\blicenses?\b/,
+      /\bpermits?\b/,
+      /\bstatutory dues?\b/,
+      /\bbank fees?\b/,
+      /\btiming wash\b/,
     ],
   },
   {
     key: "income_taxes",
     direction: "outflow",
-    patterns: [/\bincome taxes?\b/, /\btaxes paid\b/, /\btax payment(s)?\b/, /\bgovernment remittance\b/],
+    patterns: [
+      /\bincome taxes?\b/,
+      /\btaxes paid\b/,
+      /\btax payment(s)?\b/,
+      /\bgovernment remittance\b/,
+      /\btax authority\b/,
+      /\bauthority sweeps?\b/,
+    ],
+  },
+  {
+    key: "other_operating_outflows",
+    direction: "outflow",
+    patterns: [
+      /\bclaims?\b/,
+      /\bmake-good credits?\b/,
+      /\bcustomer refunds?\b/,
+      /\brefunds? paid\b/,
+      /\btiming wash\b/,
+      /\brounding\b/,
+      /\bother operating outflows?\b/,
+    ],
   },
   {
     key: "capital_expenditures",
@@ -204,6 +363,10 @@ const DIRECT_CASH_FLOW_CONCEPTS = [
       /\bleasehold improvements?\b/,
       /\bworkshop kit\b/,
       /\bkit purchases?\b/,
+      /\bequipment refresh\b/,
+      /\bfit-out checks?\b/,
+      /\bfit[- ]out milestone\b/,
+      /\bfit[- ]out .*cheques?\b/,
     ],
   },
   {
@@ -214,12 +377,42 @@ const DIRECT_CASH_FLOW_CONCEPTS = [
       /\bsoftware development capitalization\b/,
       /\bdevelopment capitalization\b/,
       /\bcode asset capitalization\b/,
+      /\bcore system implementation\b/,
     ],
   },
   {
     key: "asset_sale_proceeds",
     direction: "inflow",
-    patterns: [/\basset sale\b/, /\bdisposal proceeds?\b/, /\bsale proceeds?\b/, /\binvestment sale\b/, /\bequipment resale\b/, /\bresale receipts?\b/],
+    patterns: [
+      /\basset sale\b/,
+      /\bdisposal proceeds?\b/,
+      /\bsale proceeds?\b/,
+      /\binvestment sale\b/,
+      /\bequipment resale\b/,
+      /\bresale receipts?\b/,
+      /\bretired kit\b/,
+      /\bretired .*fixtures?\b/,
+    ],
+  },
+  {
+    key: "restricted_cash_investment",
+    direction: "outflow",
+    patterns: [
+      /\binvestment in pledged\b/,
+      /\bpledged term deposits?\b/,
+      /\brestricted deposits?\b/,
+      /\breserve deposits?\b/,
+    ],
+  },
+  {
+    key: "restricted_cash_release",
+    direction: "inflow",
+    patterns: [
+      /\brelease of pledged\b/,
+      /\bpledged .*release\b/,
+      /\brestricted deposit .*release\b/,
+      /\breserve .*release\b/,
+    ],
   },
   {
     key: "debt_drawdown",
@@ -234,6 +427,8 @@ const DIRECT_CASH_FLOW_CONCEPTS = [
       /\bcredit facilit(y|ies) proceeds?\b/,
       /\bcredit line proceeds?\b/,
       /\bfinancing proceeds?\b/,
+      /\bborrowing draws?\b/,
+      /\bbooked at treasury\b/,
     ],
   },
   {
@@ -249,6 +444,12 @@ const DIRECT_CASH_FLOW_CONCEPTS = [
       /\bcredit facilit(y|ies) repayments?\b/,
       /\bprincipal sendback\b/,
       /\blender principal sendback\b/,
+      /\blender principal retirements?\b/,
+      /\bprincipal retirements?\b/,
+      /\bprincipal retired\b/,
+      /\bbank facility principal retired\b/,
+      /\bfacility amortization\b/,
+      /\bamortization wires?\b/,
     ],
   },
   {
@@ -274,12 +475,26 @@ const DIRECT_CASH_FLOW_CONCEPTS = [
       /\bcapital calls?\b/,
       /\bsubscriptions?\b/,
       /\bsponsor oxygen\b/,
+      /\bmember capital subscriptions?\b/,
     ],
   },
   {
     key: "dividends_distributions",
     direction: "outflow",
-    patterns: [/\bdividends? paid\b/, /\bdistributions?\b/, /\bredemptions?\b/, /\bowner drawings?\b/, /\bpartner drawings?\b/, /\bowner cash sweeps?\b/, /\bcash sweeps?\b/],
+    patterns: [
+      /\bdividends? paid\b/,
+      /\bdistributions?\b/,
+      /\bredemptions?\b/,
+      /\bowner drawings?\b/,
+      /\bpartner drawings?\b/,
+      /\bowner cash sweeps?\b/,
+      /\bcash sweeps?\b/,
+      /\bpreference redemptions?\b/,
+      /\bpartner preference redemptions?\b/,
+      /\bpreference yield settlements?\b/,
+      /\bmember tax draw\b/,
+      /\btax draw packets?\b/,
+    ],
   },
 ]
 
@@ -1984,6 +2199,7 @@ function buildRuntimeAccountProfileSummary({ accountProfile, mapped = null, assi
   const finalAssignments = Array.isArray(mapped?.finalBucketAssignments) ? mapped.finalBucketAssignments : []
   const autoMappings = Array.isArray(mapped?.autoCreatedMappings) ? mapped.autoCreatedMappings : []
   const lowConfidence = Array.isArray(mapped?.lowConfidenceMappings) ? mapped.lowConfidenceMappings : []
+  const unmapped = Array.isArray(mapped?.unmapped) ? mapped.unmapped : []
   const rejected = Array.isArray(assistanceSummary?.rejectedRecommendations) ? assistanceSummary.rejectedRecommendations : []
   const mappedAccountKeys = new Set(
     finalAssignments.map((assignment) => buildRuntimeMappingAccountKey(assignment.normalized_account || assignment.account_name, assignment.direction)),
@@ -1995,7 +2211,476 @@ function buildRuntimeAccountProfileSummary({ accountProfile, mapped = null, assi
     mapped_accounts: mappedAccountKeys.size,
     profile_auto_mappings: autoMappings.filter((mapping) => mapping.source === "profile_auto").length,
     llm_assisted_mappings: autoMappings.filter((mapping) => mapping.source === "llm_assisted").length,
-    review_required_mappings: lowConfidence.length + rejected.length,
+    review_required_mappings: lowConfidence.length + unmapped.length + rejected.length,
+  }
+}
+
+function titleCaseConceptKey(value) {
+  return String(value || "")
+    .split(/[_\s-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ")
+}
+
+function getDirectConceptCoverageCopy(conceptKey) {
+  const normalizedKey = CashFlowConcepts.normalizeDirectConceptKey(conceptKey || "")
+  const concept = CashFlowConcepts.getDirectConcept(normalizedKey)
+  const fallbackLabel = concept?.label || titleCaseConceptKey(normalizedKey)
+  return {
+    semantic_key: normalizedKey,
+    display_name: DIRECT_CASH_FLOW_COVERAGE_COPY[normalizedKey]?.display_name || fallbackLabel,
+    plain_description:
+      DIRECT_CASH_FLOW_COVERAGE_COPY[normalizedKey]?.plain_description ||
+      `Cash-flow activity that belongs to ${fallbackLabel.toLowerCase()}.`,
+    suggested_template_row_label:
+      DIRECT_CASH_FLOW_COVERAGE_COPY[normalizedKey]?.suggested_template_row_label || fallbackLabel,
+  }
+}
+
+function joinHumanList(values = []) {
+  const list = values.map((value) => String(value || "").trim()).filter(Boolean)
+  if (list.length <= 1) return list[0] || ""
+  if (list.length === 2) return `${list[0]} and ${list[1]}`
+  return `${list.slice(0, -1).join(", ")}, and ${list[list.length - 1]}`
+}
+
+function uniquePushLimited(list, value, limit = 6) {
+  const text = String(value || "").trim()
+  if (!text || list.includes(text) || list.length >= limit) return
+  list.push(text)
+}
+
+function getCoverageAlternatesForDirectConcept(conceptKey) {
+  const normalizedKey = CashFlowConcepts.normalizeDirectConceptKey(conceptKey || "")
+  const alternates = new Set([normalizedKey])
+  if (normalizedKey === "capitalized_software" || normalizedKey === "restricted_cash_investment") {
+    alternates.add("capital_expenditures")
+  }
+  if (normalizedKey === "restricted_cash_release") {
+    alternates.add("asset_sale_proceeds")
+  }
+  return Array.from(alternates).filter(Boolean)
+}
+
+function hasWritableCoverageCells(binding) {
+  return Array.isArray(binding?.cells) && binding.cells.some((cell) => String(cell?.cell || "").trim())
+}
+
+function getCoverageMovementEvidenceText(profile, movement = null) {
+  return normalizeText(
+    [
+      movement?.account_name,
+      movement?.normalized_account,
+      movement?.description,
+      profile?.account_name,
+      profile?.normalized_account,
+      profile?.tb_account_class,
+      ...(Array.isArray(profile?.sample_descriptions) ? profile.sample_descriptions : []),
+    ]
+      .filter(Boolean)
+      .join(" "),
+  )
+}
+
+function pickCoverageConceptForMovement(movement, profile, direction) {
+  const evidenceText = getCoverageMovementEvidenceText(profile, movement)
+  const candidates = new Map()
+  const addCandidate = (key, score, reason) => {
+    const normalizedKey = CashFlowConcepts.normalizeDirectConceptKey(key || "")
+    const concept = CashFlowConcepts.getDirectConcept(normalizedKey)
+    if (!concept || concept.direction !== direction) return
+    const boundedScore = Math.max(0, Math.min(1, Number(score || 0)))
+    if (boundedScore < 0.7) return
+    const existing = candidates.get(normalizedKey)
+    if (!existing || boundedScore > existing.score) {
+      candidates.set(normalizedKey, {
+        key: normalizedKey,
+        score: boundedScore,
+        reason: reason || "profile_evidence",
+      })
+    }
+  }
+
+  directTargetScoresFromProfile(profile, direction, evidenceText).forEach((target) => {
+    addCandidate(target.key, target.score, target.reason)
+  })
+  matchDirectCashFlowConcepts(evidenceText, direction).forEach((concept) => {
+    addCandidate(concept.key, concept.score, "account_or_gl_text")
+  })
+
+  const ranked = Array.from(candidates.values()).sort((left, right) => right.score - left.score)
+  const best = ranked[0] || null
+  const second = ranked[1] || null
+  if (!best) {
+    return {
+      concept: null,
+      reason: "no_strong_concept_evidence",
+      candidates: ranked,
+    }
+  }
+  if (second && best.score - second.score < 0.08 && best.score < 0.82) {
+    return {
+      concept: null,
+      reason: "ambiguous_concept_evidence",
+      candidates: ranked,
+    }
+  }
+  return {
+    concept: best,
+    reason: best.reason,
+    candidates: ranked,
+  }
+}
+
+function movementFallsInsideRange(movement, resolvedRange) {
+  try {
+    const date = normalizeDateOnly(movement?.date)
+    const start = normalizeDateStart(resolvedRange.start)
+    const end = normalizeDateEnd(resolvedRange.end)
+    return date >= start && date <= end
+  } catch (error) {
+    return false
+  }
+}
+
+function buildCompanyCashFlowConceptRequirements({ movements = [], accountProfile = null, resolvedRange }) {
+  const requirements = new Map()
+  const stats = {
+    movement_count: 0,
+    evaluated_movements: 0,
+    strong_concept_movements: 0,
+    ambiguous_movements: 0,
+    no_evidence_movements: 0,
+  }
+
+  ;(Array.isArray(movements) ? movements : []).forEach((movement) => {
+    const amount = Number(movement?.amount || 0)
+    if (!amount || !movementFallsInsideRange(movement, resolvedRange)) return
+    stats.movement_count += 1
+    stats.evaluated_movements += 1
+
+    const direction = amount >= 0 ? "inflow" : "outflow"
+    const normalizedAccount = normalizeText(movement?.account_name || movement?.normalized_account || "")
+    const profile = getRuntimeAccountDirectionProfile(accountProfile, normalizedAccount, direction)
+    const coverageConcept = pickCoverageConceptForMovement(
+      {
+        ...movement,
+        direction,
+        normalized_account: normalizedAccount,
+      },
+      profile,
+      direction,
+    )
+
+    if (!coverageConcept.concept) {
+      if (coverageConcept.reason === "ambiguous_concept_evidence") stats.ambiguous_movements += 1
+      else stats.no_evidence_movements += 1
+      return
+    }
+    stats.strong_concept_movements += 1
+
+    const key = coverageConcept.concept.key
+    if (!requirements.has(key)) {
+      const copy = getDirectConceptCoverageCopy(key)
+      requirements.set(key, {
+        ...copy,
+        concept_key: key,
+        direction,
+        total_amount: 0,
+        movement_count: 0,
+        accounts: [],
+        sample_gl_descriptions: [],
+        evidence: [],
+      })
+    }
+
+    const requirement = requirements.get(key)
+    const absAmount = Math.abs(amount)
+    requirement.total_amount = roundCurrency(Number(requirement.total_amount || 0) + absAmount)
+    requirement.movement_count += 1
+    uniquePushLimited(requirement.sample_gl_descriptions, movement?.description, 3)
+    uniquePushLimited(requirement.evidence, coverageConcept.reason, 5)
+
+    const accountName = String(movement?.account_name || normalizedAccount || "Unknown account").trim()
+    let account = requirement.accounts.find((item) => item.normalized_account === normalizedAccount && item.direction === direction)
+    if (!account) {
+      account = {
+        account_name: accountName,
+        normalized_account: normalizedAccount,
+        direction,
+        total_amount: 0,
+        movement_count: 0,
+        tb_account_class: profile?.tb_account_class || null,
+      }
+      requirement.accounts.push(account)
+    }
+    account.total_amount = roundCurrency(Number(account.total_amount || 0) + absAmount)
+    account.movement_count += 1
+  })
+
+  const requiredItems = Array.from(requirements.values()).map((item) => ({
+    ...item,
+    accounts: item.accounts
+      .sort((left, right) => Number(right.total_amount || 0) - Number(left.total_amount || 0))
+      .slice(0, 8),
+  }))
+
+  stats.required_concepts = requiredItems.length
+  return {
+    required_items: requiredItems,
+    stats,
+  }
+}
+
+function buildCashFlowTemplateCoverageIndex(config = {}) {
+  const statementMethod = getStatementMethodFromConfig(config)
+  const directConceptKeys = new Set()
+  const indirectKeys = new Set()
+  const coveredItems = []
+  const unlabeledTargets = []
+  const fallbackTargets = []
+  const writableTargets = []
+
+  const addDirectConcept = (conceptKey, target = {}) => {
+    const normalizedKey = CashFlowConcepts.normalizeDirectConceptKey(conceptKey || "")
+    const concept = CashFlowConcepts.getDirectConcept(normalizedKey)
+    if (!concept) return
+    directConceptKeys.add(normalizedKey)
+    const copy = getDirectConceptCoverageCopy(normalizedKey)
+    coveredItems.push({
+      ...copy,
+      concept_key: normalizedKey,
+      direction: concept.direction,
+      target_key: target.target_key || null,
+      target_label: target.target_label || copy.suggested_template_row_label,
+      source: target.source || "semantic",
+    })
+  }
+
+  if (statementMethod === STATEMENT_METHODS.INDIRECT) {
+    getIndirectRowBindingsFromConfig(config).forEach((row, index) => {
+      const semanticKey = normalizeBucketKey(row?.semantic_key || "", "")
+      const targetLabel = String(row?.label || semanticKey || `Row ${index + 1}`).trim()
+      if (!hasWritableCoverageCells(row)) return
+      writableTargets.push({ key: semanticKey || `row_${index + 1}`, label: targetLabel, kind: "row" })
+      const indirectConcept = CashFlowConcepts.getIndirectConcept(semanticKey)
+      if (!indirectConcept) {
+        unlabeledTargets.push({
+          label: targetLabel,
+          review_task: "Confirm what this row represents.",
+        })
+        return
+      }
+      indirectKeys.add(semanticKey)
+      CashFlowConcepts.getAllowedDirectConcepts().forEach((directConcept) => {
+        if (directConcept.indirect_key === semanticKey) {
+          addDirectConcept(directConcept.key, {
+            target_key: semanticKey,
+            target_label: targetLabel,
+            source: "indirect_row_binding",
+          })
+        }
+      })
+    })
+  } else {
+    getBucketsFromConfig(config).forEach((bucket, index) => {
+      const targetKey = bucket?.bucket_key || `bucket_${index + 1}`
+      const targetLabel = String(bucket?.label || targetKey).trim()
+      if (!hasWritableCoverageCells(bucket)) return
+      writableTargets.push({ key: targetKey, label: targetLabel, kind: "bucket" })
+      if (bucket?.fallback || bucket?.is_fallback) {
+        fallbackTargets.push({ key: targetKey, label: targetLabel })
+        return
+      }
+
+      const direction = bucket?.direction === "outflow" ? "outflow" : "inflow"
+      const semanticKey = CashFlowConcepts.normalizeDirectConceptKey(bucket?.semantic_key || "")
+      const semanticConcept = CashFlowConcepts.getDirectConcept(semanticKey)
+      let added = false
+      if (semanticConcept && semanticConcept.direction === direction) {
+        addDirectConcept(semanticConcept.key, {
+          target_key: targetKey,
+          target_label: targetLabel,
+          source: bucket?.semantic_source || "semantic_key",
+        })
+        added = true
+      }
+
+      const support = getDirectBucketSemanticSupport(bucket, direction)
+      support.bucketConcepts
+        .filter((concept) => Number(concept.score || 0) >= 0.78)
+        .forEach((concept) => {
+          addDirectConcept(concept.key, {
+            target_key: targetKey,
+            target_label: targetLabel,
+            source: added ? "semantic_key_confirmed" : "label_inferred",
+          })
+          added = true
+        })
+
+      if (!added) {
+        unlabeledTargets.push({
+          label: targetLabel,
+          review_task: "Confirm what this row represents.",
+        })
+      }
+    })
+  }
+
+  const uniqueCovered = []
+  const seenCovered = new Set()
+  coveredItems.forEach((item) => {
+    const key = `${item.concept_key}:${item.target_key || ""}`
+    if (seenCovered.has(key)) return
+    seenCovered.add(key)
+    uniqueCovered.push(item)
+  })
+
+  return {
+    statement_method: statementMethod,
+    direct_concept_keys: directConceptKeys,
+    indirect_keys: indirectKeys,
+    covered_items: uniqueCovered,
+    writable_targets: writableTargets,
+    unlabeled_targets: unlabeledTargets,
+    fallback_targets: fallbackTargets,
+  }
+}
+
+function summarizeTemplateSemanticCoverage(config = {}) {
+  const coverageIndex = buildCashFlowTemplateCoverageIndex(config)
+  const uniqueCategories = new Map()
+  coverageIndex.covered_items.forEach((item) => {
+    if (!uniqueCategories.has(item.concept_key)) {
+      uniqueCategories.set(item.concept_key, {
+        concept_key: item.concept_key,
+        display_name: item.display_name,
+        direction: item.direction,
+      })
+    }
+  })
+
+  const categoryCount = uniqueCategories.size
+  return {
+    status: categoryCount > 0 ? "ready" : "needs_review",
+    statement_method: coverageIndex.statement_method,
+    writable_categories: categoryCount,
+    writable_targets: coverageIndex.writable_targets.length,
+    fallback_targets: coverageIndex.fallback_targets.length,
+    unlabeled_targets: coverageIndex.unlabeled_targets.length,
+    message:
+      categoryCount > 0
+        ? `This template can write to ${categoryCount} cash-flow ${categoryCount === 1 ? "category" : "categories"}.`
+        : "This template needs cash-flow category labels before it can be checked against company activity.",
+    categories: Array.from(uniqueCategories.values()).sort((left, right) =>
+      String(left.display_name || "").localeCompare(String(right.display_name || "")),
+    ),
+    review_tasks: coverageIndex.unlabeled_targets.map((target) => ({
+      title: "Confirm what this row represents",
+      message: target.label
+        ? `Confirm the cash-flow category for "${target.label}".`
+        : "Confirm the cash-flow category for this writable row.",
+      row_label: target.label || null,
+    })),
+  }
+}
+
+function templateCoversRequiredDirectConcept(coverageIndex, conceptKey) {
+  return getCoverageAlternatesForDirectConcept(conceptKey).some((allowedKey) =>
+    coverageIndex.direct_concept_keys.has(allowedKey),
+  )
+}
+
+function evaluateCashFlowTemplateCoverage({ config, movements = [], accountProfile = null, resolvedRange }) {
+  const templateCoverage = buildCashFlowTemplateCoverageIndex(config)
+  const semanticSummary = summarizeTemplateSemanticCoverage(config)
+  const requirements = buildCompanyCashFlowConceptRequirements({
+    movements,
+    accountProfile,
+    resolvedRange,
+  })
+
+  const missingItems = []
+  const coveredItems = []
+  requirements.required_items.forEach((requiredItem) => {
+    if (templateCoversRequiredDirectConcept(templateCoverage, requiredItem.concept_key)) {
+      coveredItems.push(requiredItem)
+    } else {
+      missingItems.push(requiredItem)
+    }
+  })
+
+  const missingLabels = missingItems.map((item) => item.display_name)
+  const blocked = missingItems.length > 0
+  const message = blocked
+    ? `Your template is missing rows for ${missingItems.length} cash-flow ${
+        missingItems.length === 1 ? "category" : "categories"
+      } found in this company's GL: ${joinHumanList(missingLabels)}. Add or map ${
+        missingItems.length === 1 ? "this row" : "these rows"
+      } before generating the report.`
+    : requirements.required_items.length
+      ? `This template covers all ${requirements.required_items.length} cash-flow ${
+          requirements.required_items.length === 1 ? "category" : "categories"
+        } found in this company's GL.`
+      : "No cash-flow categories requiring template rows were detected for this run."
+
+  return {
+    code: blocked ? CASH_FLOW_TEMPLATE_COVERAGE_ERROR_CODE : null,
+    status: blocked ? "blocked" : "ready",
+    can_generate: !blocked,
+    title: blocked ? "Template needs rows before this report can run" : "Template coverage looks ready",
+    message,
+    missing_items: missingItems,
+    covered_items: coveredItems,
+    next_actions: blocked
+      ? [
+          `Add or map template rows for ${joinHumanList(missingLabels)}.`,
+          "Reanalyze the template after updating the rows.",
+          "Upload a different template that includes these categories.",
+        ]
+      : [],
+    required_concepts_count: requirements.required_items.length,
+    covered_concepts_count: coveredItems.length,
+    missing_concepts_count: missingItems.length,
+    template_summary: {
+      statement_method: templateCoverage.statement_method,
+      writable_targets: templateCoverage.writable_targets.length,
+      semantic_targets: semanticSummary.writable_categories,
+      unlabeled_targets: templateCoverage.unlabeled_targets.length,
+      fallback_targets: templateCoverage.fallback_targets.length,
+    },
+    semantic_coverage: semanticSummary,
+    profile_evidence_stats: requirements.stats,
+    diagnostics: {
+      required_items: requirements.required_items.map((item) => ({
+        semantic_key: item.concept_key,
+        direction: item.direction,
+        total_amount: item.total_amount,
+        movement_count: item.movement_count,
+        accounts: item.accounts,
+        evidence: item.evidence,
+      })),
+      template_direct_concepts: Array.from(templateCoverage.direct_concept_keys),
+      template_indirect_keys: Array.from(templateCoverage.indirect_keys),
+      missing_semantic_keys: missingItems.map((item) => item.concept_key),
+    },
+  }
+}
+
+function buildCashFlowCoverageSummaryForResponse(coverage) {
+  if (!coverage) return null
+  return {
+    status: coverage.status,
+    can_generate: coverage.can_generate,
+    title: coverage.title,
+    message: coverage.message,
+    required_concepts_count: coverage.required_concepts_count,
+    covered_concepts_count: coverage.covered_concepts_count,
+    missing_concepts_count: coverage.missing_concepts_count,
+    template_summary: coverage.template_summary,
+    semantic_coverage: coverage.semantic_coverage,
+    profile_evidence_stats: coverage.profile_evidence_stats,
   }
 }
 
@@ -2006,13 +2691,29 @@ function detectBucketDirection(input) {
   const label = options.label || ""
   const sectionLabel = options.sectionLabel || ""
   const text = normalizeText(`${sectionLabel} ${label}`)
+  const labelText = normalizeText(label)
   const numericDirection = inferDirectionFromCellValues(options.cells || [])
+  if (
+    /^(payments?|cash paid|cash applied)\b/.test(labelText) ||
+    /\b(disbursements?|retirements?|redemptions? paid|checks?|cheques?|fees?|charges?|draw packets?)\b/.test(labelText)
+  ) {
+    return "outflow"
+  }
+  if (/\b(release of pledged|pledged .*release|restricted deposit .*release|reserve .*release)\b/.test(labelText)) {
+    return "inflow"
+  }
   const concept = bestDirectCashFlowConcept(text)
   const outflowHints = scorePatternMatches(text, DIRECT_OUTFLOW_TEXT_HINTS)
   const inflowHints = scorePatternMatches(text, DIRECT_INFLOW_TEXT_HINTS)
 
   if (concept && (!numericDirection || concept.direction === numericDirection)) {
     return concept.direction
+  }
+  if (
+    /^(receipts?|proceeds?|release|member capital|borrowing draws?|cash gathered|cash supplied)\b/.test(labelText) ||
+    /\b(receipts?|takings?|deposits?|banked|releases?|drawdowns? released|proceeds?)\b/.test(labelText)
+  ) {
+    return "inflow"
   }
 
   if (outflowHints && !inflowHints) return "outflow"
@@ -3381,6 +4082,77 @@ function bucketSupportsDirectTarget(bucket, bucketEvidence, bucketConceptKeys, t
   return false
 }
 
+function getDirectBucketSemanticSupport(bucket, direction) {
+  const semanticConcept = CashFlowConcepts.getDirectConcept(bucket?.semantic_key || "")
+  const bucketEvidence = normalizeText(
+    [
+      bucket?.label,
+      bucket?.bucket_key,
+      bucket?.description,
+      ...(Array.isArray(bucket?.rules) ? bucket.rules.map((rule) => rule?.pattern) : []),
+      semanticConcept?.label,
+      ...(Array.isArray(semanticConcept?.synonyms) ? semanticConcept.synonyms : []),
+      ...(Array.isArray(bucket?.semantic_evidence) ? bucket.semantic_evidence : []),
+    ]
+      .filter(Boolean)
+      .join(" "),
+  )
+  const bucketConcepts = [
+    ...matchDirectCashFlowConcepts(bucketEvidence, direction),
+    ...(semanticConcept && semanticConcept.direction === direction
+      ? [
+          {
+            key: semanticConcept.key,
+            direction: semanticConcept.direction,
+            score: Math.max(0.88, Number(bucket?.semantic_confidence || 0)),
+            matchCount: 1,
+          },
+        ]
+      : []),
+  ]
+
+  return {
+    semanticConcept,
+    bucketEvidence,
+    bucketConcepts,
+    bucketConceptKeys: new Set(bucketConcepts.map((concept) => concept.key)),
+  }
+}
+
+function getStrongDirectTargetsForMovement(movement, profile, direction, threshold = 0.7) {
+  const accountEvidence = getRuntimeProfileEvidenceText(profile, movement)
+  const targets = new Map()
+  const addTarget = (key, score, reason) => {
+    const normalizedKey = CashFlowConcepts.normalizeDirectConceptKey(key || "")
+    if (!normalizedKey) return
+    const boundedScore = Math.max(0, Math.min(1, Number(score || 0)))
+    if (boundedScore < threshold) return
+    const existing = targets.get(normalizedKey)
+    if (!existing || boundedScore > existing.score) {
+      targets.set(normalizedKey, {
+        key: normalizedKey,
+        score: boundedScore,
+        reason,
+      })
+    }
+  }
+
+  directTargetScoresFromProfile(profile, direction, accountEvidence).forEach((target) => {
+    addTarget(target.key, target.score, target.reason || "profile_evidence")
+  })
+  matchDirectCashFlowConcepts(accountEvidence, direction).forEach((concept) => {
+    addTarget(concept.key, concept.score, "account_or_gl_evidence_concept")
+  })
+
+  return Array.from(targets.values()).sort((left, right) => right.score - left.score)
+}
+
+function directBucketSupportsAnyTarget(bucket, direction, targets = []) {
+  if (!Array.isArray(targets) || !targets.length) return true
+  const { bucketEvidence, bucketConceptKeys } = getDirectBucketSemanticSupport(bucket, direction)
+  return targets.some((target) => bucketSupportsDirectTarget(bucket, bucketEvidence, bucketConceptKeys, target.key))
+}
+
 function scoreDirectBucketMatchDetails(movement, bucket, options = {}) {
   const explicitDirection = normalizeText(movement?.direction || options.direction || "").toLowerCase()
   const direction = explicitDirection || (Number(movement?.amount || 0) >= 0 ? "inflow" : "outflow")
@@ -3403,19 +4175,7 @@ function scoreDirectBucketMatchDetails(movement, bucket, options = {}) {
       .filter(Boolean)
       .join(" "),
   )
-  const semanticConcept = CashFlowConcepts.getDirectConcept(bucket?.semantic_key || "")
-  const bucketEvidence = normalizeText(
-    [
-      bucket?.label,
-      bucket?.bucket_key,
-      bucket?.description,
-      semanticConcept?.label,
-      ...(Array.isArray(semanticConcept?.synonyms) ? semanticConcept.synonyms : []),
-      ...(Array.isArray(bucket?.semantic_evidence) ? bucket.semantic_evidence : []),
-    ]
-      .filter(Boolean)
-      .join(" "),
-  )
+  const { semanticConcept, bucketEvidence, bucketConcepts, bucketConceptKeys } = getDirectBucketSemanticSupport(bucket, direction)
   const lexicalScore = Math.max(
     computeTokenSimilarity(accountEvidence, bucket?.label),
     computeTokenSimilarity(accountEvidence, bucket?.bucket_key),
@@ -3423,20 +4183,6 @@ function scoreDirectBucketMatchDetails(movement, bucket, options = {}) {
   )
 
   const accountConcepts = matchDirectCashFlowConcepts(accountEvidence, direction)
-  const bucketConcepts = [
-    ...matchDirectCashFlowConcepts(bucketEvidence, direction),
-    ...(semanticConcept && semanticConcept.direction === direction
-      ? [
-          {
-            key: semanticConcept.key,
-            direction: semanticConcept.direction,
-            score: Math.max(0.88, Number(bucket?.semantic_confidence || 0)),
-            matchCount: 1,
-          },
-        ]
-      : []),
-  ]
-  const bucketConceptKeys = new Set(bucketConcepts.map((concept) => concept.key))
   const sharedConcept = accountConcepts.find((concept) =>
     Array.from(bucketConceptKeys).some((key) => CashFlowConcepts.keysEquivalent(key, concept.key)),
   )
@@ -3563,9 +4309,24 @@ function mapMovementsToBuckets(movements, buckets, options = {}) {
     const normalizedAccount = normalizeText(movement.account_name)
     const profileEntry = getRuntimeAccountDirectionProfile(accountProfile, normalizedAccount, direction)
     const compactProfile = compactRuntimeProfileEvidence(profileEntry)
+    const movementContext = {
+      ...movement,
+      direction,
+      normalized_account: normalizedAccount,
+    }
     const directionBuckets = buckets
       .map((bucket, bucketIndex) => ({ bucket, bucketIndex }))
       .filter((item) => item.bucket.direction === direction)
+    const strongDirectTargets = getStrongDirectTargetsForMovement(
+      movementContext,
+      profileEntry,
+      direction,
+      Number(mappingPolicy.high_confidence_threshold || 0.7),
+    )
+    const hasSupportedStrongTarget =
+      strongDirectTargets.length > 0 &&
+      directionBuckets.some(({ bucket }) => directBucketSupportsAnyTarget(bucket, direction, strongDirectTargets))
+    const missingSpecificTemplateTarget = strongDirectTargets.length > 0 && !hasSupportedStrongTarget
 
     let selectedBucket = null
     let selectedSource = "template_rule"
@@ -3606,11 +4367,18 @@ function mapMovementsToBuckets(movements, buckets, options = {}) {
     if (!selectedBucket) {
       const learned = learnedLookup.get(`${normalizedAccount}:${direction}`)
       if (learned) {
-        selectedBucket = buckets.find((bucket) => bucket.bucket_key === learned.bucket_key && bucket.direction === direction)
-        if (selectedBucket) {
+        const learnedBucket = buckets.find((bucket) => bucket.bucket_key === learned.bucket_key && bucket.direction === direction)
+        const learnedIsApproved = learned.status === "approved"
+        const learnedConflictsWithStrongTarget =
+          learnedBucket &&
+          strongDirectTargets.length > 0 &&
+          !directBucketSupportsAnyTarget(learnedBucket, direction, strongDirectTargets) &&
+          !learnedBucket.fallback
+        if (learnedBucket && (learnedIsApproved || !learnedConflictsWithStrongTarget)) {
+          selectedBucket = learnedBucket
           selectedSource = learned.source || "auto_semantic"
           selectedConfidence = Number(learned.confidence || 1)
-          selectedGroundingStatus = learned.status === "approved" ? "approved" : "suggested"
+          selectedGroundingStatus = learnedIsApproved ? "approved" : "suggested"
         }
       }
     }
@@ -3619,11 +4387,7 @@ function mapMovementsToBuckets(movements, buckets, options = {}) {
       let bestSemantic = null
       directionBuckets.forEach(({ bucket }) => {
         const details = scoreDirectBucketMatchDetails(
-          {
-            ...movement,
-            direction,
-            normalized_account: normalizedAccount,
-          },
+          movementContext,
           bucket,
           { accountProfile: profileEntry },
         )
@@ -3632,7 +4396,9 @@ function mapMovementsToBuckets(movements, buckets, options = {}) {
         }
       })
 
-      if (bestSemantic && bestSemantic.score >= mappingPolicy.low_confidence_threshold) {
+      const bestMatchesStrongTarget =
+        !strongDirectTargets.length || directBucketSupportsAnyTarget(bestSemantic?.bucket, direction, strongDirectTargets)
+      if (bestSemantic && bestSemantic.score >= mappingPolicy.low_confidence_threshold && bestMatchesStrongTarget) {
         selectedBucket = bestSemantic.bucket
         selectedSource =
           bestSemantic.details?.profile_score >= mappingPolicy.high_confidence_threshold &&
@@ -3647,10 +4413,42 @@ function mapMovementsToBuckets(movements, buckets, options = {}) {
 
     if (!selectedBucket) {
       const directionBuckets = buckets.filter((bucket) => bucket.direction === direction)
-      selectedBucket = fallbackByDirection[direction] || directionBuckets[0] || null
-      selectedSource = fallbackByDirection[direction] ? "fallback" : "auto_semantic"
-      selectedConfidence = fallbackByDirection[direction] ? 0.4 : 0.25
-      selectedGroundingStatus = fallbackByDirection[direction] ? "fallback" : "auto_semantic"
+      if (fallbackByDirection[direction]) {
+        selectedBucket = fallbackByDirection[direction]
+        selectedSource = "fallback"
+        selectedConfidence = 0.4
+        selectedGroundingStatus = "fallback"
+        selectedScoreDetails = {
+          profile_score: 0,
+          profile_target_key: strongDirectTargets[0]?.key || null,
+          reasons: [
+            "fallback_bucket",
+            ...(missingSpecificTemplateTarget
+              ? [`missing_supported_template_target:${strongDirectTargets.map((target) => target.key).join("|")}`]
+              : []),
+          ],
+        }
+      } else if (missingSpecificTemplateTarget) {
+        unmapped.push({
+          ...movement,
+          direction,
+          abs_amount: roundCurrency(Math.abs(movement.amount)),
+          mapping_review_reason: "missing_supported_template_target",
+          expected_semantic_keys: strongDirectTargets.map((target) => target.key),
+          expected_semantic_evidence: strongDirectTargets.map((target) => ({
+            key: target.key,
+            score: roundCurrency(target.score),
+            reason: target.reason,
+          })),
+          profile_evidence: compactProfile,
+        })
+        return
+      } else {
+        selectedBucket = directionBuckets[0] || null
+        selectedSource = "auto_semantic"
+        selectedConfidence = 0.25
+        selectedGroundingStatus = "auto_semantic"
+      }
     }
 
     if (!selectedBucket) {
@@ -5422,6 +6220,16 @@ async function generateCashFlowReport({
     generalLedger,
     cashAccountName: trialBalance.cashAccountName,
   })
+  const coverage = evaluateCashFlowTemplateCoverage({
+    config,
+    movements: generalLedger.movements,
+    accountProfile,
+    resolvedRange,
+  })
+  if (!coverage.can_generate) {
+    throw new CashFlowValidationError(coverage.message, coverage)
+  }
+  const coverageSummary = buildCashFlowCoverageSummaryForResponse(coverage)
 
   const initialMapping =
     statementMethod === STATEMENT_METHODS.INDIRECT
@@ -5524,6 +6332,7 @@ async function generateCashFlowReport({
       final_bucket_assignments: mapped.finalBucketAssignments,
       assistance_summary: runtimeAssistance.assistanceSummary,
       account_profile_summary: accountProfileSummary,
+      coverage_summary: coverageSummary,
     },
     preview: {
       period_start: periodData.period_start,
@@ -5556,6 +6365,7 @@ async function generateCashFlowReport({
         low_confidence_mappings: mapped.lowConfidenceMappings.length,
         assistance: runtimeAssistance.assistanceSummary,
         account_profile: accountProfileSummary,
+        coverage: coverageSummary,
       },
     },
   }
@@ -5580,6 +6390,8 @@ module.exports = {
   buildFiscalYearData,
   fillTemplateWorkbook,
   generateCashFlowReport,
+  summarizeTemplateSemanticCoverage,
+  evaluateCashFlowTemplateCoverage,
   __test: {
     normalizeText,
     parseMonthValue,
@@ -5608,6 +6420,10 @@ module.exports = {
     getRuntimeAccountDirectionProfile,
     compactRuntimeProfileEvidence,
     buildRuntimeAccountProfileSummary,
+    buildCompanyCashFlowConceptRequirements,
+    buildCashFlowTemplateCoverageIndex,
+    summarizeTemplateSemanticCoverage,
+    evaluateCashFlowTemplateCoverage,
     buildRuntimeMappingCandidates,
     buildRuntimeMovementContext,
     maybeApplyRuntimeMappingAssistance,

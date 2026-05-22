@@ -179,6 +179,13 @@ class TemplateService {
     if (!template) return template
     const payload = withTemplateIdentity(template)
     const review = readiness || this.evaluateReadinessForTemplate(template)
+    const config = template?.activeVersion?.config_json || template?.config_json || null
+    let semanticCoverage = null
+    try {
+      semanticCoverage = CashFlowService.summarizeTemplateSemanticCoverage(config || {})
+    } catch (error) {
+      semanticCoverage = null
+    }
     return {
       ...payload,
       review_state: review.review_state,
@@ -186,6 +193,7 @@ class TemplateService {
       activation_block_reason: review.activation_block_reason,
       required_anchors: review.required_anchors,
       anchor_statuses: review.anchor_statuses,
+      semantic_coverage: semanticCoverage,
     }
   }
 

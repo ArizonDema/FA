@@ -1422,6 +1422,65 @@ describe("cash-flow API", () => {
     )
   })
 
+  test("persists friendly preflight failure when template coverage is missing", async () => {
+    const tbFile = path.join(tempDir, "tb_coverage_fail.xlsx")
+    const glFile = path.join(tempDir, "gl_coverage_fail.xlsx")
+    await writeTinyWorkbook(tbFile)
+    await writeTinyWorkbook(glFile)
+
+    const runRecord = createRunRecord()
+    mockReportRunModel.create.mockResolvedValueOnce(runRecord)
+    mockCashFlowService.generateCashFlowReport.mockRejectedValueOnce(
+      new MockCashFlowValidationError("Your template is missing rows for 1 cash-flow category found in this company's GL: Marketing spend.", {
+        code: "cash_flow_template_coverage_failed",
+        title: "Template needs rows before this report can run",
+        message: "Your template is missing rows for 1 cash-flow category found in this company's GL: Marketing spend.",
+        missing_items: [
+          {
+            display_name: "Marketing spend",
+            plain_description: "Cash paid for advertising, campaigns, brand, demand generation, or customer acquisition.",
+            suggested_template_row_label: "Marketing spend",
+            accounts: [{ account_name: "Marketing Expense", total_amount: 1200 }],
+            total_amount: 1200,
+            sample_gl_descriptions: ["Paid demand generation campaign"],
+          },
+        ],
+        next_actions: ["Add or map template rows for Marketing spend."],
+      }),
+    )
+
+    const response = await request(app)
+      .post("/api/v1/cash-flow/reports/run")
+      .field("portfolio_id", "fund-1")
+      .field("date_start", "2025-01-01")
+      .field("date_end", "2025-12-31")
+      .attach("tb_file", tbFile)
+      .attach("gl_file", glFile)
+
+    expect(response.status).toBe(400)
+    expect(response.body.errors).toEqual(
+      expect.objectContaining({
+        code: "cash_flow_template_coverage_failed",
+        title: "Template needs rows before this report can run",
+        missing_items: [
+          expect.objectContaining({
+            display_name: "Marketing spend",
+            suggested_template_row_label: "Marketing spend",
+          }),
+        ],
+      }),
+    )
+    expect(runRecord.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: "failed_preflight",
+        readiness_status: "not_ready",
+        error_json: expect.objectContaining({
+          code: "cash_flow_template_coverage_failed",
+        }),
+      }),
+    )
+  })
+
   test("generates a deterministic approved-mapping report", async () => {
     const response = await request(app).post("/api/v1/cash-flow/reports/generate").send({
       portfolio_id: "fund-1",

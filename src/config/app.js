@@ -73,6 +73,7 @@ module.exports = {
   // Ollama template-ingestion LLM
   ollama: {
     baseUrl: process.env.OLLAMA_BASE_URL || "http://localhost:11434",
+    apiKey: process.env.OLLAMA_API_KEY || "",
     model: process.env.OLLAMA_MODEL || "qwen3:14b",
     modelCandidates: parseCsv(process.env.OLLAMA_MODEL_CANDIDATES || process.env.OLLAMA_MODELS),
     chatPath: process.env.OLLAMA_CHAT_PATH || "/api/chat",
@@ -118,6 +119,7 @@ module.exports = {
     model: process.env.MAPPING_LLM_MODEL || process.env.OLLAMA_MODEL || "qwen3:14b",
     modelCandidates: parseCsv(process.env.MAPPING_LLM_MODEL_CANDIDATES || process.env.OLLAMA_MODEL_CANDIDATES),
     baseUrl: process.env.MAPPING_LLM_BASE_URL || process.env.OLLAMA_BASE_URL || "http://localhost:11434",
+    apiKey: process.env.MAPPING_LLM_API_KEY || process.env.OLLAMA_API_KEY || "",
     chatPath: process.env.MAPPING_LLM_CHAT_PATH || process.env.OLLAMA_CHAT_PATH || "/api/chat",
     timeoutMs: Number.parseInt(process.env.MAPPING_LLM_TIMEOUT_MS || "120000", 10),
     runtimeTimeoutMs: Number.parseInt(

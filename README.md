@@ -216,6 +216,7 @@ DEFAULT_LOCKUP_MONTHS=12
 
 # Ollama (template analysis)
 OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_API_KEY=
 OLLAMA_MODEL=gpt-oss:20b
 OLLAMA_MODEL_CANDIDATES=qwen3:30b,qwen3:14b
 OLLAMA_CHAT_PATH=/api/chat
@@ -232,7 +233,45 @@ OLLAMA_THINK=false
 OLLAMA_FORCE_JSON_OUTPUT=true
 OLLAMA_COMPACT_PROMPT_FIRST=true
 OLLAMA_COMPACT_PROMPT_THRESHOLD_CHARS=22000
+
+# Mapping LLM (defaults to the Ollama values above)
+MAPPING_LLM_BASE_URL=
+MAPPING_LLM_API_KEY=
+MAPPING_LLM_MODEL=
+MAPPING_LLM_MODEL_CANDIDATES=
 \`\`\`
+
+### Ollama LLM Modes
+
+#### Local mode (default)
+
+Local Ollama remains the production default. It is free, keeps prompts on the machine, and does not require API keys:
+
+\`\`\`env
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_API_KEY=
+OLLAMA_MODEL=gpt-oss:20b
+OLLAMA_MODEL_CANDIDATES=qwen3:30b,qwen3:14b
+MAPPING_LLM_BASE_URL=
+MAPPING_LLM_API_KEY=
+\`\`\`
+
+#### Cloud pilot mode
+
+Use direct Ollama Cloud only for synthetic or sanitized benchmark runs until vendor/privacy approval. The free tier is for light usage and has reset-based usage and concurrency limits, so it is not approved as the production default.
+
+\`\`\`env
+OLLAMA_BASE_URL=https://ollama.com
+OLLAMA_API_KEY=your_ollama_api_key
+OLLAMA_MODEL=gpt-oss:20b
+OLLAMA_MODEL_CANDIDATES=gpt-oss:120b
+MAPPING_LLM_BASE_URL=https://ollama.com
+MAPPING_LLM_API_KEY=
+MAPPING_LLM_MODEL=gpt-oss:20b
+MAPPING_LLM_MODEL_CANDIDATES=gpt-oss:120b
+\`\`\`
+
+`MAPPING_LLM_API_KEY` is optional when `OLLAMA_API_KEY` is set; use it only when mapping requests should use a different Ollama Cloud key. Confirm readiness with `GET /api/v1/system/llm/health` before running template or mapping evaluations.
 
 ## Running the Application
 

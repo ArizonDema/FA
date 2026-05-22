@@ -1641,6 +1641,7 @@ export function AdminWorkspace({ token, user, onLogout }) {
             selectedFundId={selectedFundId}
             onError={setError}
             onNote={setNote}
+            onOpenTemplates={() => setActivePage("cash-flow-templates")}
           />
         )}
 

@@ -20,6 +20,14 @@ function isTruthy(value) {
     .toLowerCase() === "true"
 }
 
+function summarizeSemanticCoverage(config) {
+  try {
+    return CashFlowService.summarizeTemplateSemanticCoverage(config || {})
+  } catch (error) {
+    return null
+  }
+}
+
 class CashFlowTemplateController {
   static async getTemplates(req, res, next) {
     try {
@@ -87,6 +95,7 @@ class CashFlowTemplateController {
         review,
         workbookStructure: analysisResult.raw_structure_json || null,
       })
+      const semanticCoverage = summarizeSemanticCoverage(analysisConfigPayload)
 
       return ResponseHandler.success(
         res,
@@ -97,6 +106,8 @@ class CashFlowTemplateController {
           issues: analysisResult.issues || [],
           required_anchors: analysisResult.required_anchors || [],
           suggested_config_json: analysisConfigPayload,
+          semantic_coverage: semanticCoverage,
+          coverage_summary: semanticCoverage,
           needs_human_review: Boolean(analysisResult.needs_human_review),
           review_state: review.review_state,
           can_activate: review.can_activate,
@@ -318,6 +329,8 @@ class CashFlowTemplateController {
             review,
             workbookStructure: analysisResult.raw_structure_json || null,
           }),
+          semantic_coverage: summarizeSemanticCoverage(analysisConfigPayload || buildAnalysisConfigPayload(analysisResult)),
+          coverage_summary: summarizeSemanticCoverage(analysisConfigPayload || buildAnalysisConfigPayload(analysisResult)),
           schema_cache_hit: Boolean(analysisResult.schema_cache_hit),
           analysis_source: analysisResult.analysis_source || "llm",
           llm_fallback_reason: analysisResult.llm_failure_reason || null,

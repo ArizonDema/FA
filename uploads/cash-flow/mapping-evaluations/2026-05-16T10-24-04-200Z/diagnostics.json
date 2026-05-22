@@ -1,0 +1,1147 @@
+{
+  "status": "passed",
+  "generated_at": "2026-05-16T10:28:18.043Z",
+  "runtime_llm_enabled": true,
+  "model": "gpt-oss:20b",
+  "runtime_prompt_version": "runtime.v1",
+  "min_accepted_score": 0.7,
+  "scenarios": [
+    {
+      "name": "renamed_accounts_and_template_rows",
+      "status": "passed",
+      "failures": [],
+      "latency_ms": 142538,
+      "expected": {
+        "bucket_totals": {
+          "buyer_money_in": 120000,
+          "growth_spend": 22000,
+          "founder_funding": 50000,
+          "asset_buildout": 30000,
+          "debt_service_principal": 15000,
+          "partner_operating_payouts": 40000
+        },
+        "total_inflows": 170000,
+        "total_outflows": 107000,
+        "net_cash_flow": 63000,
+        "opening_balance_start": 10000,
+        "closing_balance_end": 73000
+      },
+      "actual_totals": {
+        "total_inflows": 170000,
+        "total_outflows": 107000,
+        "net_cash_flow": 63000,
+        "opening_balance_start": 10000,
+        "closing_balance_end": 73000,
+        "bucket_totals": {
+          "buyer_money_in": 120000,
+          "growth_spend": 22000,
+          "founder_funding": 50000,
+          "asset_buildout": 30000,
+          "debt_service_principal": 15000,
+          "partner_operating_payouts": 40000
+        }
+      },
+      "final_assignments": [
+        {
+          "account_name": "Clearing A",
+          "normalized_account": "clearing a",
+          "direction": "inflow",
+          "bucket_key": "buyer_money_in",
+          "semantic_key": "customer_receipts",
+          "confidence": 0.94,
+          "source": "llm_assisted",
+          "grounding_status": "suggested",
+          "abs_amount": 120000,
+          "profile_score": 0,
+          "profile_evidence": {
+            "tb_account_class": "other",
+            "tb_ending_balance": -120000,
+            "tb_balance_direction": "credit",
+            "movement_count": 1,
+            "total_abs_amount": 120000,
+            "net_amount": 120000,
+            "active_months": [
+              "2026-06"
+            ],
+            "sample_descriptions": [
+              "Customer invoice collections deposited from enterprise buyers"
+            ],
+            "sample_je_numbers": [
+              "EVAL-1"
+            ],
+            "evidence_tokens": [
+              "clearing a",
+              "other",
+              "customer invoice collections deposited from enterprise buyers",
+              "inflow"
+            ]
+          },
+          "mapping_evidence": []
+        },
+        {
+          "account_name": "Spend Pod",
+          "normalized_account": "spend pod",
+          "direction": "outflow",
+          "bucket_key": "growth_spend",
+          "semantic_key": "sales_marketing",
+          "confidence": 0.94,
+          "source": "llm_assisted",
+          "grounding_status": "suggested",
+          "abs_amount": 22000,
+          "profile_score": 0,
+          "profile_evidence": {
+            "tb_account_class": "other",
+            "tb_ending_balance": 22000,
+            "tb_balance_direction": "debit",
+            "movement_count": 1,
+            "total_abs_amount": 22000,
+            "net_amount": -22000,
+            "active_months": [
+              "2026-06"
+            ],
+            "sample_descriptions": [
+              "Growth campaign media buy and demand generation spend"
+            ],
+            "sample_je_numbers": [
+              "EVAL-2"
+            ],
+            "evidence_tokens": [
+              "spend pod",
+              "other",
+              "growth campaign media buy and demand generation spend",
+              "outflow"
+            ]
+          },
+          "mapping_evidence": []
+        },
+        {
+          "account_name": "Founder Bridge",
+          "normalized_account": "founder bridge",
+          "direction": "inflow",
+          "bucket_key": "founder_funding",
+          "semantic_key": "equity_injection",
+          "confidence": 0.94,
+          "source": "llm_assisted",
+          "grounding_status": "suggested",
+          "abs_amount": 50000,
+          "profile_score": 0,
+          "profile_evidence": {
+            "tb_account_class": "equity",
+            "tb_ending_balance": -50000,
+            "tb_balance_direction": "credit",
+            "movement_count": 1,
+            "total_abs_amount": 50000,
+            "net_amount": 50000,
+            "active_months": [
+              "2026-06"
+            ],
+            "sample_descriptions": [
+              "Founder funding contribution received from members"
+            ],
+            "sample_je_numbers": [
+              "EVAL-3"
+            ],
+            "evidence_tokens": [
+              "founder bridge",
+              "equity",
+              "capital contribution",
+              "owner distribution",
+              "founder funding contribution received from members",
+              "inflow"
+            ]
+          },
+          "mapping_evidence": []
+        },
+        {
+          "account_name": "Asset Build Ledger",
+          "normalized_account": "asset build ledger",
+          "direction": "outflow",
+          "bucket_key": "asset_buildout",
+          "semantic_key": "capital_expenditures",
+          "confidence": 0.94,
+          "source": "llm_assisted",
+          "grounding_status": "suggested",
+          "abs_amount": 30000,
+          "profile_score": 0,
+          "profile_evidence": {
+            "tb_account_class": "other",
+            "tb_ending_balance": 30000,
+            "tb_balance_direction": "debit",
+            "movement_count": 1,
+            "total_abs_amount": 30000,
+            "net_amount": -30000,
+            "active_months": [
+              "2026-06"
+            ],
+            "sample_descriptions": [
+              "Purchase of equipment and leasehold improvements for new site"
+            ],
+            "sample_je_numbers": [
+              "EVAL-4"
+            ],
+            "evidence_tokens": [
+              "asset build ledger",
+              "other",
+              "purchase of equipment and leasehold improvements for new site",
+              "outflow"
+            ]
+          },
+          "mapping_evidence": []
+        },
+        {
+          "account_name": "Note Channel",
+          "normalized_account": "note channel",
+          "direction": "outflow",
+          "bucket_key": "debt_service_principal",
+          "semantic_key": "debt_repayment",
+          "confidence": 0.87,
+          "source": "llm_assisted",
+          "grounding_status": "suggested",
+          "abs_amount": 15000,
+          "profile_score": 0,
+          "profile_evidence": {
+            "tb_account_class": "other",
+            "tb_ending_balance": -15000,
+            "tb_balance_direction": "credit",
+            "movement_count": 1,
+            "total_abs_amount": 15000,
+            "net_amount": -15000,
+            "active_months": [
+              "2026-06"
+            ],
+            "sample_descriptions": [
+              "Principal repayment on bank term loan"
+            ],
+            "sample_je_numbers": [
+              "EVAL-5"
+            ],
+            "evidence_tokens": [
+              "note channel",
+              "other",
+              "principal repayment on bank term loan",
+              "outflow"
+            ]
+          },
+          "mapping_evidence": []
+        },
+        {
+          "account_name": "Ops Payables",
+          "normalized_account": "ops payables",
+          "direction": "outflow",
+          "bucket_key": "partner_operating_payouts",
+          "semantic_key": "supplier_payments",
+          "confidence": 0.94,
+          "source": "llm_assisted",
+          "grounding_status": "suggested",
+          "abs_amount": 40000,
+          "profile_score": 0,
+          "profile_evidence": {
+            "tb_account_class": "other",
+            "tb_ending_balance": 40000,
+            "tb_balance_direction": "debit",
+            "movement_count": 1,
+            "total_abs_amount": 40000,
+            "net_amount": -40000,
+            "active_months": [
+              "2026-06"
+            ],
+            "sample_descriptions": [
+              "Vendor settlement and supplier invoices paid"
+            ],
+            "sample_je_numbers": [
+              "EVAL-6"
+            ],
+            "evidence_tokens": [
+              "ops payables",
+              "other",
+              "vendor settlement and supplier invoices paid",
+              "outflow"
+            ]
+          },
+          "mapping_evidence": []
+        }
+      ],
+      "auto_mappings_created": [
+        {
+          "normalized_account": "clearing a",
+          "direction": "inflow",
+          "bucket_key": "buyer_money_in",
+          "confidence": 0.94,
+          "source": "llm_assisted",
+          "status": "suggested",
+          "semantic_key": "customer_receipts",
+          "profile_score": 0.94,
+          "llm_score": 0.94,
+          "deterministic_score": 0.94,
+          "evidence": [
+            "Customer invoice collections deposited from enterprise buyers",
+            "buyer_money_in"
+          ],
+          "reasoning": "The account is an inflow labeled 'Clearing A' with description 'Customer invoice collections deposited from enterprise buyers'. This matches the allowed mapping 'buyer_money_in' (Receipts From Buyers) with strong evidence from the description and profile. No ambiguity detected.",
+          "previous_bucket_key": "buyer_money_in",
+          "account_profile": {
+            "tb_account_class": "other",
+            "tb_ending_balance": -120000,
+            "tb_balance_direction": "credit",
+            "movement_count": 1,
+            "total_abs_amount": 120000,
+            "net_amount": 120000,
+            "active_months": [
+              "2026-06"
+            ],
+            "sample_descriptions": [
+              "Customer invoice collections deposited from enterprise buyers"
+            ],
+            "sample_je_numbers": [
+              "EVAL-1"
+            ],
+            "evidence_tokens": [
+              "clearing a",
+              "other",
+              "customer invoice collections deposited from enterprise buyers",
+              "inflow"
+            ]
+          }
+        },
+        {
+          "normalized_account": "founder bridge",
+          "direction": "inflow",
+          "bucket_key": "founder_funding",
+          "confidence": 0.94,
+          "source": "llm_assisted",
+          "status": "suggested",
+          "semantic_key": "equity_injection",
+          "profile_score": 0.94,
+          "llm_score": 0.94,
+          "deterministic_score": 0.94,
+          "evidence": [
+            "Founder funding contribution received from members",
+            "founder_funding"
+          ],
+          "reasoning": "The account is an inflow labeled 'Founder Bridge' with description 'Founder funding contribution received from members'. This aligns with the allowed mapping 'founder_funding' (Founder Funding) as a financing inflow. The evidence from the description and profile confirms this mapping. No ambiguity detected.",
+          "previous_bucket_key": "founder_funding",
+          "account_profile": {
+            "tb_account_class": "equity",
+            "tb_ending_balance": -50000,
+            "tb_balance_direction": "credit",
+            "movement_count": 1,
+            "total_abs_amount": 50000,
+            "net_amount": 50000,
+            "active_months": [
+              "2026-06"
+            ],
+            "sample_descriptions": [
+              "Founder funding contribution received from members"
+            ],
+            "sample_je_numbers": [
+              "EVAL-3"
+            ],
+            "evidence_tokens": [
+              "founder bridge",
+              "equity",
+              "capital contribution",
+              "owner distribution",
+              "founder funding contribution received from members",
+              "inflow"
+            ]
+          }
+        },
+        {
+          "normalized_account": "ops payables",
+          "direction": "outflow",
+          "bucket_key": "partner_operating_payouts",
+          "confidence": 0.94,
+          "source": "llm_assisted",
+          "status": "suggested",
+          "semantic_key": "supplier_payments",
+          "profile_score": 0.94,
+          "llm_score": 0.94,
+          "deterministic_score": 0.94,
+          "evidence": [
+            "Vendor settlement and supplier invoices paid",
+            "supplier_payments"
+          ],
+          "reasoning": "The account description “Vendor settlement and supplier invoices paid” and the evidence tokens indicate supplier payments, matching the allowed mapping for Partner Operating Payouts. No ambiguity exists.",
+          "previous_bucket_key": "partner_operating_payouts",
+          "account_profile": {
+            "tb_account_class": "other",
+            "tb_ending_balance": 40000,
+            "tb_balance_direction": "debit",
+            "movement_count": 1,
+            "total_abs_amount": 40000,
+            "net_amount": -40000,
+            "active_months": [
+              "2026-06"
+            ],
+            "sample_descriptions": [
+              "Vendor settlement and supplier invoices paid"
+            ],
+            "sample_je_numbers": [
+              "EVAL-6"
+            ],
+            "evidence_tokens": [
+              "ops payables",
+              "other",
+              "vendor settlement and supplier invoices paid",
+              "outflow"
+            ]
+          }
+        },
+        {
+          "normalized_account": "asset build ledger",
+          "direction": "outflow",
+          "bucket_key": "asset_buildout",
+          "confidence": 0.94,
+          "source": "llm_assisted",
+          "status": "suggested",
+          "semantic_key": "capital_expenditures",
+          "profile_score": 0.94,
+          "llm_score": 0.94,
+          "deterministic_score": 0.94,
+          "evidence": [
+            "Purchase of equipment and leasehold improvements for new site",
+            "capital_expenditures"
+          ],
+          "reasoning": "The description “Purchase of equipment and leasehold improvements for new site” clearly indicates capital expenditures, aligning with the Asset Buildout mapping. No ambiguity exists.",
+          "previous_bucket_key": "asset_buildout",
+          "account_profile": {
+            "tb_account_class": "other",
+            "tb_ending_balance": 30000,
+            "tb_balance_direction": "debit",
+            "movement_count": 1,
+            "total_abs_amount": 30000,
+            "net_amount": -30000,
+            "active_months": [
+              "2026-06"
+            ],
+            "sample_descriptions": [
+              "Purchase of equipment and leasehold improvements for new site"
+            ],
+            "sample_je_numbers": [
+              "EVAL-4"
+            ],
+            "evidence_tokens": [
+              "asset build ledger",
+              "other",
+              "purchase of equipment and leasehold improvements for new site",
+              "outflow"
+            ]
+          }
+        },
+        {
+          "normalized_account": "spend pod",
+          "direction": "outflow",
+          "bucket_key": "growth_spend",
+          "confidence": 0.94,
+          "source": "llm_assisted",
+          "status": "suggested",
+          "semantic_key": "sales_marketing",
+          "profile_score": 0.94,
+          "llm_score": 0.94,
+          "deterministic_score": 0.94,
+          "evidence": [
+            "name_similarity",
+            "shared_concept:sales_marketing"
+          ],
+          "reasoning": "The account name and description clearly indicate marketing spend, matching the allowed mapping 'growth_spend' with evidence from name similarity and shared concept sales_marketing.",
+          "previous_bucket_key": "growth_spend",
+          "account_profile": {
+            "tb_account_class": "other",
+            "tb_ending_balance": 22000,
+            "tb_balance_direction": "debit",
+            "movement_count": 1,
+            "total_abs_amount": 22000,
+            "net_amount": -22000,
+            "active_months": [
+              "2026-06"
+            ],
+            "sample_descriptions": [
+              "Growth campaign media buy and demand generation spend"
+            ],
+            "sample_je_numbers": [
+              "EVAL-2"
+            ],
+            "evidence_tokens": [
+              "spend pod",
+              "other",
+              "growth campaign media buy and demand generation spend",
+              "outflow"
+            ]
+          }
+        },
+        {
+          "normalized_account": "note channel",
+          "direction": "outflow",
+          "bucket_key": "debt_service_principal",
+          "confidence": 0.87,
+          "source": "llm_assisted",
+          "status": "suggested",
+          "semantic_key": "debt_repayment",
+          "profile_score": 0.87,
+          "llm_score": 0.87,
+          "deterministic_score": 0.87,
+          "evidence": [
+            "name_similarity",
+            "shared_concept:debt_repayment"
+          ],
+          "reasoning": "The description 'Principal repayment on bank term loan' directly indicates debt repayment, matching the allowed mapping 'debt_service_principal' with evidence from name similarity and shared concept debt_repayment.",
+          "previous_bucket_key": "debt_service_principal",
+          "account_profile": {
+            "tb_account_class": "other",
+            "tb_ending_balance": -15000,
+            "tb_balance_direction": "credit",
+            "movement_count": 1,
+            "total_abs_amount": 15000,
+            "net_amount": -15000,
+            "active_months": [
+              "2026-06"
+            ],
+            "sample_descriptions": [
+              "Principal repayment on bank term loan"
+            ],
+            "sample_je_numbers": [
+              "EVAL-5"
+            ],
+            "evidence_tokens": [
+              "note channel",
+              "other",
+              "principal repayment on bank term loan",
+              "outflow"
+            ]
+          }
+        }
+      ],
+      "low_confidence_mappings": [],
+      "assistance_summary": {
+        "enabled": true,
+        "statementMethod": "direct",
+        "candidatesConsidered": 6,
+        "attempted": true,
+        "acceptedCount": 6,
+        "rejectedCount": 0,
+        "failed": false,
+        "model": "gpt-oss:20b",
+        "minimumAcceptedScore": 0.7,
+        "promptVersion": "runtime.v1",
+        "skillVersion": "cash-flow-mapping.v1",
+        "batchSize": 2,
+        "batchCount": 3,
+        "candidatePoolSize": 6,
+        "notes": [],
+        "runtimeScope": "ambiguous_novel",
+        "confidenceCalibrationNotes": [
+          "accepted mappings require schema-valid targets, non-empty evidence, and min score",
+          "profile/llm conflicts within 0.12 are review-only",
+          "auto-created runtime mappings persist as suggested"
+        ],
+        "profileEvidenceStats": {
+          "candidates_with_profile": 6,
+          "strong_profile_candidates": 6,
+          "deterministic_profile_disagreements": 0
+        },
+        "rejectedRecommendations": [],
+        "acceptedMappings": [
+          {
+            "normalized_account": "clearing a",
+            "direction": "inflow",
+            "bucket_key": "buyer_money_in",
+            "semantic_key": "customer_receipts",
+            "confidence": 0.94,
+            "llm_score": 0.94,
+            "profile_score": 0.94,
+            "reasoning": "The account is an inflow labeled 'Clearing A' with description 'Customer invoice collections deposited from enterprise buyers'. This matches the allowed mapping 'buyer_money_in' (Receipts From Buyers) with strong evidence from the description and profile. No ambiguity detected.",
+            "previous_bucket_key": "buyer_money_in",
+            "changed": false
+          },
+          {
+            "normalized_account": "founder bridge",
+            "direction": "inflow",
+            "bucket_key": "founder_funding",
+            "semantic_key": "equity_injection",
+            "confidence": 0.94,
+            "llm_score": 0.94,
+            "profile_score": 0.94,
+            "reasoning": "The account is an inflow labeled 'Founder Bridge' with description 'Founder funding contribution received from members'. This aligns with the allowed mapping 'founder_funding' (Founder Funding) as a financing inflow. The evidence from the description and profile confirms this mapping. No ambiguity detected.",
+            "previous_bucket_key": "founder_funding",
+            "changed": false
+          },
+          {
+            "normalized_account": "ops payables",
+            "direction": "outflow",
+            "bucket_key": "partner_operating_payouts",
+            "semantic_key": "supplier_payments",
+            "confidence": 0.94,
+            "llm_score": 0.94,
+            "profile_score": 0.94,
+            "reasoning": "The account description “Vendor settlement and supplier invoices paid” and the evidence tokens indicate supplier payments, matching the allowed mapping for Partner Operating Payouts. No ambiguity exists.",
+            "previous_bucket_key": "partner_operating_payouts",
+            "changed": false
+          },
+          {
+            "normalized_account": "asset build ledger",
+            "direction": "outflow",
+            "bucket_key": "asset_buildout",
+            "semantic_key": "capital_expenditures",
+            "confidence": 0.94,
+            "llm_score": 0.94,
+            "profile_score": 0.94,
+            "reasoning": "The description “Purchase of equipment and leasehold improvements for new site” clearly indicates capital expenditures, aligning with the Asset Buildout mapping. No ambiguity exists.",
+            "previous_bucket_key": "asset_buildout",
+            "changed": false
+          },
+          {
+            "normalized_account": "spend pod",
+            "direction": "outflow",
+            "bucket_key": "growth_spend",
+            "semantic_key": "sales_marketing",
+            "confidence": 0.94,
+            "llm_score": 0.94,
+            "profile_score": 0.94,
+            "reasoning": "The account name and description clearly indicate marketing spend, matching the allowed mapping 'growth_spend' with evidence from name similarity and shared concept sales_marketing.",
+            "previous_bucket_key": "growth_spend",
+            "changed": false
+          },
+          {
+            "normalized_account": "note channel",
+            "direction": "outflow",
+            "bucket_key": "debt_service_principal",
+            "semantic_key": "debt_repayment",
+            "confidence": 0.87,
+            "llm_score": 0.87,
+            "profile_score": 0.87,
+            "reasoning": "The description 'Principal repayment on bank term loan' directly indicates debt repayment, matching the allowed mapping 'debt_service_principal' with evidence from name similarity and shared concept debt_repayment.",
+            "previous_bucket_key": "debt_service_principal",
+            "changed": false
+          }
+        ]
+      },
+      "account_profile_summary": {
+        "profiled_accounts": 7,
+        "movement_accounts": 6,
+        "direction_profiles": 6,
+        "mapped_accounts": 6,
+        "profile_auto_mappings": 0,
+        "llm_assisted_mappings": 6,
+        "review_required_mappings": 0
+      },
+      "warnings": [],
+      "files": {
+        "template": "C:\\Users\\Mano PC\\FA\\uploads\\cash-flow\\mapping-evaluations\\2026-05-16T10-24-04-200Z\\renamed_accounts_and_template_rows\\template.xlsx",
+        "trial_balance": "C:\\Users\\Mano PC\\FA\\uploads\\cash-flow\\mapping-evaluations\\2026-05-16T10-24-04-200Z\\renamed_accounts_and_template_rows\\trial_balance.xlsx",
+        "general_ledger": "C:\\Users\\Mano PC\\FA\\uploads\\cash-flow\\mapping-evaluations\\2026-05-16T10-24-04-200Z\\renamed_accounts_and_template_rows\\general_ledger.xlsx",
+        "output": "C:\\Users\\Mano PC\\FA\\uploads\\cash-flow\\mapping-evaluations\\2026-05-16T10-24-04-200Z\\renamed_accounts_and_template_rows\\cash_flow_output.xlsx"
+      }
+    },
+    {
+      "name": "split_financing_and_generic_accounts",
+      "status": "passed",
+      "failures": [],
+      "latency_ms": 111228,
+      "expected": {
+        "bucket_totals": {
+          "capital_source_cash": 80000,
+          "debt_return_cash": 20000,
+          "financing_costs": 5000,
+          "owner_payouts": 12000,
+          "people_out": 18000
+        },
+        "total_inflows": 80000,
+        "total_outflows": 55000,
+        "net_cash_flow": 25000,
+        "opening_balance_start": 25000,
+        "closing_balance_end": 50000
+      },
+      "actual_totals": {
+        "total_inflows": 80000,
+        "total_outflows": 55000,
+        "net_cash_flow": 25000,
+        "opening_balance_start": 25000,
+        "closing_balance_end": 50000,
+        "bucket_totals": {
+          "capital_source_cash": 80000,
+          "debt_return_cash": 20000,
+          "financing_costs": 5000,
+          "owner_payouts": 12000,
+          "people_out": 18000
+        }
+      },
+      "final_assignments": [
+        {
+          "account_name": "Facility",
+          "normalized_account": "facility",
+          "direction": "inflow",
+          "bucket_key": "capital_source_cash",
+          "semantic_key": "debt_drawdown",
+          "confidence": 0.62,
+          "source": "auto_semantic",
+          "grounding_status": "auto_semantic",
+          "abs_amount": 80000,
+          "profile_score": 0,
+          "profile_evidence": {
+            "tb_account_class": "other",
+            "tb_ending_balance": -60000,
+            "tb_balance_direction": "credit",
+            "movement_count": 1,
+            "total_abs_amount": 80000,
+            "net_amount": 80000,
+            "active_months": [
+              "2026-06"
+            ],
+            "sample_descriptions": [
+              "Credit facility drawdown proceeds received"
+            ],
+            "sample_je_numbers": [
+              "EVAL-1"
+            ],
+            "evidence_tokens": [
+              "facility",
+              "other",
+              "credit facility drawdown proceeds received",
+              "principal repayment against revolving credit facility",
+              "inflow"
+            ]
+          },
+          "mapping_evidence": [
+            "direction_hint"
+          ]
+        },
+        {
+          "account_name": "Facility",
+          "normalized_account": "facility",
+          "direction": "outflow",
+          "bucket_key": "debt_return_cash",
+          "semantic_key": "debt_repayment",
+          "confidence": 0.87,
+          "source": "llm_assisted",
+          "grounding_status": "suggested",
+          "abs_amount": 20000,
+          "profile_score": 0,
+          "profile_evidence": {
+            "tb_account_class": "other",
+            "tb_ending_balance": -60000,
+            "tb_balance_direction": "credit",
+            "movement_count": 1,
+            "total_abs_amount": 20000,
+            "net_amount": -20000,
+            "active_months": [
+              "2026-06"
+            ],
+            "sample_descriptions": [
+              "Principal repayment against revolving credit facility"
+            ],
+            "sample_je_numbers": [
+              "EVAL-2"
+            ],
+            "evidence_tokens": [
+              "facility",
+              "other",
+              "credit facility drawdown proceeds received",
+              "principal repayment against revolving credit facility",
+              "inflow",
+              "outflow"
+            ]
+          },
+          "mapping_evidence": []
+        },
+        {
+          "account_name": "Cost of Capital",
+          "normalized_account": "cost of capital",
+          "direction": "outflow",
+          "bucket_key": "financing_costs",
+          "semantic_key": "interest_paid",
+          "confidence": 0.94,
+          "source": "llm_assisted",
+          "grounding_status": "suggested",
+          "abs_amount": 5000,
+          "profile_score": 0,
+          "profile_evidence": {
+            "tb_account_class": "equity",
+            "tb_ending_balance": 5000,
+            "tb_balance_direction": "debit",
+            "movement_count": 1,
+            "total_abs_amount": 5000,
+            "net_amount": -5000,
+            "active_months": [
+              "2026-06"
+            ],
+            "sample_descriptions": [
+              "Finance charges and interest paid to lender"
+            ],
+            "sample_je_numbers": [
+              "EVAL-3"
+            ],
+            "evidence_tokens": [
+              "cost of capital",
+              "equity",
+              "capital contribution",
+              "owner distribution",
+              "finance charges and interest paid to lender",
+              "outflow"
+            ]
+          },
+          "mapping_evidence": []
+        },
+        {
+          "account_name": "Owner Payout Lane",
+          "normalized_account": "owner payout lane",
+          "direction": "outflow",
+          "bucket_key": "owner_payouts",
+          "semantic_key": "dividends_distributions",
+          "confidence": 0.87,
+          "source": "llm_assisted",
+          "grounding_status": "suggested",
+          "abs_amount": 12000,
+          "profile_score": 0,
+          "profile_evidence": {
+            "tb_account_class": "equity",
+            "tb_ending_balance": -12000,
+            "tb_balance_direction": "credit",
+            "movement_count": 1,
+            "total_abs_amount": 12000,
+            "net_amount": -12000,
+            "active_months": [
+              "2026-06"
+            ],
+            "sample_descriptions": [
+              "Member distributions paid to owners"
+            ],
+            "sample_je_numbers": [
+              "EVAL-4"
+            ],
+            "evidence_tokens": [
+              "owner payout lane",
+              "equity",
+              "capital contribution",
+              "owner distribution",
+              "member distributions paid to owners",
+              "outflow"
+            ]
+          },
+          "mapping_evidence": []
+        },
+        {
+          "account_name": "Generic Expense 72",
+          "normalized_account": "generic expense 72",
+          "direction": "outflow",
+          "bucket_key": "people_out",
+          "semantic_key": "payroll",
+          "confidence": 0.94,
+          "source": "llm_assisted",
+          "grounding_status": "suggested",
+          "abs_amount": 18000,
+          "profile_score": 0,
+          "profile_evidence": {
+            "tb_account_class": "admin_expense",
+            "tb_ending_balance": 18000,
+            "tb_balance_direction": "debit",
+            "movement_count": 1,
+            "total_abs_amount": 18000,
+            "net_amount": -18000,
+            "active_months": [
+              "2026-06"
+            ],
+            "sample_descriptions": [
+              "Payroll run for hourly team wages and benefits"
+            ],
+            "sample_je_numbers": [
+              "EVAL-5"
+            ],
+            "evidence_tokens": [
+              "generic expense 72",
+              "admin expense",
+              "general admin",
+              "professional fees",
+              "operating expenses",
+              "payroll run for hourly team wages and benefits",
+              "outflow"
+            ]
+          },
+          "mapping_evidence": []
+        }
+      ],
+      "auto_mappings_created": [
+        {
+          "normalized_account": "facility",
+          "direction": "outflow",
+          "bucket_key": "debt_return_cash",
+          "confidence": 0.87,
+          "source": "llm_assisted",
+          "status": "suggested",
+          "semantic_key": "debt_repayment",
+          "profile_score": 0.87,
+          "llm_score": 0.87,
+          "deterministic_score": 0.87,
+          "evidence": [
+            "Principal repayment against revolving credit facility",
+            "debt_repayment"
+          ],
+          "reasoning": "The account description \"Principal repayment against revolving credit facility\" and evidence tokens indicate a debt repayment, matching the allowed mapping \"debt_return_cash\".",
+          "previous_bucket_key": "debt_return_cash",
+          "account_profile": {
+            "tb_account_class": "other",
+            "tb_ending_balance": -60000,
+            "tb_balance_direction": "credit",
+            "movement_count": 1,
+            "total_abs_amount": 20000,
+            "net_amount": -20000,
+            "active_months": [
+              "2026-06"
+            ],
+            "sample_descriptions": [
+              "Principal repayment against revolving credit facility"
+            ],
+            "sample_je_numbers": [
+              "EVAL-2"
+            ],
+            "evidence_tokens": [
+              "facility",
+              "other",
+              "credit facility drawdown proceeds received",
+              "principal repayment against revolving credit facility",
+              "inflow",
+              "outflow"
+            ]
+          }
+        },
+        {
+          "normalized_account": "generic expense 72",
+          "direction": "outflow",
+          "bucket_key": "people_out",
+          "confidence": 0.94,
+          "source": "llm_assisted",
+          "status": "suggested",
+          "semantic_key": "payroll",
+          "profile_score": 0.94,
+          "llm_score": 0.94,
+          "deterministic_score": 0.94,
+          "evidence": [
+            "Payroll run for hourly team wages and benefits",
+            "payroll"
+          ],
+          "reasoning": "The description \"Payroll run for hourly team wages and benefits\" and evidence tokens point to payroll expenses, aligning with the allowed mapping \"people_out\".",
+          "previous_bucket_key": "people_out",
+          "account_profile": {
+            "tb_account_class": "admin_expense",
+            "tb_ending_balance": 18000,
+            "tb_balance_direction": "debit",
+            "movement_count": 1,
+            "total_abs_amount": 18000,
+            "net_amount": -18000,
+            "active_months": [
+              "2026-06"
+            ],
+            "sample_descriptions": [
+              "Payroll run for hourly team wages and benefits"
+            ],
+            "sample_je_numbers": [
+              "EVAL-5"
+            ],
+            "evidence_tokens": [
+              "generic expense 72",
+              "admin expense",
+              "general admin",
+              "professional fees",
+              "operating expenses",
+              "payroll run for hourly team wages and benefits",
+              "outflow"
+            ]
+          }
+        },
+        {
+          "normalized_account": "owner payout lane",
+          "direction": "outflow",
+          "bucket_key": "owner_payouts",
+          "confidence": 0.87,
+          "source": "llm_assisted",
+          "status": "suggested",
+          "semantic_key": "dividends_distributions",
+          "profile_score": 0.87,
+          "llm_score": 0.87,
+          "deterministic_score": 0.87,
+          "evidence": [
+            "Member distributions paid to owners",
+            "owner payout lane",
+            "owner distribution"
+          ],
+          "reasoning": "The account description and evidence indicate member distributions paid to owners, which is a financing outflow. The best profile mapping is owner_payouts with a score of 0.87, matching the allowed mapping for dividends/distributions.",
+          "previous_bucket_key": "owner_payouts",
+          "account_profile": {
+            "tb_account_class": "equity",
+            "tb_ending_balance": -12000,
+            "tb_balance_direction": "credit",
+            "movement_count": 1,
+            "total_abs_amount": 12000,
+            "net_amount": -12000,
+            "active_months": [
+              "2026-06"
+            ],
+            "sample_descriptions": [
+              "Member distributions paid to owners"
+            ],
+            "sample_je_numbers": [
+              "EVAL-4"
+            ],
+            "evidence_tokens": [
+              "owner payout lane",
+              "equity",
+              "capital contribution",
+              "owner distribution",
+              "member distributions paid to owners",
+              "outflow"
+            ]
+          }
+        },
+        {
+          "normalized_account": "cost of capital",
+          "direction": "outflow",
+          "bucket_key": "financing_costs",
+          "confidence": 0.94,
+          "source": "llm_assisted",
+          "status": "suggested",
+          "semantic_key": "interest_paid",
+          "profile_score": 0.94,
+          "llm_score": 0.94,
+          "deterministic_score": 0.94,
+          "evidence": [
+            "Finance charges and interest paid to lender",
+            "cost of capital",
+            "interest_paid"
+          ],
+          "reasoning": "The account represents finance charges and interest paid to a lender, a classic financing outflow. The best profile mapping is financing_costs with a score of 0.94, aligning with the interest_paid semantic key.",
+          "previous_bucket_key": "financing_costs",
+          "account_profile": {
+            "tb_account_class": "equity",
+            "tb_ending_balance": 5000,
+            "tb_balance_direction": "debit",
+            "movement_count": 1,
+            "total_abs_amount": 5000,
+            "net_amount": -5000,
+            "active_months": [
+              "2026-06"
+            ],
+            "sample_descriptions": [
+              "Finance charges and interest paid to lender"
+            ],
+            "sample_je_numbers": [
+              "EVAL-3"
+            ],
+            "evidence_tokens": [
+              "cost of capital",
+              "equity",
+              "capital contribution",
+              "owner distribution",
+              "finance charges and interest paid to lender",
+              "outflow"
+            ]
+          }
+        }
+      ],
+      "low_confidence_mappings": [
+        {
+          "account_name": "Facility",
+          "normalized_account": "facility",
+          "direction": "inflow",
+          "bucket_key": "capital_source_cash",
+          "confidence": 0.62
+        }
+      ],
+      "assistance_summary": {
+        "enabled": true,
+        "statementMethod": "direct",
+        "candidatesConsidered": 4,
+        "attempted": true,
+        "acceptedCount": 4,
+        "rejectedCount": 0,
+        "failed": false,
+        "model": "gpt-oss:20b",
+        "minimumAcceptedScore": 0.7,
+        "promptVersion": "runtime.v1",
+        "skillVersion": "cash-flow-mapping.v1",
+        "batchSize": 2,
+        "batchCount": 2,
+        "candidatePoolSize": 4,
+        "notes": [],
+        "runtimeScope": "ambiguous_novel",
+        "confidenceCalibrationNotes": [
+          "accepted mappings require schema-valid targets, non-empty evidence, and min score",
+          "profile/llm conflicts within 0.12 are review-only",
+          "auto-created runtime mappings persist as suggested"
+        ],
+        "profileEvidenceStats": {
+          "candidates_with_profile": 4,
+          "strong_profile_candidates": 4,
+          "deterministic_profile_disagreements": 0
+        },
+        "rejectedRecommendations": [],
+        "acceptedMappings": [
+          {
+            "normalized_account": "facility",
+            "direction": "outflow",
+            "bucket_key": "debt_return_cash",
+            "semantic_key": "debt_repayment",
+            "confidence": 0.87,
+            "llm_score": 0.87,
+            "profile_score": 0.87,
+            "reasoning": "The account description \"Principal repayment against revolving credit facility\" and evidence tokens indicate a debt repayment, matching the allowed mapping \"debt_return_cash\".",
+            "previous_bucket_key": "debt_return_cash",
+            "changed": false
+          },
+          {
+            "normalized_account": "generic expense 72",
+            "direction": "outflow",
+            "bucket_key": "people_out",
+            "semantic_key": "payroll",
+            "confidence": 0.94,
+            "llm_score": 0.94,
+            "profile_score": 0.94,
+            "reasoning": "The description \"Payroll run for hourly team wages and benefits\" and evidence tokens point to payroll expenses, aligning with the allowed mapping \"people_out\".",
+            "previous_bucket_key": "people_out",
+            "changed": false
+          },
+          {
+            "normalized_account": "owner payout lane",
+            "direction": "outflow",
+            "bucket_key": "owner_payouts",
+            "semantic_key": "dividends_distributions",
+            "confidence": 0.87,
+            "llm_score": 0.87,
+            "profile_score": 0.87,
+            "reasoning": "The account description and evidence indicate member distributions paid to owners, which is a financing outflow. The best profile mapping is owner_payouts with a score of 0.87, matching the allowed mapping for dividends/distributions.",
+            "previous_bucket_key": "owner_payouts",
+            "changed": false
+          },
+          {
+            "normalized_account": "cost of capital",
+            "direction": "outflow",
+            "bucket_key": "financing_costs",
+            "semantic_key": "interest_paid",
+            "confidence": 0.94,
+            "llm_score": 0.94,
+            "profile_score": 0.94,
+            "reasoning": "The account represents finance charges and interest paid to a lender, a classic financing outflow. The best profile mapping is financing_costs with a score of 0.94, aligning with the interest_paid semantic key.",
+            "previous_bucket_key": "financing_costs",
+            "changed": false
+          }
+        ]
+      },
+      "account_profile_summary": {
+        "profiled_accounts": 5,
+        "movement_accounts": 4,
+        "direction_profiles": 5,
+        "mapped_accounts": 5,
+        "profile_auto_mappings": 0,
+        "llm_assisted_mappings": 4,
+        "review_required_mappings": 1
+      },
+      "warnings": [
+        "1 auto-mapped account(s) have low confidence."
+      ],
+      "files": {
+        "template": "C:\\Users\\Mano PC\\FA\\uploads\\cash-flow\\mapping-evaluations\\2026-05-16T10-24-04-200Z\\split_financing_and_generic_accounts\\template.xlsx",
+        "trial_balance": "C:\\Users\\Mano PC\\FA\\uploads\\cash-flow\\mapping-evaluations\\2026-05-16T10-24-04-200Z\\split_financing_and_generic_accounts\\trial_balance.xlsx",
+        "general_ledger": "C:\\Users\\Mano PC\\FA\\uploads\\cash-flow\\mapping-evaluations\\2026-05-16T10-24-04-200Z\\split_financing_and_generic_accounts\\general_ledger.xlsx",
+        "output": "C:\\Users\\Mano PC\\FA\\uploads\\cash-flow\\mapping-evaluations\\2026-05-16T10-24-04-200Z\\split_financing_and_generic_accounts\\cash_flow_output.xlsx"
+      }
+    }
+  ]
+}

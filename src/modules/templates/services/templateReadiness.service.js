@@ -2,6 +2,14 @@ const {
   normalizeRequiredAnchors,
   stableStringify,
 } = require("../utils/templateAnalysis.util")
+const {
+  getDirectConcept,
+  getIndirectConcept,
+  normalizeConceptKey,
+} = require("../../../services/cashFlowConcepts.service")
+
+const SEMANTIC_CONFIDENCE_REVIEW_THRESHOLD = 0.7
+const USER_REVIEWED_SEMANTIC_SOURCES = new Set(["user_confirmed", "user_override", "manual", "approved"])
 
 const ANCHOR_DEFINITIONS = [
   {
@@ -16,8 +24,8 @@ const ANCHOR_DEFINITIONS = [
   },
   {
     key: "bucket_targets",
-    label: "Cash flow bucket targets",
-    message: "Confirm the cells where cash flow bucket values should be written.",
+    label: "Cash-flow categories",
+    message: "Confirm where cash-flow category values should be written.",
   },
   {
     key: "row_bindings",
@@ -33,6 +41,19 @@ function normalizeAnchorKey(value) {
     .trim()
     .toLowerCase()
     .replace(/\s+/g, "_")
+}
+
+function semanticConfidence(value) {
+  const numeric = Number(value)
+  return Number.isFinite(numeric) ? Math.max(0, Math.min(1, numeric)) : null
+}
+
+function isUserReviewedSemanticSource(value) {
+  return USER_REVIEWED_SEMANTIC_SOURCES.has(
+    String(value || "")
+      .trim()
+      .toLowerCase(),
+  )
 }
 
 function uniqueAnchors(values) {
@@ -225,7 +246,7 @@ function evaluateBucketTargets(config = {}) {
   const periodKeys = getPeriodKeys(config)
   const buckets = Array.isArray(config?.bucket_bindings) ? config.bucket_bindings : []
   if (!buckets.length) {
-    return buildStatus("bucket_targets", "missing", "Add at least one cash flow bucket target.")
+    return buildStatus("bucket_targets", "missing", "Add at least one writable cash-flow category.")
   }
 
   const incomplete = buckets
@@ -239,12 +260,40 @@ function evaluateBucketTargets(config = {}) {
     return buildStatus(
       "bucket_targets",
       "missing",
-      `${incomplete.length} bucket(s) need cells for every period.`,
+      `${incomplete.length} cash-flow row(s) need cells for every period.`,
       { missing_bucket_keys: incomplete.map((item) => item.key) },
     )
   }
 
-  return buildStatus("bucket_targets", "ready", "Cash flow bucket targets are mapped.")
+  const semanticIssues = buckets
+    .filter((bucket) => !bucket?.fallback)
+    .map((bucket, index) => {
+      const semanticKey = normalizeConceptKey(bucket?.semantic_key)
+      const confidence = semanticConfidence(bucket?.semantic_confidence ?? bucket?.semanticConfidence)
+      const userReviewed = isUserReviewedSemanticSource(bucket?.semantic_source)
+      if (!semanticKey) return { reason: "missing", key: bucket?.bucket_key || `bucket_${index + 1}` }
+      if (!getDirectConcept(semanticKey)) return { reason: "invalid", key: bucket?.bucket_key || semanticKey }
+      if (confidence !== null && confidence < SEMANTIC_CONFIDENCE_REVIEW_THRESHOLD && !userReviewed) {
+        return { reason: "low_confidence", key: bucket?.bucket_key || semanticKey }
+      }
+      return null
+    })
+    .filter(Boolean)
+
+  if (semanticIssues.length) {
+    return buildStatus(
+      "bucket_targets",
+      "needs_review",
+      `Confirm what ${semanticIssues.length} cash-flow row(s) represent before activating this template.`,
+      {
+        missing_semantic_bucket_keys: semanticIssues.filter((issue) => issue.reason === "missing").map((issue) => issue.key),
+        invalid_semantic_bucket_keys: semanticIssues.filter((issue) => issue.reason === "invalid").map((issue) => issue.key),
+        low_confidence_bucket_keys: semanticIssues.filter((issue) => issue.reason === "low_confidence").map((issue) => issue.key),
+      },
+    )
+  }
+
+  return buildStatus("bucket_targets", "ready", "Cash-flow categories are mapped.")
 }
 
 function evaluateRowBindings(config = {}) {
@@ -272,6 +321,33 @@ function evaluateRowBindings(config = {}) {
       "missing",
       `${incomplete.length} indirect row(s) need cells for every period.`,
       { missing_row_keys: incomplete.map((item) => item.key) },
+    )
+  }
+
+  const semanticIssues = rows
+    .map((row, index) => {
+      const semanticKey = normalizeConceptKey(row?.semantic_key)
+      const confidence = semanticConfidence(row?.semantic_confidence ?? row?.semanticConfidence)
+      const userReviewed = isUserReviewedSemanticSource(row?.semantic_source)
+      if (!semanticKey) return { reason: "missing", key: row?.label || `row_${index + 1}` }
+      if (!getIndirectConcept(semanticKey)) return { reason: "invalid", key: semanticKey }
+      if (confidence !== null && confidence < SEMANTIC_CONFIDENCE_REVIEW_THRESHOLD && !userReviewed) {
+        return { reason: "low_confidence", key: semanticKey }
+      }
+      return null
+    })
+    .filter(Boolean)
+
+  if (semanticIssues.length) {
+    return buildStatus(
+      "row_bindings",
+      "needs_review",
+      `Confirm what ${semanticIssues.length} indirect cash-flow row(s) represent before activating this template.`,
+      {
+        missing_semantic_row_keys: semanticIssues.filter((issue) => issue.reason === "missing").map((issue) => issue.key),
+        invalid_semantic_row_keys: semanticIssues.filter((issue) => issue.reason === "invalid").map((issue) => issue.key),
+        low_confidence_row_keys: semanticIssues.filter((issue) => issue.reason === "low_confidence").map((issue) => issue.key),
+      },
     )
   }
 

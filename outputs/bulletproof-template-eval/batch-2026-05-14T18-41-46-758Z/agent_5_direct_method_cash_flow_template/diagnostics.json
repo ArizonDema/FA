@@ -1,0 +1,548 @@
+{
+  "status": "failed",
+  "template_path": "C:\\Users\\Mano PC\\FA\\outputs\\bulletproof-template-agent-5\\agent-5-direct-method-cash-flow-template.xlsx",
+  "output_path": "C:\\Users\\Mano PC\\FA\\outputs\\bulletproof-template-eval\\batch-2026-05-14T18-41-46-758Z\\agent_5_direct_method_cash_flow_template\\agent_5_direct_method_cash_flow_template_output.xlsx",
+  "failures": [
+    "template analyzer did not finish on an LLM source: fallback",
+    "template analyzer needs review: LLM output could not be validated after retries. Human review is required before confirming this template.; No direct outflow bucket rows were detected.; Several direct bucket labels need semantic review: CF-10, CF-20, CF-30, CF-40.; Layout decision did not identify any usable period labels; Ollama request timed out after 120000ms",
+    "template LLM timeout marker found",
+    "report total_inflows mismatch: expected 446500, got 0",
+    "report total_outflows mismatch: expected 217925, got 0",
+    "report net_cash_flow mismatch: expected 228575, got 0",
+    "missing mapping assignment for accounts receivable:inflow; expected customer_receipts",
+    "missing mapping assignment for unearned revenue:inflow; expected customer_receipts",
+    "missing mapping assignment for accounts payable:outflow; expected supplier_payments",
+    "missing mapping assignment for salaries expense:outflow; expected payroll",
+    "missing mapping assignment for rent expense:outflow; expected rent_facilities",
+    "missing mapping assignment for marketing expense:outflow; expected sales_marketing",
+    "missing mapping assignment for bank fees expense:outflow; expected general_admin",
+    "missing mapping assignment for prepaid insurance:outflow; expected general_admin",
+    "missing mapping assignment for travel expense:outflow; expected general_admin",
+    "missing mapping assignment for utilities expense:outflow; expected general_admin",
+    "missing mapping assignment for office equipment:outflow; expected capital_expenditures",
+    "missing mapping assignment for notes payable:inflow; expected debt_drawdown",
+    "missing mapping assignment for notes payable:outflow; expected debt_repayment",
+    "missing mapping assignment for interest expense:outflow; expected interest_paid",
+    "missing mapping assignment for owner capital:inflow; expected equity_injection",
+    "missing mapping assignment for owner drawings:outflow; expected dividends_distributions"
+  ],
+  "timings_ms": {
+    "ingestion": 433095,
+    "report": 139
+  },
+  "ingestion": {
+    "analysis_source": "fallback",
+    "confidence": 0.64,
+    "needs_human_review": true,
+    "issues": [
+      "LLM output could not be validated after retries. Human review is required before confirming this template.",
+      "No direct outflow bucket rows were detected.",
+      "Several direct bucket labels need semantic review: CF-10, CF-20, CF-30, CF-40.",
+      "Layout decision did not identify any usable period labels",
+      "Ollama request timed out after 120000ms"
+    ],
+    "required_anchors": [
+      "bucket_targets"
+    ],
+    "model": "gpt-oss:20b",
+    "layout_decision": null,
+    "semantic_repair": null,
+    "attempts": [
+      {
+        "attempt": 1,
+        "status": "failed",
+        "error_code": "llm_error",
+        "error_reason": "Layout decision did not identify any usable period labels",
+        "error_details": null,
+        "timeout_ms": 120000,
+        "request_duration_ms": 0,
+        "request_bytes": 0,
+        "endpoint": "http://localhost:11434/api/chat",
+        "model": "gpt-oss:20b",
+        "prompt_mode": "compact",
+        "skill_version": "cash-flow-template-reading.v1",
+        "schema_constrained": true
+      },
+      {
+        "attempt": 2,
+        "status": "failed",
+        "error_code": "llm_error",
+        "error_reason": "Layout decision did not identify any usable period labels",
+        "error_details": null,
+        "timeout_ms": 120000,
+        "request_duration_ms": 0,
+        "request_bytes": 0,
+        "endpoint": "http://localhost:11434/api/chat",
+        "model": "gpt-oss:20b",
+        "prompt_mode": "compact",
+        "skill_version": "cash-flow-template-reading.v1",
+        "schema_constrained": true
+      },
+      {
+        "attempt": 1,
+        "status": "failed",
+        "error_code": "timeout",
+        "error_reason": "Ollama request timed out after 120000ms",
+        "error_details": "Ollama request timed out after 120000ms",
+        "timeout_ms": 120000,
+        "request_duration_ms": 120010,
+        "request_bytes": 10000,
+        "endpoint": "http://localhost:11434/api/chat",
+        "model": "qwen3:14b",
+        "prompt_mode": "compact",
+        "skill_version": "cash-flow-template-reading.v1",
+        "schema_constrained": true
+      },
+      {
+        "attempt": 2,
+        "status": "failed",
+        "error_code": "timeout",
+        "error_reason": "Ollama request timed out after 120000ms",
+        "error_details": "Ollama request timed out after 120000ms",
+        "timeout_ms": 120000,
+        "request_duration_ms": 120004,
+        "request_bytes": 10042,
+        "endpoint": "http://localhost:11434/api/chat",
+        "model": "qwen3:14b",
+        "prompt_mode": "compact",
+        "skill_version": "cash-flow-template-reading.v1",
+        "schema_constrained": true
+      }
+    ],
+    "raw_errors": [
+      "Layout decision did not identify any usable period labels",
+      "Layout decision did not identify any usable period labels",
+      "Ollama request timed out after 120000ms",
+      "Ollama request timed out after 120000ms"
+    ]
+  },
+  "config_summary": {
+    "sheet_name": "2026 Direct Cash Bridge",
+    "layout_type": "columns",
+    "statement_method": "direct",
+    "period_orientation": "column",
+    "period_count": 19,
+    "bucket_count": 26,
+    "row_binding_count": 0,
+    "buckets": [
+      {
+        "bucket_key": "cf_10",
+        "label": "CF-10",
+        "direction": "inflow",
+        "semantic_key": null,
+        "semantic_confidence": null,
+        "semantic_source": null
+      },
+      {
+        "bucket_key": "cf_20",
+        "label": "CF-20",
+        "direction": "inflow",
+        "semantic_key": null,
+        "semantic_confidence": null,
+        "semantic_source": null
+      },
+      {
+        "bucket_key": "cf_30",
+        "label": "CF-30",
+        "direction": "inflow",
+        "semantic_key": null,
+        "semantic_confidence": null,
+        "semantic_source": null
+      },
+      {
+        "bucket_key": "cf_40",
+        "label": "CF-40",
+        "direction": "inflow",
+        "semantic_key": null,
+        "semantic_confidence": null,
+        "semantic_source": null
+      },
+      {
+        "bucket_key": "cf_50",
+        "label": "CF-50",
+        "direction": "inflow",
+        "semantic_key": null,
+        "semantic_confidence": null,
+        "semantic_source": null
+      },
+      {
+        "bucket_key": "cf_60",
+        "label": "CF-60",
+        "direction": "inflow",
+        "semantic_key": null,
+        "semantic_confidence": null,
+        "semantic_source": null
+      },
+      {
+        "bucket_key": "cf_70",
+        "label": "CF-70",
+        "direction": "inflow",
+        "semantic_key": null,
+        "semantic_confidence": null,
+        "semantic_source": null
+      },
+      {
+        "bucket_key": "cf_80",
+        "label": "CF-80",
+        "direction": "inflow",
+        "semantic_key": null,
+        "semantic_confidence": null,
+        "semantic_source": null
+      },
+      {
+        "bucket_key": "cf_90",
+        "label": "CF-90",
+        "direction": "inflow",
+        "semantic_key": null,
+        "semantic_confidence": null,
+        "semantic_source": null
+      },
+      {
+        "bucket_key": "cf_100",
+        "label": "CF-100",
+        "direction": "inflow",
+        "semantic_key": null,
+        "semantic_confidence": null,
+        "semantic_source": null
+      },
+      {
+        "bucket_key": "cf_110",
+        "label": "CF-110",
+        "direction": "inflow",
+        "semantic_key": null,
+        "semantic_confidence": null,
+        "semantic_source": null
+      },
+      {
+        "bucket_key": "cf_120",
+        "label": "CF-120",
+        "direction": "inflow",
+        "semantic_key": null,
+        "semantic_confidence": null,
+        "semantic_source": null
+      },
+      {
+        "bucket_key": "cf_130",
+        "label": "CF-130",
+        "direction": "inflow",
+        "semantic_key": null,
+        "semantic_confidence": null,
+        "semantic_source": null
+      },
+      {
+        "bucket_key": "cf_140",
+        "label": "CF-140",
+        "direction": "inflow",
+        "semantic_key": null,
+        "semantic_confidence": null,
+        "semantic_source": null
+      },
+      {
+        "bucket_key": "cf_150",
+        "label": "CF-150",
+        "direction": "inflow",
+        "semantic_key": null,
+        "semantic_confidence": null,
+        "semantic_source": null
+      },
+      {
+        "bucket_key": "cf_160",
+        "label": "CF-160",
+        "direction": "inflow",
+        "semantic_key": null,
+        "semantic_confidence": null,
+        "semantic_source": null
+      },
+      {
+        "bucket_key": "cf_170",
+        "label": "CF-170",
+        "direction": "inflow",
+        "semantic_key": null,
+        "semantic_confidence": null,
+        "semantic_source": null
+      },
+      {
+        "bucket_key": "cf_180",
+        "label": "CF-180",
+        "direction": "inflow",
+        "semantic_key": null,
+        "semantic_confidence": null,
+        "semantic_source": null
+      },
+      {
+        "bucket_key": "cf_190",
+        "label": "CF-190",
+        "direction": "inflow",
+        "semantic_key": null,
+        "semantic_confidence": null,
+        "semantic_source": null
+      },
+      {
+        "bucket_key": "cf_200",
+        "label": "CF-200",
+        "direction": "inflow",
+        "semantic_key": null,
+        "semantic_confidence": null,
+        "semantic_source": null
+      },
+      {
+        "bucket_key": "cf_210",
+        "label": "CF-210",
+        "direction": "inflow",
+        "semantic_key": null,
+        "semantic_confidence": null,
+        "semantic_source": null
+      },
+      {
+        "bucket_key": "cf_220",
+        "label": "CF-220",
+        "direction": "inflow",
+        "semantic_key": null,
+        "semantic_confidence": null,
+        "semantic_source": null
+      },
+      {
+        "bucket_key": "cf_230",
+        "label": "CF-230",
+        "direction": "inflow",
+        "semantic_key": null,
+        "semantic_confidence": null,
+        "semantic_source": null
+      },
+      {
+        "bucket_key": "cf_240",
+        "label": "CF-240",
+        "direction": "inflow",
+        "semantic_key": null,
+        "semantic_confidence": null,
+        "semantic_source": null
+      },
+      {
+        "bucket_key": "cf_250",
+        "label": "CF-250",
+        "direction": "inflow",
+        "semantic_key": null,
+        "semantic_confidence": null,
+        "semantic_source": null
+      },
+      {
+        "bucket_key": "cf_260",
+        "label": "CF-260",
+        "direction": "inflow",
+        "semantic_key": null,
+        "semantic_confidence": null,
+        "semantic_source": null
+      }
+    ]
+  },
+  "report": {
+    "totals": {
+      "total_inflows": 0,
+      "total_outflows": 0,
+      "net_cash_flow": 0,
+      "opening_balance_start": 228575,
+      "closing_balance_end": 228575,
+      "bucket_totals": {
+        "cf_10": 0,
+        "cf_20": 0,
+        "cf_30": 0,
+        "cf_40": 0,
+        "cf_50": 0,
+        "cf_60": 0,
+        "cf_70": 0,
+        "cf_80": 0,
+        "cf_90": 0,
+        "cf_100": 0,
+        "cf_110": 0,
+        "cf_120": 0,
+        "cf_130": 0,
+        "cf_140": 0,
+        "cf_150": 0,
+        "cf_160": 0,
+        "cf_170": 0,
+        "cf_180": 0,
+        "cf_190": 0,
+        "cf_200": 0,
+        "cf_210": 0,
+        "cf_220": 0,
+        "cf_230": 0,
+        "cf_240": 0,
+        "cf_250": 0,
+        "cf_260": 0
+      },
+      "opening_balance_january": 228575,
+      "closing_balance_december": 228575
+    },
+    "account_profile_summary": {
+      "profiled_accounts": 20,
+      "movement_accounts": 15,
+      "direction_profiles": 16,
+      "mapped_accounts": 0,
+      "profile_auto_mappings": 0,
+      "llm_assisted_mappings": 0,
+      "review_required_mappings": 0
+    },
+    "assistance_summary": {
+      "enabled": true,
+      "statementMethod": "direct",
+      "candidatesConsidered": 0,
+      "attempted": false,
+      "acceptedCount": 0,
+      "rejectedCount": 0,
+      "failed": false
+    },
+    "final_assignments": [],
+    "assignment_concept_check": {
+      "rows": [
+        {
+          "account_direction": "accounts receivable:inflow",
+          "expected_concept": "customer_receipts",
+          "actual_concept": null,
+          "passed": false
+        },
+        {
+          "account_direction": "unearned revenue:inflow",
+          "expected_concept": "customer_receipts",
+          "actual_concept": null,
+          "passed": false
+        },
+        {
+          "account_direction": "accounts payable:outflow",
+          "expected_concept": "supplier_payments",
+          "actual_concept": null,
+          "passed": false
+        },
+        {
+          "account_direction": "salaries expense:outflow",
+          "expected_concept": "payroll",
+          "actual_concept": null,
+          "passed": false
+        },
+        {
+          "account_direction": "rent expense:outflow",
+          "expected_concept": "rent_facilities",
+          "actual_concept": null,
+          "passed": false
+        },
+        {
+          "account_direction": "marketing expense:outflow",
+          "expected_concept": "sales_marketing",
+          "actual_concept": null,
+          "passed": false
+        },
+        {
+          "account_direction": "bank fees expense:outflow",
+          "expected_concept": "general_admin",
+          "actual_concept": null,
+          "passed": false
+        },
+        {
+          "account_direction": "prepaid insurance:outflow",
+          "expected_concept": "general_admin",
+          "actual_concept": null,
+          "passed": false
+        },
+        {
+          "account_direction": "travel expense:outflow",
+          "expected_concept": "general_admin",
+          "actual_concept": null,
+          "passed": false
+        },
+        {
+          "account_direction": "utilities expense:outflow",
+          "expected_concept": "general_admin",
+          "actual_concept": null,
+          "passed": false
+        },
+        {
+          "account_direction": "office equipment:outflow",
+          "expected_concept": "capital_expenditures",
+          "actual_concept": null,
+          "passed": false
+        },
+        {
+          "account_direction": "notes payable:inflow",
+          "expected_concept": "debt_drawdown",
+          "actual_concept": null,
+          "passed": false
+        },
+        {
+          "account_direction": "notes payable:outflow",
+          "expected_concept": "debt_repayment",
+          "actual_concept": null,
+          "passed": false
+        },
+        {
+          "account_direction": "interest expense:outflow",
+          "expected_concept": "interest_paid",
+          "actual_concept": null,
+          "passed": false
+        },
+        {
+          "account_direction": "owner capital:inflow",
+          "expected_concept": "equity_injection",
+          "actual_concept": null,
+          "passed": false
+        },
+        {
+          "account_direction": "owner drawings:outflow",
+          "expected_concept": "dividends_distributions",
+          "actual_concept": null,
+          "passed": false
+        }
+      ],
+      "failures": [
+        "missing mapping assignment for accounts receivable:inflow; expected customer_receipts",
+        "missing mapping assignment for unearned revenue:inflow; expected customer_receipts",
+        "missing mapping assignment for accounts payable:outflow; expected supplier_payments",
+        "missing mapping assignment for salaries expense:outflow; expected payroll",
+        "missing mapping assignment for rent expense:outflow; expected rent_facilities",
+        "missing mapping assignment for marketing expense:outflow; expected sales_marketing",
+        "missing mapping assignment for bank fees expense:outflow; expected general_admin",
+        "missing mapping assignment for prepaid insurance:outflow; expected general_admin",
+        "missing mapping assignment for travel expense:outflow; expected general_admin",
+        "missing mapping assignment for utilities expense:outflow; expected general_admin",
+        "missing mapping assignment for office equipment:outflow; expected capital_expenditures",
+        "missing mapping assignment for notes payable:inflow; expected debt_drawdown",
+        "missing mapping assignment for notes payable:outflow; expected debt_repayment",
+        "missing mapping assignment for interest expense:outflow; expected interest_paid",
+        "missing mapping assignment for owner capital:inflow; expected equity_injection",
+        "missing mapping assignment for owner drawings:outflow; expected dividends_distributions"
+      ]
+    },
+    "low_confidence_mappings": [],
+    "auto_mappings_created": [],
+    "workbook_bucket_totals": {
+      "cf_10": 0,
+      "cf_20": 0,
+      "cf_30": 0,
+      "cf_40": 0,
+      "cf_50": 0,
+      "cf_60": 0,
+      "cf_70": 0,
+      "cf_80": 0,
+      "cf_90": 0,
+      "cf_100": 0,
+      "cf_110": 0,
+      "cf_120": 0,
+      "cf_130": 0,
+      "cf_140": 0,
+      "cf_150": 0,
+      "cf_160": 0,
+      "cf_170": 0,
+      "cf_180": 0,
+      "cf_190": 0,
+      "cf_200": 0,
+      "cf_210": 0,
+      "cf_220": 0,
+      "cf_230": 0,
+      "cf_240": 0,
+      "cf_250": 0,
+      "cf_260": 0
+    },
+    "warnings": [
+      "68 movement(s) could not be mapped and were skipped."
+    ]
+  },
+  "report_error": null
+}

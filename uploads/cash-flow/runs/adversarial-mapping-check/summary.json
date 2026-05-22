@@ -1,0 +1,1226 @@
+[
+  {
+    "name": "renamed_accounts_original_template",
+    "outputFilePath": "C:\\Users\\Mano PC\\FA\\uploads\\cash-flow\\runs\\adversarial-mapping-check\\renamed_accounts_original_template_output.xlsx",
+    "analysis": {
+      "confidence": 0.88,
+      "needs_human_review": false,
+      "bucketLabels": [
+        {
+          "key": "cash_receipts_from_customers",
+          "label": "Cash receipts from customers",
+          "direction": "inflow",
+          "fallback": false
+        },
+        {
+          "key": "refunds_other_operating_inflows",
+          "label": "Refunds / other operating inflows",
+          "direction": "inflow",
+          "fallback": true
+        },
+        {
+          "key": "payments_to_suppliers",
+          "label": "Payments to suppliers",
+          "direction": "outflow",
+          "fallback": false
+        },
+        {
+          "key": "payroll_and_benefits",
+          "label": "Payroll and benefits",
+          "direction": "outflow",
+          "fallback": false
+        },
+        {
+          "key": "rent_and_facilities",
+          "label": "Rent and facilities",
+          "direction": "outflow",
+          "fallback": false
+        },
+        {
+          "key": "sales_marketing",
+          "label": "Sales & marketing",
+          "direction": "outflow",
+          "fallback": false
+        },
+        {
+          "key": "general_admin",
+          "label": "General & admin",
+          "direction": "outflow",
+          "fallback": false
+        },
+        {
+          "key": "income_taxes_paid",
+          "label": "Income taxes paid",
+          "direction": "outflow",
+          "fallback": false
+        },
+        {
+          "key": "capital_expenditures",
+          "label": "Capital expenditures",
+          "direction": "outflow",
+          "fallback": false
+        },
+        {
+          "key": "software_development_capitalization",
+          "label": "Software development capitalization",
+          "direction": "outflow",
+          "fallback": false
+        },
+        {
+          "key": "asset_sale_proceeds",
+          "label": "Asset sale proceeds",
+          "direction": "inflow",
+          "fallback": false
+        },
+        {
+          "key": "debt_drawdown",
+          "label": "Debt drawdown",
+          "direction": "inflow",
+          "fallback": false
+        },
+        {
+          "key": "debt_principal_repayments",
+          "label": "Debt principal repayments",
+          "direction": "outflow",
+          "fallback": false
+        },
+        {
+          "key": "interest_paid",
+          "label": "Interest paid",
+          "direction": "outflow",
+          "fallback": false
+        },
+        {
+          "key": "equity_injection",
+          "label": "Equity injection",
+          "direction": "inflow",
+          "fallback": false
+        },
+        {
+          "key": "dividends_paid",
+          "label": "Dividends paid",
+          "direction": "outflow",
+          "fallback": false
+        }
+      ]
+    },
+    "totals": {
+      "inflows": 446500,
+      "outflows": 217925,
+      "net": 228575,
+      "closing": 228575,
+      "buckets": {
+        "cash_receipts_from_customers": 276500,
+        "refunds_other_operating_inflows": 0,
+        "payments_to_suppliers": 35765,
+        "payroll_and_benefits": 79500,
+        "rent_and_facilities": 43560,
+        "sales_marketing": 15500,
+        "general_admin": 19600,
+        "income_taxes_paid": 0,
+        "capital_expenditures": 18000,
+        "software_development_capitalization": 0,
+        "asset_sale_proceeds": 0,
+        "debt_drawdown": 35000,
+        "debt_principal_repayments": 0,
+        "interest_paid": 0,
+        "equity_injection": 135000,
+        "dividends_paid": 6000
+      }
+    },
+    "mappingSummary": {
+      "total_cash_movements": 68,
+      "mapped_cash_movements": 68,
+      "auto_mappings_created": 13,
+      "low_confidence_mappings": 3,
+      "assistance": {
+        "enabled": false,
+        "statementMethod": "direct",
+        "candidatesConsidered": 0,
+        "attempted": false,
+        "acceptedCount": 0,
+        "rejectedCount": 0,
+        "failed": false
+      },
+      "account_profile": {
+        "profiled_accounts": 20,
+        "movement_accounts": 15,
+        "direction_profiles": 16,
+        "mapped_accounts": 16,
+        "profile_auto_mappings": 13,
+        "llm_assisted_mappings": 0,
+        "review_required_mappings": 3
+      }
+    },
+    "assignments": [
+      {
+        "account": "Founder Funding",
+        "dir": "inflow",
+        "bucket": "equity_injection",
+        "confidence": 0.94,
+        "source": "profile_auto",
+        "profile": 0.94
+      },
+      {
+        "account": "IT Hardware",
+        "dir": "outflow",
+        "bucket": "capital_expenditures",
+        "confidence": 0.87,
+        "source": "profile_auto",
+        "profile": 0.87
+      },
+      {
+        "account": "Annual Policy Asset",
+        "dir": "outflow",
+        "bucket": "general_admin",
+        "confidence": 0.87,
+        "source": "profile_auto",
+        "profile": 0.87
+      },
+      {
+        "account": "Premises Lease Cost",
+        "dir": "outflow",
+        "bucket": "rent_and_facilities",
+        "confidence": 0.94,
+        "source": "profile_auto",
+        "profile": 0.94
+      },
+      {
+        "account": "Client Balances",
+        "dir": "inflow",
+        "bucket": "cash_receipts_from_customers",
+        "confidence": 0.94,
+        "source": "profile_auto",
+        "profile": 0.94
+      },
+      {
+        "account": "Trade Vendor Ledger",
+        "dir": "outflow",
+        "bucket": "payments_to_suppliers",
+        "confidence": 0.94,
+        "source": "profile_auto",
+        "profile": 0.94
+      },
+      {
+        "account": "Team Compensation",
+        "dir": "outflow",
+        "bucket": "payroll_and_benefits",
+        "confidence": 0.87,
+        "source": "profile_auto",
+        "profile": 0.87
+      },
+      {
+        "account": "Facilities Services",
+        "dir": "outflow",
+        "bucket": "rent_and_facilities",
+        "confidence": 0.94,
+        "source": "profile_auto",
+        "profile": 0.94
+      },
+      {
+        "account": "Growth Campaign Spend",
+        "dir": "outflow",
+        "bucket": "sales_marketing",
+        "confidence": 0.87,
+        "source": "profile_auto",
+        "profile": 0.87
+      },
+      {
+        "account": "Field Travel Reimbursements",
+        "dir": "outflow",
+        "bucket": "general_admin",
+        "confidence": 0.94,
+        "source": "profile_auto",
+        "profile": 0.94
+      },
+      {
+        "account": "Bank Charges",
+        "dir": "outflow",
+        "bucket": "payments_to_suppliers",
+        "confidence": 0.62,
+        "source": "auto_semantic",
+        "profile": 0
+      },
+      {
+        "account": "Credit Facility",
+        "dir": "outflow",
+        "bucket": "rent_and_facilities",
+        "confidence": 0.94,
+        "source": "profile_auto",
+        "profile": 0.94
+      },
+      {
+        "account": "Finance Charge",
+        "dir": "outflow",
+        "bucket": "payments_to_suppliers",
+        "confidence": 0.62,
+        "source": "auto_semantic",
+        "profile": 0
+      },
+      {
+        "account": "Credit Facility",
+        "dir": "inflow",
+        "bucket": "debt_drawdown",
+        "confidence": 0.87,
+        "source": "profile_auto",
+        "profile": 0.87
+      },
+      {
+        "account": "Member Distributions",
+        "dir": "outflow",
+        "bucket": "dividends_paid",
+        "confidence": 0.94,
+        "source": "profile_auto",
+        "profile": 0.94
+      },
+      {
+        "account": "Deferred Client Deposits",
+        "dir": "inflow",
+        "bucket": "cash_receipts_from_customers",
+        "confidence": 0.62,
+        "source": "auto_semantic",
+        "profile": 0
+      }
+    ],
+    "assistance": {
+      "enabled": false,
+      "statementMethod": "direct",
+      "candidatesConsidered": 0,
+      "attempted": false,
+      "acceptedCount": 0,
+      "rejectedCount": 0,
+      "failed": false
+    },
+    "warnings": [
+      "3 auto-mapped account(s) have low confidence."
+    ]
+  },
+  {
+    "name": "renamed_accounts_renamed_template_deterministic",
+    "outputFilePath": "C:\\Users\\Mano PC\\FA\\uploads\\cash-flow\\runs\\adversarial-mapping-check\\renamed_accounts_renamed_template_deterministic_output.xlsx",
+    "analysis": {
+      "confidence": 0.88,
+      "needs_human_review": false,
+      "bucketLabels": [
+        {
+          "key": "client_collections",
+          "label": "Client collections",
+          "direction": "inflow",
+          "fallback": false
+        },
+        {
+          "key": "misc_operating_receipts",
+          "label": "Misc operating receipts",
+          "direction": "inflow",
+          "fallback": true
+        },
+        {
+          "key": "vendor_disbursements",
+          "label": "Vendor disbursements",
+          "direction": "outflow",
+          "fallback": false
+        },
+        {
+          "key": "people_costs",
+          "label": "People costs",
+          "direction": "outflow",
+          "fallback": false
+        },
+        {
+          "key": "premises_costs",
+          "label": "Premises costs",
+          "direction": "outflow",
+          "fallback": false
+        },
+        {
+          "key": "growth_spend",
+          "label": "Growth spend",
+          "direction": "inflow",
+          "fallback": false
+        },
+        {
+          "key": "overhead_and_admin",
+          "label": "Overhead and admin",
+          "direction": "outflow",
+          "fallback": false
+        },
+        {
+          "key": "tax_settlements",
+          "label": "Tax settlements",
+          "direction": "inflow",
+          "fallback": false
+        },
+        {
+          "key": "asset_purchases",
+          "label": "Asset purchases",
+          "direction": "outflow",
+          "fallback": false
+        },
+        {
+          "key": "product_build_capitalization",
+          "label": "Product build capitalization",
+          "direction": "inflow",
+          "fallback": false
+        },
+        {
+          "key": "fixed_asset_disposals",
+          "label": "Fixed asset disposals",
+          "direction": "outflow",
+          "fallback": false
+        },
+        {
+          "key": "credit_facility_proceeds",
+          "label": "Credit facility proceeds",
+          "direction": "outflow",
+          "fallback": false
+        },
+        {
+          "key": "borrowing_principal_paid",
+          "label": "Borrowing principal paid",
+          "direction": "inflow",
+          "fallback": false
+        },
+        {
+          "key": "finance_charges_paid",
+          "label": "Finance charges paid",
+          "direction": "outflow",
+          "fallback": false
+        },
+        {
+          "key": "founder_funding",
+          "label": "Founder funding",
+          "direction": "inflow",
+          "fallback": false
+        },
+        {
+          "key": "member_distributions",
+          "label": "Member distributions",
+          "direction": "outflow",
+          "fallback": false
+        }
+      ]
+    },
+    "totals": {
+      "inflows": 446500,
+      "outflows": 217925,
+      "net": 228575,
+      "closing": 228575,
+      "buckets": {
+        "client_collections": 0,
+        "misc_operating_receipts": 0,
+        "vendor_disbursements": 28085,
+        "people_costs": 102680,
+        "premises_costs": 0,
+        "growth_spend": 0,
+        "overhead_and_admin": 19600,
+        "tax_settlements": 0,
+        "asset_purchases": 0,
+        "product_build_capitalization": 0,
+        "fixed_asset_disposals": 18000,
+        "credit_facility_proceeds": 43560,
+        "borrowing_principal_paid": 446500,
+        "finance_charges_paid": 0,
+        "founder_funding": 0,
+        "member_distributions": 6000
+      }
+    },
+    "mappingSummary": {
+      "total_cash_movements": 68,
+      "mapped_cash_movements": 68,
+      "auto_mappings_created": 9,
+      "low_confidence_mappings": 7,
+      "assistance": {
+        "enabled": false,
+        "statementMethod": "direct",
+        "candidatesConsidered": 0,
+        "attempted": false,
+        "acceptedCount": 0,
+        "rejectedCount": 0,
+        "failed": false
+      },
+      "account_profile": {
+        "profiled_accounts": 20,
+        "movement_accounts": 15,
+        "direction_profiles": 16,
+        "mapped_accounts": 16,
+        "profile_auto_mappings": 9,
+        "llm_assisted_mappings": 0,
+        "review_required_mappings": 7
+      }
+    },
+    "assignments": [
+      {
+        "account": "Founder Funding",
+        "dir": "inflow",
+        "bucket": "borrowing_principal_paid",
+        "confidence": 0.62,
+        "source": "auto_semantic",
+        "profile": 0
+      },
+      {
+        "account": "IT Hardware",
+        "dir": "outflow",
+        "bucket": "fixed_asset_disposals",
+        "confidence": 0.87,
+        "source": "profile_auto",
+        "profile": 0.87
+      },
+      {
+        "account": "Annual Policy Asset",
+        "dir": "outflow",
+        "bucket": "overhead_and_admin",
+        "confidence": 0.87,
+        "source": "profile_auto",
+        "profile": 0.87
+      },
+      {
+        "account": "Premises Lease Cost",
+        "dir": "outflow",
+        "bucket": "credit_facility_proceeds",
+        "confidence": 0.94,
+        "source": "profile_auto",
+        "profile": 0.94
+      },
+      {
+        "account": "Client Balances",
+        "dir": "inflow",
+        "bucket": "borrowing_principal_paid",
+        "confidence": 0.62,
+        "source": "auto_semantic",
+        "profile": 0
+      },
+      {
+        "account": "Trade Vendor Ledger",
+        "dir": "outflow",
+        "bucket": "vendor_disbursements",
+        "confidence": 0.94,
+        "source": "profile_auto",
+        "profile": 0.94
+      },
+      {
+        "account": "Team Compensation",
+        "dir": "outflow",
+        "bucket": "people_costs",
+        "confidence": 0.62,
+        "source": "auto_semantic",
+        "profile": 0
+      },
+      {
+        "account": "Facilities Services",
+        "dir": "outflow",
+        "bucket": "credit_facility_proceeds",
+        "confidence": 0.94,
+        "source": "profile_auto",
+        "profile": 0.94
+      },
+      {
+        "account": "Growth Campaign Spend",
+        "dir": "outflow",
+        "bucket": "people_costs",
+        "confidence": 0.62,
+        "source": "auto_semantic",
+        "profile": 0
+      },
+      {
+        "account": "Field Travel Reimbursements",
+        "dir": "outflow",
+        "bucket": "overhead_and_admin",
+        "confidence": 0.94,
+        "source": "profile_auto",
+        "profile": 0.94
+      },
+      {
+        "account": "Bank Charges",
+        "dir": "outflow",
+        "bucket": "people_costs",
+        "confidence": 0.62,
+        "source": "auto_semantic",
+        "profile": 0
+      },
+      {
+        "account": "Credit Facility",
+        "dir": "outflow",
+        "bucket": "credit_facility_proceeds",
+        "confidence": 0.94,
+        "source": "profile_auto",
+        "profile": 0.94
+      },
+      {
+        "account": "Finance Charge",
+        "dir": "outflow",
+        "bucket": "people_costs",
+        "confidence": 0.62,
+        "source": "auto_semantic",
+        "profile": 0
+      },
+      {
+        "account": "Credit Facility",
+        "dir": "inflow",
+        "bucket": "borrowing_principal_paid",
+        "confidence": 0.87,
+        "source": "profile_auto",
+        "profile": 0.87
+      },
+      {
+        "account": "Member Distributions",
+        "dir": "outflow",
+        "bucket": "member_distributions",
+        "confidence": 0.94,
+        "source": "profile_auto",
+        "profile": 0.94
+      },
+      {
+        "account": "Deferred Client Deposits",
+        "dir": "inflow",
+        "bucket": "borrowing_principal_paid",
+        "confidence": 0.62,
+        "source": "auto_semantic",
+        "profile": 0
+      }
+    ],
+    "assistance": {
+      "enabled": false,
+      "statementMethod": "direct",
+      "candidatesConsidered": 0,
+      "attempted": false,
+      "acceptedCount": 0,
+      "rejectedCount": 0,
+      "failed": false
+    },
+    "warnings": [
+      "7 auto-mapped account(s) have low confidence."
+    ]
+  },
+  {
+    "name": "renamed_accounts_renamed_template_with_llm_stub",
+    "outputFilePath": "C:\\Users\\Mano PC\\FA\\uploads\\cash-flow\\runs\\adversarial-mapping-check\\renamed_accounts_renamed_template_with_llm_stub_output.xlsx",
+    "analysis": {
+      "confidence": 0.88,
+      "needs_human_review": false,
+      "bucketLabels": [
+        {
+          "key": "client_collections",
+          "label": "Client collections",
+          "direction": "inflow",
+          "fallback": false
+        },
+        {
+          "key": "misc_operating_receipts",
+          "label": "Misc operating receipts",
+          "direction": "inflow",
+          "fallback": true
+        },
+        {
+          "key": "vendor_disbursements",
+          "label": "Vendor disbursements",
+          "direction": "outflow",
+          "fallback": false
+        },
+        {
+          "key": "people_costs",
+          "label": "People costs",
+          "direction": "outflow",
+          "fallback": false
+        },
+        {
+          "key": "premises_costs",
+          "label": "Premises costs",
+          "direction": "outflow",
+          "fallback": false
+        },
+        {
+          "key": "growth_spend",
+          "label": "Growth spend",
+          "direction": "inflow",
+          "fallback": false
+        },
+        {
+          "key": "overhead_and_admin",
+          "label": "Overhead and admin",
+          "direction": "outflow",
+          "fallback": false
+        },
+        {
+          "key": "tax_settlements",
+          "label": "Tax settlements",
+          "direction": "inflow",
+          "fallback": false
+        },
+        {
+          "key": "asset_purchases",
+          "label": "Asset purchases",
+          "direction": "outflow",
+          "fallback": false
+        },
+        {
+          "key": "product_build_capitalization",
+          "label": "Product build capitalization",
+          "direction": "inflow",
+          "fallback": false
+        },
+        {
+          "key": "fixed_asset_disposals",
+          "label": "Fixed asset disposals",
+          "direction": "outflow",
+          "fallback": false
+        },
+        {
+          "key": "credit_facility_proceeds",
+          "label": "Credit facility proceeds",
+          "direction": "outflow",
+          "fallback": false
+        },
+        {
+          "key": "borrowing_principal_paid",
+          "label": "Borrowing principal paid",
+          "direction": "inflow",
+          "fallback": false
+        },
+        {
+          "key": "finance_charges_paid",
+          "label": "Finance charges paid",
+          "direction": "outflow",
+          "fallback": false
+        },
+        {
+          "key": "founder_funding",
+          "label": "Founder funding",
+          "direction": "inflow",
+          "fallback": false
+        },
+        {
+          "key": "member_distributions",
+          "label": "Member distributions",
+          "direction": "outflow",
+          "fallback": false
+        }
+      ]
+    },
+    "totals": {
+      "inflows": 446500,
+      "outflows": 217925,
+      "net": 228575,
+      "closing": 228575,
+      "buckets": {
+        "client_collections": 276500,
+        "misc_operating_receipts": 0,
+        "vendor_disbursements": 28085,
+        "people_costs": 95000,
+        "premises_costs": 10200,
+        "growth_spend": 0,
+        "overhead_and_admin": 43000,
+        "tax_settlements": 0,
+        "asset_purchases": 18000,
+        "product_build_capitalization": 0,
+        "fixed_asset_disposals": 0,
+        "credit_facility_proceeds": 14460,
+        "borrowing_principal_paid": 35000,
+        "finance_charges_paid": 3180,
+        "founder_funding": 135000,
+        "member_distributions": 6000
+      }
+    },
+    "mappingSummary": {
+      "total_cash_movements": 68,
+      "mapped_cash_movements": 68,
+      "auto_mappings_created": 15,
+      "low_confidence_mappings": 1,
+      "assistance": {
+        "enabled": true,
+        "statementMethod": "direct",
+        "candidatesConsidered": 16,
+        "attempted": true,
+        "acceptedCount": 13,
+        "rejectedCount": 3,
+        "failed": false,
+        "model": "fake-llm",
+        "notes": [
+          "fake llm used for adversarial harness"
+        ],
+        "profileEvidenceStats": {
+          "candidates_with_profile": 16,
+          "strong_profile_candidates": 9,
+          "deterministic_profile_disagreements": 0
+        },
+        "rejectedRecommendations": [
+          {
+            "account_key": "growth campaign spend:outflow",
+            "reason": "fake_llm_no_allowed_target"
+          },
+          {
+            "account_key": "credit facility:outflow",
+            "reason": "fake_llm_no_allowed_target"
+          },
+          {
+            "account_key": "credit facility:inflow",
+            "reason": "fake_llm_no_allowed_target"
+          }
+        ],
+        "acceptedMappings": [
+          {
+            "normalized_account": "founder funding",
+            "direction": "inflow",
+            "bucket_key": "founder_funding",
+            "confidence": 0.88,
+            "llm_score": 0.88,
+            "profile_score": 0,
+            "reasoning": "Allowed target chosen from renamed template label and account profile evidence.",
+            "previous_bucket_key": "borrowing_principal_paid",
+            "changed": true
+          },
+          {
+            "normalized_account": "it hardware",
+            "direction": "outflow",
+            "bucket_key": "asset_purchases",
+            "confidence": 0.88,
+            "llm_score": 0.88,
+            "profile_score": 0,
+            "reasoning": "Allowed target chosen from renamed template label and account profile evidence.",
+            "previous_bucket_key": "fixed_asset_disposals",
+            "changed": true
+          },
+          {
+            "normalized_account": "annual policy asset",
+            "direction": "outflow",
+            "bucket_key": "overhead_and_admin",
+            "confidence": 0.88,
+            "llm_score": 0.88,
+            "profile_score": 0.87,
+            "reasoning": "Allowed target chosen from renamed template label and account profile evidence.",
+            "previous_bucket_key": "overhead_and_admin",
+            "changed": false
+          },
+          {
+            "normalized_account": "premises lease cost",
+            "direction": "outflow",
+            "bucket_key": "premises_costs",
+            "confidence": 0.88,
+            "llm_score": 0.88,
+            "profile_score": 0,
+            "reasoning": "Allowed target chosen from renamed template label and account profile evidence.",
+            "previous_bucket_key": "credit_facility_proceeds",
+            "changed": true
+          },
+          {
+            "normalized_account": "client balances",
+            "direction": "inflow",
+            "bucket_key": "client_collections",
+            "confidence": 0.88,
+            "llm_score": 0.88,
+            "profile_score": 0,
+            "reasoning": "Allowed target chosen from renamed template label and account profile evidence.",
+            "previous_bucket_key": "borrowing_principal_paid",
+            "changed": true
+          },
+          {
+            "normalized_account": "trade vendor ledger",
+            "direction": "outflow",
+            "bucket_key": "vendor_disbursements",
+            "confidence": 0.88,
+            "llm_score": 0.88,
+            "profile_score": 0.94,
+            "reasoning": "Allowed target chosen from renamed template label and account profile evidence.",
+            "previous_bucket_key": "vendor_disbursements",
+            "changed": false
+          },
+          {
+            "normalized_account": "team compensation",
+            "direction": "outflow",
+            "bucket_key": "people_costs",
+            "confidence": 0.88,
+            "llm_score": 0.88,
+            "profile_score": 0,
+            "reasoning": "Allowed target chosen from renamed template label and account profile evidence.",
+            "previous_bucket_key": "people_costs",
+            "changed": false
+          },
+          {
+            "normalized_account": "facilities services",
+            "direction": "outflow",
+            "bucket_key": "overhead_and_admin",
+            "confidence": 0.88,
+            "llm_score": 0.88,
+            "profile_score": 0.87,
+            "reasoning": "Allowed target chosen from renamed template label and account profile evidence.",
+            "previous_bucket_key": "credit_facility_proceeds",
+            "changed": true
+          },
+          {
+            "normalized_account": "field travel reimbursements",
+            "direction": "outflow",
+            "bucket_key": "overhead_and_admin",
+            "confidence": 0.88,
+            "llm_score": 0.88,
+            "profile_score": 0.94,
+            "reasoning": "Allowed target chosen from renamed template label and account profile evidence.",
+            "previous_bucket_key": "overhead_and_admin",
+            "changed": false
+          },
+          {
+            "normalized_account": "bank charges",
+            "direction": "outflow",
+            "bucket_key": "overhead_and_admin",
+            "confidence": 0.88,
+            "llm_score": 0.88,
+            "profile_score": 0,
+            "reasoning": "Allowed target chosen from renamed template label and account profile evidence.",
+            "previous_bucket_key": "people_costs",
+            "changed": true
+          },
+          {
+            "normalized_account": "finance charge",
+            "direction": "outflow",
+            "bucket_key": "finance_charges_paid",
+            "confidence": 0.88,
+            "llm_score": 0.88,
+            "profile_score": 0,
+            "reasoning": "Allowed target chosen from renamed template label and account profile evidence.",
+            "previous_bucket_key": "people_costs",
+            "changed": true
+          },
+          {
+            "normalized_account": "member distributions",
+            "direction": "outflow",
+            "bucket_key": "member_distributions",
+            "confidence": 0.88,
+            "llm_score": 0.88,
+            "profile_score": 0.94,
+            "reasoning": "Allowed target chosen from renamed template label and account profile evidence.",
+            "previous_bucket_key": "member_distributions",
+            "changed": false
+          },
+          {
+            "normalized_account": "deferred client deposits",
+            "direction": "inflow",
+            "bucket_key": "client_collections",
+            "confidence": 0.88,
+            "llm_score": 0.88,
+            "profile_score": 0,
+            "reasoning": "Allowed target chosen from renamed template label and account profile evidence.",
+            "previous_bucket_key": "borrowing_principal_paid",
+            "changed": true
+          }
+        ]
+      },
+      "account_profile": {
+        "profiled_accounts": 20,
+        "movement_accounts": 15,
+        "direction_profiles": 16,
+        "mapped_accounts": 16,
+        "profile_auto_mappings": 2,
+        "llm_assisted_mappings": 13,
+        "review_required_mappings": 4
+      }
+    },
+    "assignments": [
+      {
+        "account": "Founder Funding",
+        "dir": "inflow",
+        "bucket": "founder_funding",
+        "confidence": 0.88,
+        "source": "llm_assisted",
+        "profile": 0
+      },
+      {
+        "account": "IT Hardware",
+        "dir": "outflow",
+        "bucket": "asset_purchases",
+        "confidence": 0.88,
+        "source": "llm_assisted",
+        "profile": 0
+      },
+      {
+        "account": "Annual Policy Asset",
+        "dir": "outflow",
+        "bucket": "overhead_and_admin",
+        "confidence": 0.88,
+        "source": "llm_assisted",
+        "profile": 0
+      },
+      {
+        "account": "Premises Lease Cost",
+        "dir": "outflow",
+        "bucket": "premises_costs",
+        "confidence": 0.88,
+        "source": "llm_assisted",
+        "profile": 0
+      },
+      {
+        "account": "Client Balances",
+        "dir": "inflow",
+        "bucket": "client_collections",
+        "confidence": 0.88,
+        "source": "llm_assisted",
+        "profile": 0
+      },
+      {
+        "account": "Trade Vendor Ledger",
+        "dir": "outflow",
+        "bucket": "vendor_disbursements",
+        "confidence": 0.88,
+        "source": "llm_assisted",
+        "profile": 0
+      },
+      {
+        "account": "Team Compensation",
+        "dir": "outflow",
+        "bucket": "people_costs",
+        "confidence": 0.88,
+        "source": "llm_assisted",
+        "profile": 0
+      },
+      {
+        "account": "Facilities Services",
+        "dir": "outflow",
+        "bucket": "overhead_and_admin",
+        "confidence": 0.88,
+        "source": "llm_assisted",
+        "profile": 0
+      },
+      {
+        "account": "Growth Campaign Spend",
+        "dir": "outflow",
+        "bucket": "people_costs",
+        "confidence": 0.62,
+        "source": "auto_semantic",
+        "profile": 0
+      },
+      {
+        "account": "Field Travel Reimbursements",
+        "dir": "outflow",
+        "bucket": "overhead_and_admin",
+        "confidence": 0.88,
+        "source": "llm_assisted",
+        "profile": 0
+      },
+      {
+        "account": "Bank Charges",
+        "dir": "outflow",
+        "bucket": "overhead_and_admin",
+        "confidence": 0.88,
+        "source": "llm_assisted",
+        "profile": 0
+      },
+      {
+        "account": "Credit Facility",
+        "dir": "outflow",
+        "bucket": "credit_facility_proceeds",
+        "confidence": 0.94,
+        "source": "profile_auto",
+        "profile": 0.94
+      },
+      {
+        "account": "Finance Charge",
+        "dir": "outflow",
+        "bucket": "finance_charges_paid",
+        "confidence": 0.88,
+        "source": "llm_assisted",
+        "profile": 0
+      },
+      {
+        "account": "Credit Facility",
+        "dir": "inflow",
+        "bucket": "borrowing_principal_paid",
+        "confidence": 0.87,
+        "source": "profile_auto",
+        "profile": 0.87
+      },
+      {
+        "account": "Member Distributions",
+        "dir": "outflow",
+        "bucket": "member_distributions",
+        "confidence": 0.88,
+        "source": "llm_assisted",
+        "profile": 0
+      },
+      {
+        "account": "Deferred Client Deposits",
+        "dir": "inflow",
+        "bucket": "client_collections",
+        "confidence": 0.88,
+        "source": "llm_assisted",
+        "profile": 0
+      }
+    ],
+    "assistance": {
+      "enabled": true,
+      "statementMethod": "direct",
+      "candidatesConsidered": 16,
+      "attempted": true,
+      "acceptedCount": 13,
+      "rejectedCount": 3,
+      "failed": false,
+      "model": "fake-llm",
+      "notes": [
+        "fake llm used for adversarial harness"
+      ],
+      "profileEvidenceStats": {
+        "candidates_with_profile": 16,
+        "strong_profile_candidates": 9,
+        "deterministic_profile_disagreements": 0
+      },
+      "rejectedRecommendations": [
+        {
+          "account_key": "growth campaign spend:outflow",
+          "reason": "fake_llm_no_allowed_target"
+        },
+        {
+          "account_key": "credit facility:outflow",
+          "reason": "fake_llm_no_allowed_target"
+        },
+        {
+          "account_key": "credit facility:inflow",
+          "reason": "fake_llm_no_allowed_target"
+        }
+      ],
+      "acceptedMappings": [
+        {
+          "normalized_account": "founder funding",
+          "direction": "inflow",
+          "bucket_key": "founder_funding",
+          "confidence": 0.88,
+          "llm_score": 0.88,
+          "profile_score": 0,
+          "reasoning": "Allowed target chosen from renamed template label and account profile evidence.",
+          "previous_bucket_key": "borrowing_principal_paid",
+          "changed": true
+        },
+        {
+          "normalized_account": "it hardware",
+          "direction": "outflow",
+          "bucket_key": "asset_purchases",
+          "confidence": 0.88,
+          "llm_score": 0.88,
+          "profile_score": 0,
+          "reasoning": "Allowed target chosen from renamed template label and account profile evidence.",
+          "previous_bucket_key": "fixed_asset_disposals",
+          "changed": true
+        },
+        {
+          "normalized_account": "annual policy asset",
+          "direction": "outflow",
+          "bucket_key": "overhead_and_admin",
+          "confidence": 0.88,
+          "llm_score": 0.88,
+          "profile_score": 0.87,
+          "reasoning": "Allowed target chosen from renamed template label and account profile evidence.",
+          "previous_bucket_key": "overhead_and_admin",
+          "changed": false
+        },
+        {
+          "normalized_account": "premises lease cost",
+          "direction": "outflow",
+          "bucket_key": "premises_costs",
+          "confidence": 0.88,
+          "llm_score": 0.88,
+          "profile_score": 0,
+          "reasoning": "Allowed target chosen from renamed template label and account profile evidence.",
+          "previous_bucket_key": "credit_facility_proceeds",
+          "changed": true
+        },
+        {
+          "normalized_account": "client balances",
+          "direction": "inflow",
+          "bucket_key": "client_collections",
+          "confidence": 0.88,
+          "llm_score": 0.88,
+          "profile_score": 0,
+          "reasoning": "Allowed target chosen from renamed template label and account profile evidence.",
+          "previous_bucket_key": "borrowing_principal_paid",
+          "changed": true
+        },
+        {
+          "normalized_account": "trade vendor ledger",
+          "direction": "outflow",
+          "bucket_key": "vendor_disbursements",
+          "confidence": 0.88,
+          "llm_score": 0.88,
+          "profile_score": 0.94,
+          "reasoning": "Allowed target chosen from renamed template label and account profile evidence.",
+          "previous_bucket_key": "vendor_disbursements",
+          "changed": false
+        },
+        {
+          "normalized_account": "team compensation",
+          "direction": "outflow",
+          "bucket_key": "people_costs",
+          "confidence": 0.88,
+          "llm_score": 0.88,
+          "profile_score": 0,
+          "reasoning": "Allowed target chosen from renamed template label and account profile evidence.",
+          "previous_bucket_key": "people_costs",
+          "changed": false
+        },
+        {
+          "normalized_account": "facilities services",
+          "direction": "outflow",
+          "bucket_key": "overhead_and_admin",
+          "confidence": 0.88,
+          "llm_score": 0.88,
+          "profile_score": 0.87,
+          "reasoning": "Allowed target chosen from renamed template label and account profile evidence.",
+          "previous_bucket_key": "credit_facility_proceeds",
+          "changed": true
+        },
+        {
+          "normalized_account": "field travel reimbursements",
+          "direction": "outflow",
+          "bucket_key": "overhead_and_admin",
+          "confidence": 0.88,
+          "llm_score": 0.88,
+          "profile_score": 0.94,
+          "reasoning": "Allowed target chosen from renamed template label and account profile evidence.",
+          "previous_bucket_key": "overhead_and_admin",
+          "changed": false
+        },
+        {
+          "normalized_account": "bank charges",
+          "direction": "outflow",
+          "bucket_key": "overhead_and_admin",
+          "confidence": 0.88,
+          "llm_score": 0.88,
+          "profile_score": 0,
+          "reasoning": "Allowed target chosen from renamed template label and account profile evidence.",
+          "previous_bucket_key": "people_costs",
+          "changed": true
+        },
+        {
+          "normalized_account": "finance charge",
+          "direction": "outflow",
+          "bucket_key": "finance_charges_paid",
+          "confidence": 0.88,
+          "llm_score": 0.88,
+          "profile_score": 0,
+          "reasoning": "Allowed target chosen from renamed template label and account profile evidence.",
+          "previous_bucket_key": "people_costs",
+          "changed": true
+        },
+        {
+          "normalized_account": "member distributions",
+          "direction": "outflow",
+          "bucket_key": "member_distributions",
+          "confidence": 0.88,
+          "llm_score": 0.88,
+          "profile_score": 0.94,
+          "reasoning": "Allowed target chosen from renamed template label and account profile evidence.",
+          "previous_bucket_key": "member_distributions",
+          "changed": false
+        },
+        {
+          "normalized_account": "deferred client deposits",
+          "direction": "inflow",
+          "bucket_key": "client_collections",
+          "confidence": 0.88,
+          "llm_score": 0.88,
+          "profile_score": 0,
+          "reasoning": "Allowed target chosen from renamed template label and account profile evidence.",
+          "previous_bucket_key": "borrowing_principal_paid",
+          "changed": true
+        }
+      ]
+    },
+    "warnings": [
+      "1 auto-mapped account(s) have low confidence."
+    ]
+  }
+]
