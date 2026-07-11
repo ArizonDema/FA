@@ -1,0 +1,68 @@
+{
+  "status": "fail",
+  "database": "css_invest_eval_20260705142517",
+  "outputDir": "C:\\Users\\Mano PC\\FA\\uploads\\cash-flow\\agent-mcp-evaluations\\real-blackbox-20260705113428",
+  "setup": {
+    "fundId": "df290b18-0d72-4605-99e0-beb4ef8c7313",
+    "crossFundId": "6a617ae6-2ed2-4cf2-bcf2-95bf12e97c63",
+    "templateId": "7811eb69-b35e-41cc-98af-765b009da855",
+    "templateActiveVersionId": "4ae3b2ae-4535-4447-83ee-2c05f8f0b553",
+    "tbVersionId": "0911f32d-568b-4d85-8c9a-bd763e5fe18b",
+    "glVersionId": "566afb4f-f2d2-4d05-829b-b1c529c2fe9b",
+    "lpaVersionId": "4f01a06d-3b95-4792-b0d9-46ba3fa072fa",
+    "agentPrincipalId": "86dcb70f-a91e-4a49-879d-efc2800fe947",
+    "agentScopes": [
+      "reporting_project:create",
+      "reporting_project:read",
+      "source:attach",
+      "source:analyze",
+      "template:analyze",
+      "mapping:read",
+      "mapping:suggest",
+      "report:run_draft",
+      "report:validate",
+      "report:read",
+      "audit:read"
+    ]
+  },
+  "expected": {
+    "total_inflows": 210000,
+    "total_outflows": 130000,
+    "net_cash_flow": 80000,
+    "bucket_totals": {
+      "customer_receipts": 120000,
+      "equity_injection": 50000,
+      "debt_drawdown": 40000,
+      "supplier_payments": 30000,
+      "payroll": 45000,
+      "rent_facilities": 12000,
+      "capital_expenditures": 25000,
+      "debt_repayment": 10000,
+      "member_distributions": 8000
+    },
+    "opening_balance_start": 50000,
+    "closing_balance_end": 130000
+  },
+  "evaluator": {
+    "exitStatus": 1,
+    "timedOut": false,
+    "stdout": "",
+    "stderr": "Error: MCP initialize failed with HTTP 401\n    at Object.rpc (C:\\Users\\Mano PC\\FA\\scripts\\evaluate-agent-cashflow-mcp.js:286:21)\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async run (C:\\Users\\Mano PC\\FA\\scripts\\evaluate-agent-cashflow-mcp.js:354:3)\n",
+    "scorecard": null,
+    "finalExplanation": null
+  },
+  "workbook": {
+    "runId": null,
+    "runStatus": null,
+    "outputPath": null,
+    "exists": false,
+    "mismatches": [
+      "no output path"
+    ],
+    "formulasSurvive": false
+  },
+  "security": {
+    "transcriptLeakCount": 0,
+    "transcriptLeakSamples": []
+  }
+}

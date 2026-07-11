@@ -19,6 +19,7 @@ const {
 const { REPORT_READINESS_STATUSES } = require("../validation.constants")
 const SemanticValueAggregationService = require("./semanticValueAggregation.service")
 const TemplateRowRenderService = require("./templateRowRender.service")
+const ReportLineageService = require("./reportLineage.service")
 const ValidationResultService = require("./validationResult.service")
 const { ValidationEngineService } = require("./validationEngine.service")
 
@@ -352,16 +353,20 @@ class ReportGenerationService {
 
       if (persist && run) {
         await sequelize.transaction(async (transaction) => {
-          await ReportRunRow.bulkCreate(
-            renderedRows.map((row) =>
-              this.buildRowPersistencePayload({
-                runId: run.id,
-                templateVersionId,
-                row,
-              }),
-            ),
-            { transaction },
+          const rowPayloads = renderedRows.map((row) =>
+            this.buildRowPersistencePayload({
+              runId: run.id,
+              templateVersionId,
+              row,
+            }),
           )
+          const persistedRows = await ReportRunRow.bulkCreate(rowPayloads, { transaction })
+
+          await ReportLineageService.persistForReportRows({
+            run,
+            rows: persistedRows,
+            transaction,
+          })
 
           await run.update(
             {

@@ -1,0 +1,24 @@
+{
+  "exists": true,
+  "formulasSurvive": true,
+  "expectedFormulaConvention": {
+    "inflows": 210000,
+    "outflows": 130000,
+    "net": 80000,
+    "opening": 50000,
+    "closing": 130000
+  },
+  "expectedCells": {
+    "B2": true,
+    "B3": true,
+    "B4": true,
+    "B5": true,
+    "B6": true,
+    "B7": true,
+    "B8": true,
+    "B9": true,
+    "B10": true,
+    "B12": true
+  },
+  "adminWorkbookPath": "C:\\Users\\Mano PC\\FA\\uploads\\cash-flow\\runs\\a2be3752-0a94-4a4a-8162-430da8c56cdd\\cash_flow_2026-01-01_2026-12-31.xlsx"
+}

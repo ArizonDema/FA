@@ -4,11 +4,17 @@ export function AppShell({ user, onLogout, navItems, activePage, setActivePage, 
   return (
     <main className="app-root">
       <aside className="sidebar">
-        <div>
-          <p className="kicker">CSS Invest</p>
-          <h2>{user.role.toUpperCase()} Workspace</h2>
+        <div className="brand-block">
+          <div className="brand-mark">FA</div>
+          <div>
+            <p className="kicker">CSS Invest</p>
+            <h2>{user.role === "admin" ? "Reporting Studio" : "Investor Workspace"}</h2>
+          </div>
+        </div>
+
+        <div className="user-block">
           <p className="muted small">{user.full_name}</p>
-          <p className="muted small">KYC: {user.kyc_status}</p>
+          <span className="status-chip">KYC {user.kyc_status}</span>
         </div>
 
         <nav className="sidebar-nav">
@@ -19,7 +25,8 @@ export function AppShell({ user, onLogout, navItems, activePage, setActivePage, 
               onClick={() => setActivePage(item.key)}
               className={activePage === item.key ? "nav-btn active" : "nav-btn"}
             >
-              {item.label}
+              <span>{item.label}</span>
+              {item.description && <small>{item.description}</small>}
             </button>
           ))}
         </nav>

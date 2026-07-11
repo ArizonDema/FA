@@ -17,6 +17,11 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: "created_by",
         as: "createdBy",
       })
+
+      ValidationResult.hasMany(models.ReportExport, {
+        foreignKey: "validation_result_id",
+        as: "reportExports",
+      })
     }
   }
 

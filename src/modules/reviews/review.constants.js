@@ -27,6 +27,9 @@ const REVIEW_PRIORITIES = Object.freeze({
 
 const REVIEW_REASONS = Object.freeze({
   APPROVAL_REQUIRED: "approval_required",
+  EXPORT_APPROVAL_REQUIRED: "export_approval_required",
+  VALIDATION_FAILED: "validation_failed",
+  VALIDATION_WARNING: "validation_warning",
   LOW_CONFIDENCE: "low_confidence",
   LLM_DISAGREEMENT: "llm_disagreement",
   NO_CANDIDATE: "no_candidate",
@@ -48,6 +51,14 @@ const REVIEW_ACTION_TYPES = Object.freeze({
 
 const REVIEW_TARGET_TYPES = Object.freeze({
   TEMPLATE_ROW: "template_row",
+  VALIDATION_CHECK: "validation_check",
+  VALIDATION_WAIVER: "validation_waiver",
+  REPORT_EXPORT: "report_export",
+  REPORT_RUN: "report_run",
+  SOURCE_TERM: "source_term",
+  SOURCE_DOCUMENT: "source_document",
+  REPOSITORY_KEY_POINT: "repository_key_point",
+  MAPPING_EXCEPTION: "mapping_exception",
 })
 
 const NON_REVIEWABLE_ROW_TYPES = new Set(["blank", "note"])

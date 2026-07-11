@@ -22,6 +22,8 @@ const semanticRoutes = require("./modules/semantic/routes/semantic.routes")
 const mappingRoutes = require("./modules/mappings/routes/mappings.routes")
 const auditRoutes = require("./modules/audit/routes/audit.routes")
 const reviewRoutes = require("./modules/reviews/routes/review.routes")
+const agentToolRoutes = require("./modules/agent-tools/routes/agentTool.routes")
+const agentMcpRoutes = require("./modules/agent-tools/routes/agentMcp.routes")
 
 /**
  * Initialize Express Application
@@ -97,12 +99,14 @@ app.use((req, res, next) => {
 app.use(`${config.apiPrefix}/auth`, authRoutes)
 app.use(`${config.apiPrefix}/investor`, investorRoutes)
 app.use(`${config.apiPrefix}/admin`, adminRoutes)
+app.use(`${config.apiPrefix}/mcp`, agentMcpRoutes)
 app.use(`${config.apiPrefix}`, fundAdminRoutes)
 app.use(`${config.apiPrefix}/cash-flow`, cashFlowRoutes)
 app.use(`${config.apiPrefix}/semantic-concepts`, semanticRoutes)
 app.use(`${config.apiPrefix}/mappings`, mappingRoutes)
 app.use(`${config.apiPrefix}/audit-events`, auditRoutes)
 app.use(`${config.apiPrefix}/review-tasks`, reviewRoutes)
+app.use(`${config.apiPrefix}/agent-reporting`, agentToolRoutes)
 app.use(`${config.apiPrefix}/system`, systemRoutes)
 
 const frontendDistPath = path.resolve(__dirname, "..", "frontend", "dist")

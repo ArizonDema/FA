@@ -154,6 +154,14 @@ const mockValidationResultService = {
   getReadiness: jest.fn(),
 }
 
+const mockRepositoryService = {
+  resolveRuntimeDatasetVersion: jest.fn(),
+  saveRunDatasetUpload: jest.fn(),
+}
+const mockRepositoryAnalysisService = {
+  getKnowledgePack: jest.fn(),
+}
+
 const mockTemplateIngestionService = {
   computeTemplateHash: jest.fn(),
   ingestTemplateSchema: jest.fn(),
@@ -173,6 +181,8 @@ jest.mock("../src/modules/reports/services/validationEngine.service", () => ({
   ValidationEngineService: mockValidationEngineService,
 }))
 jest.mock("../src/modules/reports/services/validationResult.service", () => mockValidationResultService)
+jest.mock("../src/modules/repository/services/repository.service", () => mockRepositoryService)
+jest.mock("../src/modules/repository/services/repositoryAnalysis.service", () => mockRepositoryAnalysisService)
 
 const cashFlowRoutes = require("../src/routes/cash-flow.routes")
 
@@ -267,6 +277,8 @@ function createRunRecord(overrides = {}) {
         created_at: this.created_at,
         inputs_json: this.inputs_json,
         output_paths: this.output_paths,
+        input_artifacts_json: this.input_artifacts_json,
+        output_artifacts_json: this.output_artifacts_json,
       }
     },
     ...overrides,
@@ -339,6 +351,14 @@ describe("cash-flow API", () => {
     mockReportRunModel.create.mockResolvedValue(createRunRecord())
     mockModels.AuditLog.create.mockResolvedValue({ id: "audit-1" })
     mockModels.AuditEvent.create.mockResolvedValue({ id: "audit-1" })
+    mockRepositoryService.resolveRuntimeDatasetVersion.mockResolvedValue(null)
+    mockRepositoryService.saveRunDatasetUpload.mockResolvedValue(null)
+    mockRepositoryAnalysisService.getKnowledgePack.mockResolvedValue({
+      review_status: "confirmed",
+      counts: { confirmed: 0, suggested: 0, dismissed: 0, selected_sources: 0, selected_key_points: 0, conflicts: 0 },
+      sources: [],
+      conflicts: [],
+    })
     mockTemplateParsingService.persistVersionStructure.mockResolvedValue({
       normalizedStructure: { templateVersionId: "template-version-1", sheets: [] },
       parseMetadata: { parser_version: "test-parser" },
@@ -1420,6 +1440,171 @@ describe("cash-flow API", () => {
         useRuntimeMappingAssistance: false,
       }),
     )
+    expect(mockRepositoryService.saveRunDatasetUpload).not.toHaveBeenCalled()
+  })
+
+  test("runs from stored repository TB and GL versions with immutable run artifact references", async () => {
+    const tbStored = path.join(tempDir, "stored_tb.xlsx")
+    const glStored = path.join(tempDir, "stored_gl.xlsx")
+    await writeTinyWorkbook(tbStored)
+    await writeTinyWorkbook(glStored)
+    const runRecord = createRunRecord()
+    mockReportRunModel.create.mockResolvedValueOnce(runRecord)
+    mockRepositoryService.resolveRuntimeDatasetVersion
+      .mockResolvedValueOnce({
+        itemId: "item-tb",
+        versionId: "version-tb",
+        sha256: "hash-tb",
+        originalName: "trial_balance.xlsx",
+        storagePath: tbStored,
+      })
+      .mockResolvedValueOnce({
+        itemId: "item-gl",
+        versionId: "version-gl",
+        sha256: "hash-gl",
+        originalName: "general_ledger.xlsx",
+        storagePath: glStored,
+      })
+    mockRepositoryAnalysisService.getKnowledgePack.mockResolvedValueOnce({
+      review_status: "confirmed",
+      counts: { confirmed: 2, selected_sources: 2, selected_key_points: 2, conflicts: 1 },
+      sources: [
+        { item_id: "lpa-1", version_id: "lpa-v1", key_points: [{ point_key: "management_fee", value_text: "1.75%" }] },
+        { item_id: "ppm-1", version_id: "ppm-v1", key_points: [{ point_key: "management_fee", value_text: "2.00%" }] },
+      ],
+      conflicts: [{ id: "governing_terms:management_fee", point_key: "management_fee", values: [{ item_id: "lpa-1" }, { item_id: "ppm-1" }] }],
+    })
+
+    const response = await request(app)
+      .post("/api/v1/cash-flow/reports/run")
+      .field("portfolio_id", "fund-1")
+      .field("date_start", "2025-01-01")
+      .field("date_end", "2025-12-31")
+      .field("tb_repository_version_id", "version-tb")
+      .field("gl_repository_version_id", "version-gl")
+
+    expect(response.status).toBe(200)
+    expect(mockRepositoryService.resolveRuntimeDatasetVersion).toHaveBeenCalledTimes(2)
+    expect(runRecord.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input_artifacts_json: expect.objectContaining({
+          trial_balance: expect.objectContaining({
+            source_kind: "repository",
+            repository_item_id: "item-tb",
+            repository_version_id: "version-tb",
+            repository_sha256: "hash-tb",
+          }),
+          general_ledger: expect.objectContaining({
+            source_kind: "repository",
+            repository_version_id: "version-gl",
+          }),
+          repository_knowledge: expect.objectContaining({
+            status: "captured",
+            review_status: "confirmed",
+            sources: expect.arrayContaining([expect.objectContaining({ item_id: "lpa-1", version_id: "lpa-v1" })]),
+            conflicts: [expect.objectContaining({ point_key: "management_fee" })],
+          }),
+        }),
+      }),
+    )
+    expect(response.body.data.run.input_artifacts_json.trial_balance.file_path).toBeUndefined()
+    expect(response.body.data.run.input_artifacts_json.general_ledger.file_path).toBeUndefined()
+    expect(response.body.data.run.input_artifacts_json.repository_knowledge.sources[0].item_id).toBe("lpa-1")
+    expect(response.body.data.run.output_paths).toEqual({ xlsx: true })
+    expect(mockModels.AuditEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event_type: "repository_knowledge_snapshotted_for_report",
+        metadata_json: expect.objectContaining({ conflicts: 1 }),
+      }),
+    )
+  })
+
+  test("does not block a cash flow run when repository knowledge cannot be snapshotted", async () => {
+    const tbFile = path.join(tempDir, "tb_context_unavailable.xlsx")
+    const glFile = path.join(tempDir, "gl_context_unavailable.xlsx")
+    await writeTinyWorkbook(tbFile)
+    await writeTinyWorkbook(glFile)
+    const runRecord = createRunRecord()
+    mockReportRunModel.create.mockResolvedValueOnce(runRecord)
+    mockRepositoryAnalysisService.getKnowledgePack.mockRejectedValueOnce(new Error("repository analysis unavailable"))
+
+    const response = await request(app)
+      .post("/api/v1/cash-flow/reports/run")
+      .field("portfolio_id", "fund-1")
+      .field("date_start", "2025-01-01")
+      .field("date_end", "2025-12-31")
+      .attach("tb_file", tbFile)
+      .attach("gl_file", glFile)
+
+    expect(response.status).toBe(200)
+    expect(runRecord.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input_artifacts_json: expect.objectContaining({
+          repository_knowledge: expect.objectContaining({ status: "unavailable", sources: [] }),
+        }),
+      }),
+    )
+  })
+
+  test("saves newly uploaded report inputs only when repository saving is requested", async () => {
+    const tbFile = path.join(tempDir, "tb_save.xlsx")
+    const glFile = path.join(tempDir, "gl_save.xlsx")
+    await writeTinyWorkbook(tbFile)
+    await writeTinyWorkbook(glFile)
+    mockRepositoryService.saveRunDatasetUpload
+      .mockResolvedValueOnce({
+        itemId: "saved-tb",
+        versionId: "saved-tb-v1",
+        sha256: "hash-saved-tb",
+        originalName: "tb_save.xlsx",
+        storagePath: tbFile,
+      })
+      .mockResolvedValueOnce({
+        itemId: "saved-gl",
+        versionId: "saved-gl-v1",
+        sha256: "hash-saved-gl",
+        originalName: "gl_save.xlsx",
+        storagePath: glFile,
+      })
+
+    const response = await request(app)
+      .post("/api/v1/cash-flow/reports/run")
+      .field("portfolio_id", "fund-1")
+      .field("date_start", "2025-01-01")
+      .field("date_end", "2025-12-31")
+      .field("save_uploads_to_repository", "true")
+      .attach("tb_file", tbFile)
+      .attach("gl_file", glFile)
+
+    expect(response.status).toBe(200)
+    expect(mockRepositoryService.saveRunDatasetUpload).toHaveBeenCalledTimes(2)
+    expect(mockRepositoryService.saveRunDatasetUpload).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fundId: "fund-1",
+        category: "trial_balance",
+        periodStart: "2025-01-01",
+        periodEnd: "2025-12-31",
+      }),
+    )
+  })
+
+  test("rejects a report source supplied both as a file and repository version", async () => {
+    const tbFile = path.join(tempDir, "tb_conflict.xlsx")
+    const glFile = path.join(tempDir, "gl_conflict.xlsx")
+    await writeTinyWorkbook(tbFile)
+    await writeTinyWorkbook(glFile)
+
+    const response = await request(app)
+      .post("/api/v1/cash-flow/reports/run")
+      .field("portfolio_id", "fund-1")
+      .field("date_start", "2025-01-01")
+      .field("date_end", "2025-12-31")
+      .field("tb_repository_version_id", "version-tb")
+      .attach("tb_file", tbFile)
+      .attach("gl_file", glFile)
+
+    expect(response.status).toBe(400)
+    expect(response.body.message).toContain("either tb_file or tb_repository_version_id")
   })
 
   test("persists friendly preflight failure when template coverage is missing", async () => {
@@ -1653,6 +1838,52 @@ describe("cash-flow API", () => {
     expect(response.status).toBe(200)
     expect(String(response.headers["content-disposition"] || "").toLowerCase()).toContain("attachment")
     expect(response.body.slice(0, 2).toString()).toBe("PK")
+  })
+
+  test("returns report history context without exposing physical artifact paths", async () => {
+    mockReportRunModel.findAll.mockResolvedValueOnce([
+      createRunRecord({
+        inputs_json: {
+          date_start: "2025-01-01",
+          date_end: "2025-12-31",
+          tb_file_path: "C:\\private\\tb.xlsx",
+          gl_file_path: "C:\\private\\gl.xlsx",
+        },
+        output_paths: { xlsx: "C:\\private\\report.xlsx" },
+        input_artifacts_json: {
+          trial_balance: {
+            file_path: "C:\\private\\tb.xlsx",
+            source_kind: "repository",
+            repository_version_id: "tb-version",
+          },
+          general_ledger: {
+            file_path: "C:\\private\\gl.xlsx",
+            source_kind: "repository",
+            repository_version_id: "gl-version",
+          },
+          tb_file_path: "C:\\private\\tb.xlsx",
+          gl_file_path: "C:\\private\\gl.xlsx",
+          repository_knowledge: {
+            status: "captured",
+            counts: { selected_key_points: 2 },
+            sources: [{ item_id: "lpa-1" }],
+          },
+        },
+        output_artifacts_json: { xlsx: "C:\\private\\report.xlsx" },
+      }),
+    ])
+
+    const response = await request(app).get("/api/v1/cash-flow/reports/history?portfolio_id=fund-1")
+    const run = response.body.data.runs[0]
+
+    expect(response.status).toBe(200)
+    expect(run.inputs_json.tb_file_path).toBeUndefined()
+    expect(run.inputs_json.gl_file_path).toBeUndefined()
+    expect(run.input_artifacts_json.tb_file_path).toBeUndefined()
+    expect(run.input_artifacts_json.trial_balance.file_path).toBeUndefined()
+    expect(run.input_artifacts_json.repository_knowledge.sources[0].item_id).toBe("lpa-1")
+    expect(run.output_paths).toEqual({ xlsx: true })
+    expect(run.output_artifacts_json).toEqual({ xlsx: true })
   })
 
   test("parses and inspects a template version structure", async () => {

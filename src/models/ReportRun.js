@@ -26,6 +26,16 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: "report_run_id",
         as: "validationResults",
       })
+
+      ReportRun.hasMany(models.ReportLineage, {
+        foreignKey: "report_run_id",
+        as: "lineage",
+      })
+
+      ReportRun.hasMany(models.ReportExport, {
+        foreignKey: "report_run_id",
+        as: "exports",
+      })
     }
   }
 

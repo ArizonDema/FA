@@ -33,6 +33,12 @@ class CashFlowReportController {
           : Number.parseInt(fiscalYearRaw, 10)
       const tbUpload = req.files?.tb_file?.[0]
       const glUpload = req.files?.gl_file?.[0]
+      const tbRepositoryVersionId = req.body.tb_repository_version_id || null
+      const glRepositoryVersionId = req.body.gl_repository_version_id || null
+      const saveUploadsToRepository =
+        req.body.save_uploads_to_repository === true ||
+        String(req.body.save_uploads_to_repository || "").toLowerCase() === "true" ||
+        String(req.body.save_uploads_to_repository || "") === "1"
 
       if (!fundId) {
         CashFlowReportController.cleanupTempUploads(req)
@@ -49,9 +55,20 @@ class CashFlowReportController {
         CashFlowReportController.cleanupTempUploads(req)
         return ResponseHandler.badRequest(res, "date_start and date_end must be provided together")
       }
-      if (!tbUpload || !glUpload) {
+      if (tbUpload && tbRepositoryVersionId) {
         CashFlowReportController.cleanupTempUploads(req)
-        return ResponseHandler.badRequest(res, "tb_file and gl_file are required")
+        return ResponseHandler.badRequest(res, "Provide either tb_file or tb_repository_version_id, not both")
+      }
+      if (glUpload && glRepositoryVersionId) {
+        CashFlowReportController.cleanupTempUploads(req)
+        return ResponseHandler.badRequest(res, "Provide either gl_file or gl_repository_version_id, not both")
+      }
+      if ((!tbUpload && !tbRepositoryVersionId) || (!glUpload && !glRepositoryVersionId)) {
+        CashFlowReportController.cleanupTempUploads(req)
+        return ResponseHandler.badRequest(
+          res,
+          "Provide a Trial Balance and General Ledger using uploads or repository versions",
+        )
       }
 
       const fund = await FundModel.findByPk(fundId)
@@ -67,6 +84,9 @@ class CashFlowReportController {
         rangeInput: { dateStart, dateEnd, preset, fiscalYear },
         tbUpload,
         glUpload,
+        tbRepositoryVersionId,
+        glRepositoryVersionId,
+        saveUploadsToRepository,
       })
 
       return ResponseHandler.success(res, result, "Cash flow report generated")
@@ -204,12 +224,44 @@ class CashFlowReportController {
 
   static async downloadReport(req, res, next) {
     try {
-      const download = await CashFlowReportService.getDownloadPath(req.params.run_id)
+      const requireFinalApproval = String(req.query.final || "").toLowerCase() === "true"
+      const download = await CashFlowReportService.getDownloadPath(req.params.run_id, {
+        actorId: req.user?.id || null,
+        requireFinalApproval,
+      })
       if (!download) {
         return ResponseHandler.notFound(res, "Cash flow report file not found")
       }
 
       return res.download(download.filePath, path.basename(download.filePath))
+    } catch (error) {
+      return next(error)
+    }
+  }
+
+  static async requestFinalExport(req, res, next) {
+    try {
+      const result = await CashFlowReportService.requestFinalExport({
+        runId: req.params.run_id,
+        actorId: req.user?.id || null,
+        format: req.body?.format || "xlsx",
+      })
+      if (!result) {
+        return ResponseHandler.notFound(res, "Cash flow report run not found")
+      }
+      return ResponseHandler.created(res, result, "Final export approval requested")
+    } catch (error) {
+      return next(error)
+    }
+  }
+
+  static async listExports(req, res, next) {
+    try {
+      const exports = await CashFlowReportService.listExports({ runId: req.params.run_id })
+      if (!exports) {
+        return ResponseHandler.notFound(res, "Cash flow report run not found")
+      }
+      return ResponseHandler.success(res, { exports }, "Report exports retrieved")
     } catch (error) {
       return next(error)
     }

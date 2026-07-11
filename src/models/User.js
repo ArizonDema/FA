@@ -36,9 +36,69 @@ module.exports = (sequelize, DataTypes) => {
         as: "reportRuns",
       })
 
+      User.hasMany(models.AgentPrincipal, {
+        foreignKey: "created_by",
+        as: "agentPrincipals",
+      })
+
+      User.hasMany(models.AgentToolInvocation, {
+        foreignKey: "delegated_by",
+        as: "delegatedAgentToolInvocations",
+      })
+
+      User.hasMany(models.AgentWorkflowRun, {
+        foreignKey: "initiated_by",
+        as: "initiatedAgentWorkflowRuns",
+      })
+
+      User.hasMany(models.ExternalIntegration, {
+        foreignKey: "created_by",
+        as: "externalIntegrations",
+      })
+
+      User.hasMany(models.ExternalSyncRun, {
+        foreignKey: "requested_by",
+        as: "requestedExternalSyncRuns",
+      })
+
+      User.hasMany(models.ReportExport, {
+        foreignKey: "created_by",
+        as: "reportExports",
+      })
+
       User.hasMany(models.FundDocument, {
         foreignKey: "uploaded_by",
         as: "fundDocuments",
+      })
+
+      User.hasMany(models.FundRepositoryItem, {
+        foreignKey: "created_by",
+        as: "fundRepositoryItems",
+      })
+
+      User.hasMany(models.FundRepositoryVersion, {
+        foreignKey: "uploaded_by",
+        as: "fundRepositoryVersions",
+      })
+
+      User.hasMany(models.FundRepositoryAnalysis, {
+        foreignKey: "created_by",
+        as: "fundRepositoryAnalyses",
+      })
+
+      User.hasMany(models.FundRepositoryKeyPoint, {
+        foreignKey: "reviewed_by",
+        as: "reviewedRepositoryKeyPoints",
+      })
+
+      User.hasMany(models.ReportingProject, {
+        foreignKey: "created_by",
+        as: "reportingProjects",
+      })
+
+      User.hasMany(models.ReportingProjectSource, {
+        foreignKey: "attached_by",
+        as: "reportingProjectSources",
       })
 
       User.hasMany(models.CashFlowTemplate, {

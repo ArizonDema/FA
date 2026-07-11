@@ -5,11 +5,20 @@ const mockTemplateRowSuggestionFindAll = jest.fn()
 const mockTemplateRowMappingFindAll = jest.fn()
 const mockReviewTaskFindAll = jest.fn()
 const mockReviewTaskCreate = jest.fn()
+const mockReviewTaskFindByPk = jest.fn()
 const mockReviewDecisionFindAll = jest.fn()
+const mockReviewDecisionCreate = jest.fn()
+const mockReportExportFindByPk = jest.fn()
 const mockAuditLogEvent = jest.fn()
 const mockGroupTemplateRowSuggestions = jest.fn()
 
 jest.mock("../src/models", () => ({
+  sequelize: {
+    transaction: jest.fn(async (callback) => callback({ id: "tx" })),
+  },
+  ReportExport: {
+    findByPk: (...args) => mockReportExportFindByPk(...args),
+  },
   Template: {
     findByPk: (...args) => mockTemplateFindByPk(...args),
   },
@@ -31,10 +40,11 @@ jest.mock("../src/models", () => ({
   ReviewTask: {
     findAll: (...args) => mockReviewTaskFindAll(...args),
     create: (...args) => mockReviewTaskCreate(...args),
-    findByPk: jest.fn(),
+    findByPk: (...args) => mockReviewTaskFindByPk(...args),
   },
   ReviewDecision: {
     findAll: (...args) => mockReviewDecisionFindAll(...args),
+    create: (...args) => mockReviewDecisionCreate(...args),
   },
   SemanticConcept: {},
 }))
@@ -60,6 +70,10 @@ function createTaskRecord(overrides = {}) {
     priority: "medium",
     review_reason: "approval_required",
     metadata_json: {},
+    async update(values) {
+      Object.assign(this, values)
+      return this
+    },
     toJSON() {
       return {
         id: this.id,
@@ -123,7 +137,17 @@ describe("ReviewTaskService", () => {
     mockTemplateRowMappingFindAll.mockResolvedValue([])
     mockReviewTaskFindAll.mockResolvedValue([])
     mockReviewTaskCreate.mockImplementation(async (payload) => createTaskRecord(payload))
+    mockReviewTaskFindByPk.mockResolvedValue(createTaskRecord())
     mockReviewDecisionFindAll.mockResolvedValue([])
+    mockReviewDecisionCreate.mockResolvedValue({ id: "decision-1" })
+    mockReportExportFindByPk.mockResolvedValue({
+      id: "export-1",
+      status: "approval_requested",
+      update: jest.fn(async function update(values) {
+        Object.assign(this, values)
+        return this
+      }),
+    })
     mockAuditLogEvent.mockResolvedValue(null)
     mockGroupTemplateRowSuggestions.mockResolvedValue([
       {
@@ -197,5 +221,56 @@ describe("ReviewTaskService", () => {
     expect(result.summary.tasksCreated).toBe(0)
     expect(result.summary.rowsSkippedActiveTask).toBe(1)
     expect(mockReviewTaskCreate).not.toHaveBeenCalled()
+  })
+
+  test("approves generic export review tasks without invoking mapping writes", async () => {
+    const exportTask = createTaskRecord({
+      id: "task-export",
+      target_type: "report_export",
+      target_id: "export-1",
+      template_version_id: null,
+      review_reason: "export_approval_required",
+      metadata_json: { report_run_id: "run-1", format: "xlsx" },
+    })
+    mockReviewTaskFindByPk.mockResolvedValue(exportTask)
+
+    const result = await ReviewTaskService.approveGenericTask({
+      taskId: "task-export",
+      actorId: "admin-1",
+      rationale: "Validated and approved for release.",
+    })
+
+    expect(exportTask.status).toBe("approved")
+    expect(result.target.type).toBe("report_export")
+    expect(mockReviewDecisionCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        review_task_id: "task-export",
+        action_type: "approve",
+      }),
+      expect.any(Object),
+    )
+    expect(mockReportExportFindByPk).toHaveBeenCalledWith("export-1", expect.any(Object))
+  })
+
+  test("creates generic source-term review tasks for non-template exceptions", async () => {
+    const result = await ReviewTaskService.createGenericReviewTask({
+      targetType: "source_term",
+      targetId: "key-point-1",
+      fundId: "fund-1",
+      taskType: "source_term_review",
+      reviewReason: "approval_required",
+      priority: "high",
+      metadata: { point_key: "management_fee" },
+      actorId: "admin-1",
+    })
+
+    expect(result.target.type).toBe("source_term")
+    expect(mockReviewTaskCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        task_type: "source_term_review",
+        target_type: "source_term",
+        target_id: "key-point-1",
+      }),
+    )
   })
 })

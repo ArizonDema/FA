@@ -9,8 +9,63 @@ const {
 const CashFlowService = require("../../../services/cashFlow.service")
 const StorageService = require("../../storage/services/storage.service")
 const AuditService = require("../../audit/services/audit.service")
+const RepositoryAnalysisService = require("../../repository/services/repositoryAnalysis.service")
+const RepositoryService = require("../../repository/services/repository.service")
 const TemplateService = require("../../templates/services/template.service")
+const ReportLineageService = require("../services/reportLineage.service")
+const ReportExportService = require("../services/reportExport.service")
 const ReportReliabilityService = require("./reportReliability.service")
+
+function asPlain(record) {
+  if (!record) return null
+  return typeof record.toJSON === "function" ? record.toJSON() : { ...record }
+}
+
+function publicInputArtifact(artifact) {
+  if (!artifact || typeof artifact !== "object") return artifact || null
+  const { file_path: ignoredPath, storage_path: ignoredStoragePath, ...safeArtifact } = artifact
+  void ignoredPath
+  void ignoredStoragePath
+  return safeArtifact
+}
+
+function publicReportRun(record, { inputArtifacts = null, xlsxAvailable = null } = {}) {
+  const run = asPlain(record)
+  if (!run) return null
+  const {
+    tb_file_path: ignoredTbInputPath,
+    gl_file_path: ignoredGlInputPath,
+    ...safeInputs
+  } = run.inputs_json || {}
+  void ignoredTbInputPath
+  void ignoredGlInputPath
+
+  const sourceArtifacts = inputArtifacts || run.input_artifacts_json || {}
+  const {
+    tb_file_path: ignoredTbArtifactPath,
+    gl_file_path: ignoredGlArtifactPath,
+    trial_balance: trialBalance,
+    general_ledger: generalLedger,
+    ...safeArtifactMetadata
+  } = sourceArtifacts
+  void ignoredTbArtifactPath
+  void ignoredGlArtifactPath
+  const hasXlsx = xlsxAvailable === null
+    ? Boolean(run.output_paths?.xlsx || run.output_artifacts_json?.xlsx)
+    : Boolean(xlsxAvailable)
+
+  return {
+    ...run,
+    inputs_json: safeInputs,
+    output_paths: hasXlsx ? { xlsx: true } : {},
+    input_artifacts_json: {
+      ...safeArtifactMetadata,
+      ...(trialBalance ? { trial_balance: publicInputArtifact(trialBalance) } : {}),
+      ...(generalLedger ? { general_ledger: publicInputArtifact(generalLedger) } : {}),
+    },
+    output_artifacts_json: hasXlsx ? { xlsx: true } : {},
+  }
+}
 
 class CashFlowReportService {
   static async runReport({
@@ -20,6 +75,9 @@ class CashFlowReportService {
     rangeInput,
     tbUpload,
     glUpload,
+    tbRepositoryVersionId = null,
+    glRepositoryVersionId = null,
+    saveUploadsToRepository = false,
   }) {
     const resolvedRange = CashFlowService.resolveRunDateRange(rangeInput)
     let template = null
@@ -49,6 +107,28 @@ class CashFlowReportService {
 
     const activeVersion = template.activeVersion
     const templateVersionId = activeVersion?.id || template.active_version_id || null
+    let tbRepositorySource = null
+    let glRepositorySource = null
+    try {
+      if (tbRepositoryVersionId) {
+        tbRepositorySource = await RepositoryService.resolveRuntimeDatasetVersion({
+          fundId,
+          versionId: tbRepositoryVersionId,
+          category: "trial_balance",
+          actorId,
+        })
+      }
+      if (glRepositoryVersionId) {
+        glRepositorySource = await RepositoryService.resolveRuntimeDatasetVersion({
+          fundId,
+          versionId: glRepositoryVersionId,
+          category: "general_ledger",
+          actorId,
+        })
+      }
+    } catch (error) {
+      throw new CashFlowService.CashFlowValidationError(error.message)
+    }
 
     const run = await ReportRun.create({
       type: "cash_flow",
@@ -56,24 +136,126 @@ class CashFlowReportService {
       period_start: resolvedRange.start.toISOString().slice(0, 10),
       period_end: resolvedRange.end.toISOString().slice(0, 10),
       template_version_id: templateVersionId,
+      status: "pending",
       inputs_json: {
+        generation_mode: "cash_flow_extractor",
         date_start: resolvedRange.start.toISOString().slice(0, 10),
         date_end: resolvedRange.end.toISOString().slice(0, 10),
         preset: rangeInput.preset || null,
         fiscal_year: Number.isInteger(rangeInput.fiscalYear) ? rangeInput.fiscalYear : null,
         template_id: template.id,
         template_name: template.name,
-        tb_file_name: tbUpload.originalname,
-        gl_file_name: glUpload.originalname,
+        tb_file_name: tbUpload?.originalname || tbRepositorySource?.originalName || null,
+        gl_file_name: glUpload?.originalname || glRepositorySource?.originalName || null,
       },
       created_by: actorId,
     })
 
     const runFolder = StorageService.ensureNamespace("cash-flow", "runs", run.id)
-    const tbFilePath = path.join(runFolder, `tb_${StorageService.sanitizeFileName(tbUpload.originalname, "trial_balance")}`)
-    const glFilePath = path.join(runFolder, `gl_${StorageService.sanitizeFileName(glUpload.originalname, "general_ledger")}`)
-    StorageService.moveFile(tbUpload.path, tbFilePath)
-    StorageService.moveFile(glUpload.path, glFilePath)
+    const periodStart = resolvedRange.start.toISOString().slice(0, 10)
+    const periodEnd = resolvedRange.end.toISOString().slice(0, 10)
+    const materializeInput = async ({ category, prefix, upload, repositorySource }) => {
+      let source = repositorySource
+      let sourceKind = repositorySource ? "repository" : "upload"
+      if (!source && saveUploadsToRepository) {
+        source = await RepositoryService.saveRunDatasetUpload({
+          fundId,
+          actorId,
+          category,
+          periodStart,
+          periodEnd,
+          upload,
+        })
+        sourceKind = "repository_saved_upload"
+      }
+      const originalName = source?.originalName || upload.originalname
+      const filePath = path.join(runFolder, `${prefix}_${StorageService.sanitizeFileName(originalName, category)}`)
+      if (source) {
+        fs.copyFileSync(source.storagePath, filePath)
+      } else {
+        StorageService.moveFile(upload.path, filePath)
+      }
+      return {
+        filePath,
+        artifact: {
+          source_kind: sourceKind,
+          file_path: filePath,
+          original_file_name: originalName,
+          repository_item_id: source?.itemId || null,
+          repository_version_id: source?.versionId || null,
+          repository_sha256: source?.sha256 || null,
+        },
+      }
+    }
+
+    let preparedTB
+    let preparedGL
+    try {
+      preparedTB = await materializeInput({
+        category: "trial_balance",
+        prefix: "tb",
+        upload: tbUpload,
+        repositorySource: tbRepositorySource,
+      })
+      preparedGL = await materializeInput({
+        category: "general_ledger",
+        prefix: "gl",
+        upload: glUpload,
+        repositorySource: glRepositorySource,
+      })
+    } catch (error) {
+      throw new CashFlowService.CashFlowValidationError(error.message)
+    }
+    const tbFilePath = preparedTB.filePath
+    const glFilePath = preparedGL.filePath
+    let repositoryKnowledgeSnapshot
+    try {
+      const knowledge = (await RepositoryAnalysisService.getKnowledgePack({
+        fundId,
+        reviewStatus: "confirmed",
+      })) || { review_status: "confirmed", counts: { conflicts: 0 }, sources: [], conflicts: [] }
+      repositoryKnowledgeSnapshot = {
+        status: "captured",
+        captured_at: new Date().toISOString(),
+        ...knowledge,
+      }
+      if (Number(knowledge.counts?.selected_key_points || 0) > 0) {
+        await AuditService.logEvent({
+          actorId,
+          eventType: "repository_knowledge_snapshotted_for_report",
+          entityType: "fund_repository",
+          entityId: fundId,
+          metadata: {
+            report_run_id: run.id,
+            selected_key_points: knowledge.counts.selected_key_points,
+            selected_sources: knowledge.counts.selected_sources || 0,
+            conflicts: knowledge.counts.conflicts || 0,
+          },
+        })
+      }
+    } catch (error) {
+      repositoryKnowledgeSnapshot = {
+        status: "unavailable",
+        review_status: "confirmed",
+        counts: { selected_sources: 0, selected_key_points: 0, conflicts: 0 },
+        sources: [],
+        conflicts: [],
+      }
+      await AuditService.logEvent({
+        actorId,
+        eventType: "repository_knowledge_snapshot_failed",
+        entityType: "fund_repository",
+        entityId: fundId,
+        metadata: { report_run_id: run.id, message: String(error.message || "Knowledge snapshot failed") },
+      })
+    }
+    const inputArtifacts = {
+      trial_balance: preparedTB.artifact,
+      general_ledger: preparedGL.artifact,
+      tb_file_path: tbFilePath,
+      gl_file_path: glFilePath,
+      repository_knowledge: repositoryKnowledgeSnapshot,
+    }
 
     const outputFilePath = path.join(
       runFolder,
@@ -129,10 +311,7 @@ class CashFlowReportService {
           gl_file_path: glFilePath,
           coverage_summary: details,
         },
-        input_artifacts_json: {
-          tb_file_path: tbFilePath,
-          gl_file_path: glFilePath,
-        },
+        input_artifacts_json: inputArtifacts,
         output_artifacts_json: {},
       })
       return true
@@ -321,8 +500,10 @@ class CashFlowReportService {
     })
 
     await run.update({
+      status: "completed",
       inputs_json: {
         ...run.inputs_json,
+        generation_mode: "cash_flow_extractor",
         tb_file_path: tbFilePath,
         gl_file_path: glFilePath,
         warnings: result.warnings,
@@ -346,13 +527,18 @@ class CashFlowReportService {
         coverage_summary: result.mapping?.coverage_summary || null,
         reliability_summary: result.mapping?.reliability_summary || null,
       },
-      input_artifacts_json: {
-        tb_file_path: tbFilePath,
-        gl_file_path: glFilePath,
-      },
+      input_artifacts_json: inputArtifacts,
       output_artifacts_json: {
         xlsx: result.outputFilePath,
       },
+      completed_at: new Date(),
+    })
+
+    await ReportLineageService.persistForCashFlowExtractorRun({
+      run,
+      result,
+      inputArtifacts,
+      templateVersionId,
     })
 
     await AuditService.logEvent({
@@ -369,7 +555,7 @@ class CashFlowReportService {
     })
 
     return {
-      run,
+      run: publicReportRun(run, { inputArtifacts, xlsxAvailable: true }),
       template: {
         id: template.id,
         name: template.name,
@@ -391,25 +577,48 @@ class CashFlowReportService {
   }
 
   static async getHistory({ fundId }) {
-    return await ReportRun.findAll({
+    const runs = await ReportRun.findAll({
       where: {
         portfolio_id: fundId,
         type: "cash_flow",
       },
       order: [["created_at", "DESC"]],
     })
+    return runs.map((run) => publicReportRun(run))
   }
 
-  static async getDownloadPath(runId) {
+  static async requestFinalExport({ runId, actorId = null, format = "xlsx" }) {
+    const run = await ReportRun.findByPk(runId)
+    if (!run || run.type !== "cash_flow") return null
+    return await ReportExportService.requestFinalExport({ runId, actorId, format })
+  }
+
+  static async listExports({ runId }) {
+    const run = await ReportRun.findByPk(runId)
+    if (!run || run.type !== "cash_flow") return null
+    return await ReportExportService.listExports({ runId })
+  }
+
+  static async getDownloadPath(runId, { actorId = null, requireFinalApproval = false } = {}) {
     const run = await ReportRun.findByPk(runId)
     if (!run || run.type !== "cash_flow") return null
 
     const xlsxPath = run.output_paths?.xlsx
     if (!xlsxPath || !fs.existsSync(xlsxPath)) return null
 
+    if (requireFinalApproval) {
+      return await ReportExportService.resolveDownload({
+        runId,
+        actorId,
+        format: "xlsx",
+        requireFinalApproval: true,
+      })
+    }
+
     return {
       run,
       filePath: xlsxPath,
+      final: false,
     }
   }
 }

@@ -52,6 +52,11 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: "template_version_id",
         as: "reportRunRows",
       })
+
+      TemplateVersion.hasMany(models.ReportLineage, {
+        foreignKey: "template_version_id",
+        as: "reportLineage",
+      })
     }
   }
 

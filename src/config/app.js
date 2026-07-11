@@ -30,6 +30,14 @@ module.exports = {
   port: process.env.PORT || 8000,
   apiPrefix: process.env.API_PREFIX || "/api/v1",
 
+  agentMcp: {
+    enabled: parseBoolean(process.env.AGENT_MCP_ENABLED, true),
+    protocolVersion: process.env.AGENT_MCP_PROTOCOL_VERSION || "2025-03-26",
+    allowedOrigins: parseCsv(process.env.AGENT_MCP_ALLOWED_ORIGINS),
+    rateLimitWindowMs: Number.parseInt(process.env.AGENT_MCP_RATE_LIMIT_WINDOW_MS || "60000", 10),
+    rateLimitMaxRequests: Number.parseInt(process.env.AGENT_MCP_RATE_LIMIT_MAX_REQUESTS || "120", 10),
+  },
+
   // JWT Configuration
   jwt: {
     secret: process.env.JWT_SECRET || "your-secret-key",

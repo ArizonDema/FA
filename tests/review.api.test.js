@@ -5,6 +5,10 @@ const errorHandler = require("../src/middlewares/errorHandler")
 const mockReviewTaskService = {
   listReviewTasks: jest.fn(),
   getReviewTask: jest.fn(),
+  getTaskTargetType: jest.fn(),
+  approveGenericTask: jest.fn(),
+  rejectGenericTask: jest.fn(),
+  deferGenericTask: jest.fn(),
 }
 
 const mockMappingReviewService = {
@@ -61,6 +65,22 @@ describe("Review workflow API", () => {
         deterministicCandidates: [{ semanticConceptKey: "management_fees" }],
         llmAssistedCandidates: [{ semanticConceptKey: "accrued_expenses" }],
       },
+    })
+    mockReviewTaskService.getTaskTargetType.mockResolvedValue("template_row")
+    mockReviewTaskService.approveGenericTask.mockResolvedValue({
+      id: "task-export",
+      status: "approved",
+      targetType: "report_export",
+    })
+    mockReviewTaskService.rejectGenericTask.mockResolvedValue({
+      id: "task-export",
+      status: "rejected",
+      targetType: "report_export",
+    })
+    mockReviewTaskService.deferGenericTask.mockResolvedValue({
+      id: "task-export",
+      status: "deferred",
+      targetType: "report_export",
     })
     mockMappingReviewService.approveTask.mockResolvedValue({
       id: "task-1",
@@ -119,6 +139,23 @@ describe("Review workflow API", () => {
     expect(response.status).toBe(200)
     expect(response.body.data.review_task.status).toBe("approved")
     expect(response.body.data.review_task.currentApprovedMapping.semanticConceptKey).toBe("management_fees")
+  })
+
+  test("approves generic review tasks through the generic workflow", async () => {
+    mockReviewTaskService.getTaskTargetType.mockResolvedValueOnce("report_export")
+
+    const response = await request(app).post("/review-tasks/task-export/approve").send({
+      rationale: "Validated and ready for final export.",
+    })
+
+    expect(response.status).toBe(200)
+    expect(response.body.data.review_task.targetType).toBe("report_export")
+    expect(mockReviewTaskService.approveGenericTask).toHaveBeenCalledWith({
+      taskId: "task-export",
+      actorId: "admin-1",
+      rationale: "Validated and ready for final export.",
+    })
+    expect(mockMappingReviewService.approveTask).not.toHaveBeenCalled()
   })
 
   test("overrides a review task", async () => {

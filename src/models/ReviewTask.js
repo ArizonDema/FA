@@ -37,6 +37,11 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: "review_task_id",
         as: "approvedMappings",
       })
+
+      ReviewTask.hasOne(models.ReportExport, {
+        foreignKey: "approval_review_task_id",
+        as: "reportExport",
+      })
     }
   }
 
@@ -63,7 +68,7 @@ module.exports = (sequelize, DataTypes) => {
       },
       template_version_id: {
         type: DataTypes.UUID,
-        allowNull: false,
+        allowNull: true,
       },
       portfolio_id: {
         type: DataTypes.UUID,

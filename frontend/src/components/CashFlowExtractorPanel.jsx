@@ -126,6 +126,10 @@ function displayAccountList(accounts = []) {
 function CoveragePreflightCard({ coverage, onOpenTemplates }) {
   const missingItems = Array.isArray(coverage?.missing_items) ? coverage.missing_items : []
   const nextActions = Array.isArray(coverage?.next_actions) ? coverage.next_actions : []
+  const openTemplates = (action) => {
+    if (!onOpenTemplates) return
+    onOpenTemplates({ action, coverage })
+  }
 
   return (
     <div className="panel stack">
@@ -159,13 +163,13 @@ function CoveragePreflightCard({ coverage, onOpenTemplates }) {
       )}
 
       <div className="inline-actions">
-        <button type="button" onClick={onOpenTemplates} disabled={!onOpenTemplates}>
-          Edit template mappings
+        <button type="button" onClick={() => openTemplates("review_missing_rows")} disabled={!onOpenTemplates}>
+          Review missing rows
         </button>
-        <button type="button" onClick={onOpenTemplates} disabled={!onOpenTemplates}>
-          Reanalyze template
+        <button type="button" onClick={() => openTemplates("reanalyze_template")} disabled={!onOpenTemplates}>
+          Reanalyze after editing workbook
         </button>
-        <button type="button" onClick={onOpenTemplates} disabled={!onOpenTemplates}>
+        <button type="button" onClick={() => openTemplates("upload_different_template")} disabled={!onOpenTemplates}>
           Upload a different template
         </button>
       </div>
@@ -181,11 +185,95 @@ function CoveragePreflightCard({ coverage, onOpenTemplates }) {
   )
 }
 
-export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote, onOpenTemplates }) {
+function RepositoryKnowledgeCard({ knowledge, title, onOpenRepository, attached = false }) {
+  const sources = Array.isArray(knowledge?.sources) ? knowledge.sources : []
+  const conflicts = Array.isArray(knowledge?.conflicts) ? knowledge.conflicts : []
+  const keyPoints = sources.flatMap((source) =>
+    (source.key_points || []).map((keyPoint) => ({
+      ...keyPoint,
+      sourceTitle: source.item?.title || "Repository source",
+    })),
+  )
+  const selectedCount = Number(knowledge?.counts?.selected_key_points ?? keyPoints.length)
+  const failed = knowledge?.status === "unavailable"
+
+  return (
+    <div className={`report-knowledge-context ${failed ? "unavailable" : ""}`}>
+      <div className="section-heading">
+        <div>
+          <p className="kicker">{attached ? "Attached Context" : "Repository Context"}</p>
+          <h4>{title}</h4>
+        </div>
+        {!failed && <strong className="knowledge-count">{selectedCount}</strong>}
+      </div>
+      {!failed && conflicts.length > 0 && (
+        <div className="alert warn report-knowledge-conflict">
+          <p className="small">
+            {conflicts.length} confirmed fact conflict{conflicts.length === 1 ? "" : "s"} detected across current sources. Resolve the disagreement in Fund Repository before relying on this context.
+          </p>
+        </div>
+      )}
+      {failed ? (
+        <p className="muted small">Confirmed repository facts could not be captured for this report run.</p>
+      ) : selectedCount > 0 ? (
+        <>
+          <p className="muted small">
+            {attached
+              ? "These confirmed facts were preserved with this run for review and traceability."
+              : "These confirmed facts will be preserved with the next run for review and traceability."}
+          </p>
+          <div className="report-knowledge-points">
+            {keyPoints.slice(0, 5).map((keyPoint) => (
+              <div className="report-knowledge-point" key={keyPoint.id || `${keyPoint.point_key}_${keyPoint.sourceTitle}`}>
+                <span>{keyPoint.label}</span>
+                <strong>{keyPoint.value_text || "-"}</strong>
+                <small>{keyPoint.sourceTitle}</small>
+              </div>
+            ))}
+          </div>
+          {selectedCount > keyPoints.slice(0, 5).length && (
+            <p className="muted small">{selectedCount - keyPoints.slice(0, 5).length} additional confirmed fact(s) attached.</p>
+          )}
+        </>
+      ) : (
+        <p className="muted small">No confirmed extracted facts are available yet. Review repository readings to attach reliable context.</p>
+      )}
+      {!attached && <p className="muted small">Cash-flow calculations continue to use only the selected TB, GL and active template.</p>}
+      {onOpenRepository && (
+        <button type="button" onClick={onOpenRepository}>
+          Open Fund Repository
+        </button>
+      )}
+    </div>
+  )
+}
+
+function repositoryContextLabel(run) {
+  const knowledge = run.input_artifacts_json?.repository_knowledge
+  if (!knowledge) return "-"
+  if (knowledge.status === "unavailable") return "Unavailable"
+  const selectedCount = Number(knowledge.counts?.selected_key_points || 0)
+  const conflicts = Number(knowledge.counts?.conflicts || 0)
+  if (!selectedCount) return "None confirmed"
+  const factLabel = `${selectedCount} fact${selectedCount === 1 ? "" : "s"}`
+  return conflicts ? `${factLabel} | ${conflicts} conflict${conflicts === 1 ? "" : "s"}` : factLabel
+}
+
+export function CashFlowExtractorPanel({
+  token,
+  selectedFundId,
+  onError,
+  onNote,
+  onOpenTemplates,
+  onOpenRepository,
+  onReportGenerated,
+}) {
   const [loading, setLoading] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [templates, setTemplates] = useState([])
   const [history, setHistory] = useState([])
+  const [repositoryDatasets, setRepositoryDatasets] = useState([])
+  const [confirmedKnowledge, setConfirmedKnowledge] = useState(null)
   const [latestRun, setLatestRun] = useState(null)
   const [latestPreview, setLatestPreview] = useState(null)
   const [latestWarnings, setLatestWarnings] = useState([])
@@ -204,6 +292,9 @@ export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote,
       date_start: fy.start,
       date_end: fy.end,
       template_id: "",
+      tb_repository_version_id: "",
+      gl_repository_version_id: "",
+      save_uploads_to_repository: true,
     }
   })
 
@@ -228,18 +319,31 @@ export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote,
     [activeTemplate, form.template_id, templates],
   )
   const targetLabels = useMemo(() => buildTemplateTargetLabelMap(selectedTemplate), [selectedTemplate])
+  const trialBalanceSources = useMemo(
+    () => repositoryDatasets.filter((item) => item.category === "trial_balance" && !item.is_archived && item.currentVersion),
+    [repositoryDatasets],
+  )
+  const generalLedgerSources = useMemo(
+    () => repositoryDatasets.filter((item) => item.category === "general_ledger" && !item.is_archived && item.currentVersion),
+    [repositoryDatasets],
+  )
+  const latestRepositoryKnowledge = latestRun?.input_artifacts_json?.repository_knowledge || null
 
   const loadData = useCallback(async () => {
     if (!selectedFundId) return
     setLoading(true)
     try {
-      const [templateResponse, historyResponse] = await Promise.all([
+      const [templateResponse, historyResponse, repositoryResponse, knowledgeResponse] = await Promise.all([
         apiRequest(`/cash-flow/templates?portfolio_id=${selectedFundId}`, { token }),
         apiRequest(`/cash-flow/reports/history?portfolio_id=${selectedFundId}`, { token }),
+        apiRequest(`/funds/${selectedFundId}/repository/items?kind=dataset&status=active`, { token }),
+        apiRequest(`/funds/${selectedFundId}/repository/knowledge?status=confirmed`, { token }),
       ])
       const nextTemplates = templateResponse.data.templates || []
       setTemplates(nextTemplates)
       setHistory(historyResponse.data.runs || [])
+      setRepositoryDatasets(repositoryResponse.data.items || [])
+      setConfirmedKnowledge(knowledgeResponse.data.knowledge || null)
       const active = nextTemplates.find((item) => item.is_active && item.can_activate !== false)
       if (active) {
         setForm((prev) => {
@@ -273,10 +377,15 @@ export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote,
       date_start: fy.start,
       date_end: fy.end,
       template_id: "",
+      tb_repository_version_id: "",
+      gl_repository_version_id: "",
+      save_uploads_to_repository: true,
     })
     if (!selectedFundId) {
       setTemplates([])
       setHistory([])
+      setRepositoryDatasets([])
+      setConfirmedKnowledge(null)
       return
     }
     loadData()
@@ -307,8 +416,12 @@ export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote,
     }
     const tbFile = tbInputRef.current?.files?.[0] || null
     const glFile = glInputRef.current?.files?.[0] || null
-    if (!tbFile || !glFile) {
-      onError("Upload both Trial Balance and General Ledger files.")
+    if (!tbFile && !form.tb_repository_version_id) {
+      onError("Upload or select a stored Trial Balance file.")
+      return
+    }
+    if (!glFile && !form.gl_repository_version_id) {
+      onError("Upload or select a stored General Ledger file.")
       return
     }
     if (!form.date_start || !form.date_end) {
@@ -338,8 +451,19 @@ export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote,
       if (form.template_id) {
         formData.append("template_id", form.template_id)
       }
-      formData.append("tb_file", tbFile)
-      formData.append("gl_file", glFile)
+      if (form.tb_repository_version_id) {
+        formData.append("tb_repository_version_id", form.tb_repository_version_id)
+      } else {
+        formData.append("tb_file", tbFile)
+      }
+      if (form.gl_repository_version_id) {
+        formData.append("gl_repository_version_id", form.gl_repository_version_id)
+      } else {
+        formData.append("gl_file", glFile)
+      }
+      if (!form.tb_repository_version_id || !form.gl_repository_version_id) {
+        formData.append("save_uploads_to_repository", String(form.save_uploads_to_repository))
+      }
 
       const response = await apiMultipartRequest("/cash-flow/reports/run", { token, formData })
       setLatestRun(response.data.run || null)
@@ -351,6 +475,7 @@ export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote,
       if (tbInputRef.current) tbInputRef.current.value = ""
       if (glInputRef.current) glInputRef.current.value = ""
       await loadData()
+      onReportGenerated?.()
     } catch (error) {
       const coverageDetails = getCoverageErrorDetails(error)
       if (coverageDetails) {
@@ -393,7 +518,7 @@ export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote,
   if (!selectedFundId) {
     return (
       <section className="panel stack">
-        <h2>Cash Flow Extractor</h2>
+        <h2>Run Report</h2>
         <p className="muted">Select a fund to run cash flow extraction.</p>
       </section>
     )
@@ -401,8 +526,11 @@ export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote,
 
   return (
     <section className="panel stack">
-      <div className="inline-actions">
-        <h2>Cash Flow Extractor</h2>
+      <div className="section-heading">
+        <div>
+          <p className="kicker">Report Builder</p>
+          <h2>Run Report</h2>
+        </div>
         <button type="button" onClick={loadData} disabled={loading}>
           {loading ? "Refreshing..." : "Refresh"}
         </button>
@@ -417,7 +545,7 @@ export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote,
           <strong>No ready cash-flow template is active.</strong>
           <p className="small">Review and activate a template before generating reports for this fund.</p>
           {onOpenTemplates && (
-            <button type="button" onClick={onOpenTemplates}>
+            <button type="button" onClick={() => onOpenTemplates(null)}>
               Edit template mappings
             </button>
           )}
@@ -493,14 +621,75 @@ export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote,
             </select>
           </label>
           <label>
-            Trial Balance (.xlsx)
-            <input ref={tbInputRef} name="tb_file" type="file" accept=".xlsx" required />
+            Stored Trial Balance
+            <select
+              value={form.tb_repository_version_id}
+              onChange={(event) => setForm((current) => ({ ...current, tb_repository_version_id: event.target.value }))}
+            >
+              <option value="">Upload a new file</option>
+              {trialBalanceSources.map((item) => (
+                <option key={item.id} value={item.currentVersion.id}>
+                  {item.title}{item.period_start ? ` (${item.period_start} to ${item.period_end})` : ""}
+                </option>
+              ))}
+            </select>
           </label>
           <label>
-            General Ledger (.xlsx)
-            <input ref={glInputRef} name="gl_file" type="file" accept=".xlsx" required />
+            Trial Balance Upload (.xlsx)
+            <input
+              ref={tbInputRef}
+              name="tb_file"
+              type="file"
+              accept=".xlsx"
+              required={!form.tb_repository_version_id}
+              disabled={Boolean(form.tb_repository_version_id)}
+            />
+          </label>
+          <label>
+            Stored General Ledger
+            <select
+              value={form.gl_repository_version_id}
+              onChange={(event) => setForm((current) => ({ ...current, gl_repository_version_id: event.target.value }))}
+            >
+              <option value="">Upload a new file</option>
+              {generalLedgerSources.map((item) => (
+                <option key={item.id} value={item.currentVersion.id}>
+                  {item.title}{item.period_start ? ` (${item.period_start} to ${item.period_end})` : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            General Ledger Upload (.xlsx)
+            <input
+              ref={glInputRef}
+              name="gl_file"
+              type="file"
+              accept=".xlsx"
+              required={!form.gl_repository_version_id}
+              disabled={Boolean(form.gl_repository_version_id)}
+            />
           </label>
         </div>
+
+        {(!form.tb_repository_version_id || !form.gl_repository_version_id) && (
+          <label className="checkbox-row">
+            <input
+              type="checkbox"
+              checked={form.save_uploads_to_repository}
+              onChange={(event) =>
+                setForm((current) => ({ ...current, save_uploads_to_repository: event.target.checked }))
+              }
+            />
+            Save uploaded inputs to Fund Repository for future report runs
+          </label>
+        )}
+
+        <RepositoryKnowledgeCard
+          knowledge={confirmedKnowledge}
+          title="Confirmed facts included with this run"
+          onOpenRepository={onOpenRepository}
+        />
 
         <button className="primary" type="submit" disabled={generating || !canUseTemplate}>
           {generating ? "Generating..." : "Generate XLSX Report"}
@@ -531,6 +720,15 @@ export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote,
           <p className="muted small">
             Run ID: {latestRun.id} | Created: {shortDate(latestRun.created_at)} | Scope: {latestPreview?.period_start || "-"} to {latestPreview?.period_end || "-"}
           </p>
+
+          {latestRepositoryKnowledge && (
+            <RepositoryKnowledgeCard
+              knowledge={latestRepositoryKnowledge}
+              title="Confirmed facts recorded with this report"
+              onOpenRepository={onOpenRepository}
+              attached
+            />
+          )}
 
           {latestWarnings.length > 0 && (
             <div className="alert warn">
@@ -630,6 +828,7 @@ export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote,
                 <th>Template</th>
                 <th>Auto Mapped</th>
                 <th>Low Confidence</th>
+                <th>Repository Context</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -643,6 +842,7 @@ export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote,
                   <td>{run.inputs_json?.template_name || "-"}</td>
                   <td>{run.inputs_json?.auto_mappings_created?.length || 0}</td>
                   <td>{run.inputs_json?.low_confidence_mappings?.length || 0}</td>
+                  <td>{repositoryContextLabel(run)}</td>
                   <td>
                     <button
                       type="button"
@@ -656,7 +856,7 @@ export function CashFlowExtractorPanel({ token, selectedFundId, onError, onNote,
               ))}
               {history.length === 0 && (
                 <tr>
-                  <td colSpan={6}>No cash flow report runs yet.</td>
+                  <td colSpan={7}>No cash flow report runs yet.</td>
                 </tr>
               )}
             </tbody>

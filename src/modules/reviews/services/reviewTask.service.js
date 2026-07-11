@@ -1,6 +1,8 @@
 const logger = require("../../../config/logger")
 const { Op } = require("sequelize")
 const {
+  sequelize,
+  ReportExport,
   ReviewDecision,
   ReviewTask,
   SemanticConcept,
@@ -14,8 +16,10 @@ const {
 const AuditService = require("../../audit/services/audit.service")
 const {
   ACTIVE_REVIEW_TASK_STATUSES,
+  CLOSED_REVIEW_TASK_STATUSES,
   NON_REVIEWABLE_ROW_TYPES,
   PRIORITY_SORT_ORDER,
+  REVIEW_ACTION_TYPES,
   REVIEW_PRIORITIES,
   REVIEW_REASONS,
   REVIEW_TARGET_TYPES,
@@ -29,6 +33,21 @@ const TemplateModel = Template || CashFlowTemplate
 function asPlainObject(record) {
   if (!record) return null
   return typeof record.toJSON === "function" ? record.toJSON() : { ...record }
+}
+
+function createReviewError(message, code = "review_validation", statusCode = 400) {
+  const error = new Error(message)
+  error.code = code
+  error.statusCode = statusCode
+  return error
+}
+
+function mergeMetadata(base, patch) {
+  const current = base && typeof base === "object" && !Array.isArray(base) ? base : {}
+  return {
+    ...current,
+    ...patch,
+  }
 }
 
 function roundScore(value) {
@@ -153,6 +172,22 @@ function serializeDecision(decision) {
   }
 }
 
+function serializeGenericTarget(task) {
+  const metadata = task.metadata_json || {}
+  return {
+    id: task.target_id,
+    type: task.target_type,
+    label:
+      metadata.target_label ||
+      metadata.check_type ||
+      metadata.format ||
+      metadata.source_title ||
+      task.review_reason ||
+      task.target_type,
+    metadata,
+  }
+}
+
 function selectCurrentApprovedMapping(mappings = []) {
   if (!mappings.length) return null
   const active = mappings.find((mapping) => !mapping.effectiveEnd)
@@ -266,6 +301,67 @@ function buildReviewAssessment({ row, groupedSuggestions = null, force = false }
 }
 
 class ReviewTaskService {
+  static async getTaskTargetType({ taskId }) {
+    const task = await ReviewTask.findByPk(taskId)
+    return task?.target_type || null
+  }
+
+  static isGenericTargetType(targetType) {
+    return Boolean(targetType) && targetType !== REVIEW_TARGET_TYPES.TEMPLATE_ROW
+  }
+
+  static async createGenericReviewTask({
+    targetType,
+    targetId,
+    fundId = null,
+    templateVersionId = null,
+    taskType = "exception_review",
+    reviewReason = REVIEW_REASONS.APPROVAL_REQUIRED,
+    priority = REVIEW_PRIORITIES.MEDIUM,
+    metadata = null,
+    actorId = null,
+  }) {
+    if (!Object.values(REVIEW_TARGET_TYPES).includes(targetType)) {
+      throw createReviewError("Unsupported review task target type", "review_validation", 400)
+    }
+    if (!this.isGenericTargetType(targetType)) {
+      throw createReviewError("Template row tasks must use the mapping review workflow", "review_validation", 400)
+    }
+    if (!targetId) {
+      throw createReviewError("targetId is required", "review_validation", 400)
+    }
+
+    const task = await ReviewTask.create({
+      task_type: taskType,
+      target_type: targetType,
+      target_id: targetId,
+      template_version_id: templateVersionId || null,
+      portfolio_id: fundId || null,
+      status: REVIEW_TASK_STATUSES.OPEN,
+      priority,
+      review_reason: reviewReason,
+      metadata_json: metadata || null,
+      created_by: actorId,
+    })
+
+    await AuditService.logEvent({
+      actorId,
+      eventType: "generic_review_task_created",
+      entityType: "review_task",
+      entityId: task.id,
+      after: task.toJSON(),
+      metadata: {
+        target_type: targetType,
+        target_id: targetId,
+        review_reason: reviewReason,
+        priority,
+      },
+    })
+
+    const [hydrated] = await this.hydrateReviewTasks([task])
+    return hydrated
+  }
+
   static async getTemplateVersionRecord({ templateId, versionId }) {
     const template = await TemplateModel.findByPk(templateId)
     if (!template) return null
@@ -530,6 +626,237 @@ class ReviewTaskService {
     }
   }
 
+  static async generateValidationReviewTasks({
+    run,
+    validationResult,
+    checks = [],
+    actorId = null,
+  }) {
+    if (!ReviewTask || typeof ReviewTask.findAll !== "function" || typeof ReviewTask.create !== "function") {
+      return { summary: { tasksCreated: 0, skippedUnavailable: true }, reviewTasks: [] }
+    }
+
+    const runId = run?.id || validationResult?.reportRunId || validationResult?.report_run_id || null
+    if (!runId || !validationResult) {
+      return { summary: { tasksCreated: 0, skippedMissingContext: true }, reviewTasks: [] }
+    }
+
+    const actionableChecks = checks.filter((check) => ["fail", "warning"].includes(String(check.status || "").toLowerCase()))
+    if (!actionableChecks.length) {
+      return { summary: { tasksCreated: 0 }, reviewTasks: [] }
+    }
+
+    const activeTasks = await ReviewTask.findAll({
+      where: {
+        target_type: REVIEW_TARGET_TYPES.VALIDATION_CHECK,
+        target_id: runId,
+        status: { [Op.in]: ACTIVE_REVIEW_TASK_STATUSES },
+      },
+    })
+    const activeCheckTypes = new Set(
+      activeTasks
+        .map((task) => asPlainObject(task)?.metadata_json?.check_type)
+        .filter(Boolean),
+    )
+
+    const createdTasks = []
+    for (const check of actionableChecks) {
+      if (activeCheckTypes.has(check.checkType)) continue
+
+      const isFailure = String(check.status || "").toLowerCase() === "fail"
+      const task = await ReviewTask.create({
+        task_type: "validation_exception_review",
+        target_type: REVIEW_TARGET_TYPES.VALIDATION_CHECK,
+        target_id: runId,
+        template_version_id: run.templateVersionId || run.template_version_id || null,
+        portfolio_id: run.fundId || run.portfolio_id || null,
+        status: REVIEW_TASK_STATUSES.OPEN,
+        priority: isFailure ? REVIEW_PRIORITIES.HIGH : REVIEW_PRIORITIES.MEDIUM,
+        review_reason: isFailure ? REVIEW_REASONS.VALIDATION_FAILED : REVIEW_REASONS.VALIDATION_WARNING,
+        metadata_json: {
+          report_run_id: runId,
+          validation_result_id: validationResult.id,
+          validation_check_id: check.id || null,
+          check_type: check.checkType,
+          severity: check.severity,
+          status: check.status,
+          message: check.message,
+          details: check.details || null,
+        },
+        created_by: actorId,
+      })
+
+      createdTasks.push(task)
+      activeCheckTypes.add(check.checkType)
+
+      await AuditService.logEvent({
+        actorId,
+        eventType: "validation_exception_review_task_created",
+        entityType: "review_task",
+        entityId: task.id,
+        after: task.toJSON(),
+        metadata: {
+          report_run_id: runId,
+          validation_result_id: validationResult.id,
+          check_type: check.checkType,
+        },
+      })
+    }
+
+    return {
+      summary: {
+        checksConsidered: actionableChecks.length,
+        tasksCreated: createdTasks.length,
+        tasksSkippedActive: actionableChecks.length - createdTasks.length,
+      },
+      reviewTasks: await this.hydrateReviewTasks(createdTasks),
+    }
+  }
+
+  static async loadGenericTask({ taskId, transaction = null }) {
+    const task = await ReviewTask.findByPk(taskId, { transaction })
+    if (!task) {
+      throw createReviewError("Review task not found", "review_not_found", 404)
+    }
+    if (!this.isGenericTargetType(task.target_type)) {
+      throw createReviewError("Template row review tasks must use the mapping review workflow", "review_validation", 400)
+    }
+    if (CLOSED_REVIEW_TASK_STATUSES.includes(task.status)) {
+      throw createReviewError("Review task is already closed", "review_conflict", 409)
+    }
+    return task
+  }
+
+  static async updateGenericTargetForDecision({ task, actionType, actorId, transaction }) {
+    if (task.target_type !== REVIEW_TARGET_TYPES.REPORT_EXPORT || !ReportExport) return null
+
+    const exportRecord = await ReportExport.findByPk(task.target_id, { transaction })
+    if (!exportRecord) {
+      throw createReviewError("Report export request not found", "review_not_found", 404)
+    }
+
+    const statusByAction = {
+      [REVIEW_ACTION_TYPES.APPROVE]: "approved",
+      [REVIEW_ACTION_TYPES.REJECT]: "rejected",
+      [REVIEW_ACTION_TYPES.DEFER]: "approval_requested",
+    }
+    const updates = {
+      status: statusByAction[actionType] || exportRecord.status,
+    }
+
+    if (actionType === REVIEW_ACTION_TYPES.APPROVE) {
+      updates.approved_by = actorId
+      updates.approved_at = new Date()
+    }
+
+    await exportRecord.update(updates, { transaction })
+    return exportRecord
+  }
+
+  static async recordGenericDecision({
+    taskId,
+    actionType,
+    actorId = null,
+    rationale = null,
+  }) {
+    if (!Object.values(REVIEW_ACTION_TYPES).includes(actionType)) {
+      throw createReviewError("Unsupported review action", "review_validation", 400)
+    }
+    if (actionType === REVIEW_ACTION_TYPES.OVERRIDE) {
+      throw createReviewError("Generic review tasks do not support override actions", "review_validation", 400)
+    }
+
+    const result = await sequelize.transaction(async (transaction) => {
+      const task = await this.loadGenericTask({ taskId, transaction })
+      const taskBefore = asPlainObject(task)
+      const decision = await ReviewDecision.create(
+        {
+          review_task_id: task.id,
+          action_type: actionType,
+          rationale: rationale || null,
+          actor_id: actorId,
+          metadata_json: {
+            target_type: task.target_type,
+            target_id: task.target_id,
+          },
+        },
+        { transaction },
+      )
+
+      const statusByAction = {
+        [REVIEW_ACTION_TYPES.APPROVE]: REVIEW_TASK_STATUSES.APPROVED,
+        [REVIEW_ACTION_TYPES.REJECT]: REVIEW_TASK_STATUSES.REJECTED,
+        [REVIEW_ACTION_TYPES.DEFER]: REVIEW_TASK_STATUSES.DEFERRED,
+      }
+      await task.update(
+        {
+          status: statusByAction[actionType],
+          completed_at: actionType === REVIEW_ACTION_TYPES.DEFER ? null : new Date(),
+          metadata_json: mergeMetadata(task.metadata_json, {
+            latest_decision_id: decision.id,
+            outcome: {
+              action: actionType,
+            },
+          }),
+        },
+        { transaction },
+      )
+
+      const targetRecord = await this.updateGenericTargetForDecision({
+        task,
+        actionType,
+        actorId,
+        transaction,
+      })
+
+      await AuditService.logEvent({
+        actorId,
+        eventType: `generic_review_${actionType}`,
+        entityType: "review_task",
+        entityId: task.id,
+        before: taskBefore,
+        after: task.toJSON(),
+        metadata: {
+          target_type: task.target_type,
+          target_id: task.target_id,
+          review_decision_id: decision.id,
+          target_status: targetRecord?.status || null,
+        },
+      })
+
+      return { taskId: task.id }
+    })
+
+    return await this.getReviewTask({ taskId: result.taskId })
+  }
+
+  static async approveGenericTask({ taskId, actorId = null, rationale = null }) {
+    return await this.recordGenericDecision({
+      taskId,
+      actionType: REVIEW_ACTION_TYPES.APPROVE,
+      actorId,
+      rationale,
+    })
+  }
+
+  static async rejectGenericTask({ taskId, actorId = null, rationale = null }) {
+    return await this.recordGenericDecision({
+      taskId,
+      actionType: REVIEW_ACTION_TYPES.REJECT,
+      actorId,
+      rationale,
+    })
+  }
+
+  static async deferGenericTask({ taskId, actorId = null, rationale = null }) {
+    return await this.recordGenericDecision({
+      taskId,
+      actionType: REVIEW_ACTION_TYPES.DEFER,
+      actorId,
+      rationale,
+    })
+  }
+
   static async getReviewTask({ taskId, actorId = null, markInReview = false }) {
     let task = await ReviewTask.findByPk(taskId)
     if (!task) return null
@@ -671,7 +998,7 @@ class ReviewTaskService {
         createdAt: task.created_at || task.createdAt || null,
         updatedAt: task.updated_at || task.updatedAt || null,
         metadata: task.metadata_json || null,
-        target: row ? serializeRow(row, neighbors) : null,
+        target: row ? serializeRow(row, neighbors) : serializeGenericTarget(task),
         suggestionSummary: {
           deterministicCount:
             rowSuggestions?.suggestions?.filter((item) => item.source === "deterministic_engine").length || 0,

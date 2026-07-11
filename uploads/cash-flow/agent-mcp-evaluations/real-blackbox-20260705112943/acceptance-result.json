@@ -1,0 +1,67 @@
+{
+  "status": "fail",
+  "database": "css_invest_eval_20260705142517",
+  "outputDir": "C:\\Users\\Mano PC\\FA\\uploads\\cash-flow\\agent-mcp-evaluations\\real-blackbox-20260705112943",
+  "setup": {
+    "fundId": "748c15f2-552a-4d4e-aafb-f146e56dd7be",
+    "crossFundId": "e9488719-2804-4aef-bfec-d6d3af2e13d5",
+    "templateId": "72d2ffba-1e73-4681-a4ba-f225f3e597cd",
+    "templateActiveVersionId": "49d8f3eb-7b0e-4ed0-b5e5-fb3618c0a380",
+    "tbVersionId": "731c9401-0593-434e-afb1-4b21dd17064c",
+    "glVersionId": "6c60aa21-7c1c-4812-bbe4-f76c0715d648",
+    "lpaVersionId": "40b13244-5f20-4e88-a11d-9b37805e2927",
+    "agentPrincipalId": "103ddbbc-5cc0-4b0c-831a-75fac0099ee7",
+    "agentScopes": [
+      "reporting_project:create",
+      "reporting_project:read",
+      "source:attach",
+      "source:analyze",
+      "template:analyze",
+      "mapping:read",
+      "mapping:suggest",
+      "report:run_draft",
+      "report:validate",
+      "report:read",
+      "audit:read"
+    ]
+  },
+  "expected": {
+    "total_inflows": 210000,
+    "total_outflows": 130000,
+    "net_cash_flow": 80000,
+    "bucket_totals": {
+      "customer_receipts": 120000,
+      "equity_injection": 50000,
+      "debt_drawdown": 40000,
+      "supplier_payments": 30000,
+      "payroll": 45000,
+      "rent_facilities": 12000,
+      "capital_expenditures": 25000,
+      "debt_repayment": 10000,
+      "member_distributions": 8000
+    },
+    "opening_balance_start": 50000,
+    "closing_balance_end": 130000
+  },
+  "evaluator": {
+    "exitStatus": null,
+    "stdout": "",
+    "stderr": "",
+    "scorecard": null,
+    "finalExplanation": null
+  },
+  "workbook": {
+    "runId": null,
+    "runStatus": null,
+    "outputPath": null,
+    "exists": false,
+    "mismatches": [
+      "no output path"
+    ],
+    "formulasSurvive": false
+  },
+  "security": {
+    "transcriptLeakCount": 0,
+    "transcriptLeakSamples": []
+  }
+}

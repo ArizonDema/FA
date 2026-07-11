@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { apiMultipartRequest, apiRequest, apiUrl, currency, percent, shortDate } from "../api"
+import { apiDownload, apiMultipartRequest, apiRequest, apiUrl, currency, percent, shortDate } from "../api"
 import { AppShell } from "./AppShell"
 import { CashFlowTemplatesPanel } from "./CashFlowTemplatesPanel"
 import { CashFlowExtractorPanel } from "./CashFlowExtractorPanel"
+import { FundRepositoryPanel } from "./FundRepositoryPanel"
+import { ReportingWorkbenchPanel } from "./ReportingWorkbenchPanel"
 
 const emptyBank = {
   bank_name: "",
@@ -15,25 +17,20 @@ const emptyBank = {
 
 export function AdminWorkspace({ token, user, onLogout }) {
   const navItems = [
-    { key: "overview", label: "Fund Overview" },
-    { key: "fund-setup", label: "Fund Setup" },
-    { key: "share-classes", label: "Share Classes" },
-    { key: "investors", label: "Investor Registry" },
-    { key: "commitments", label: "Commitments" },
-    { key: "capital-calls", label: "Capital Calls" },
-    { key: "distributions", label: "Distributions" },
-    { key: "ledger", label: "Ledger & Bank" },
-    { key: "journal", label: "Journal Entries" },
-    { key: "reports", label: "Reports" },
-    { key: "cash-flow-templates", label: "Cash Flow Templates" },
-    { key: "cash-flow-extractor", label: "Cash Flow Extractor" },
-    { key: "documents", label: "Documents" },
+    { key: "reporting-workbench", label: "Reporting Workbench", description: "Own cycles, controls and outputs" },
+    { key: "overview", label: "Overview", description: "Readiness and next actions" },
+    { key: "run-report", label: "Run Report", description: "Generate cash-flow workbook" },
+    { key: "templates-mapping", label: "Templates & Mapping", description: "Review and activate templates" },
+    { key: "review-issues", label: "Review Issues", description: "Resolve blockers and warnings" },
+    { key: "report-history", label: "Report History", description: "Download generated outputs" },
+    { key: "fund-repository", label: "Fund Repository", description: "Context, documents and data" },
   ]
 
-  const [activePage, setActivePage] = useState("overview")
+  const [activePage, setActivePage] = useState("reporting-workbench")
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [note, setNote] = useState("")
+  const [cashFlowCoverageIssue, setCashFlowCoverageIssue] = useState(null)
 
   const [funds, setFunds] = useState([])
   const [selectedFundId, setSelectedFundId] = useState("")
@@ -48,10 +45,13 @@ export function AdminWorkspace({ token, user, onLogout }) {
   const [documents, setDocuments] = useState([])
   const [reportTemplates, setReportTemplates] = useState([])
   const [reportHistory, setReportHistory] = useState([])
+  const [cashFlowTemplates, setCashFlowTemplates] = useState([])
+  const [reportingContextLoading, setReportingContextLoading] = useState(false)
   const [reportPreview, setReportPreview] = useState(null)
   const [reportRun, setReportRun] = useState(null)
   const [reportOutputs, setReportOutputs] = useState(null)
   const [cashLedger, setCashLedger] = useState([])
+  const [downloadingRunId, setDownloadingRunId] = useState(null)
 
   const [fundCreateForm, setFundCreateForm] = useState({
     name: "",
@@ -194,14 +194,45 @@ export function AdminWorkspace({ token, user, onLogout }) {
     [funds, selectedFundId],
   )
 
+  const activeCashFlowTemplate = useMemo(
+    () => cashFlowTemplates.find((template) => template.is_active && template.can_activate !== false) || null,
+    [cashFlowTemplates],
+  )
+
+  const templatesNeedingReview = useMemo(
+    () =>
+      cashFlowTemplates.filter(
+        (template) =>
+          template.can_activate === false ||
+          template.review_state === "needs_review" ||
+          template.status === "draft",
+      ),
+    [cashFlowTemplates],
+  )
+
+  const latestCashFlowRun = reportHistory[0] || null
+
   const loadFunds = useCallback(async () => {
     const response = await apiRequest("/funds", { token })
     const nextFunds = response.data.funds || []
     setFunds(nextFunds)
-    if (!selectedFundId && nextFunds.length > 0) {
-      setSelectedFundId(nextFunds[0].id)
+    setSelectedFundId((currentId) => currentId || nextFunds[0]?.id || "")
+  }, [token])
+
+  const loadReportingContext = useCallback(async () => {
+    if (!selectedFundId) return
+    setReportingContextLoading(true)
+    try {
+      const [templateResponse, historyResponse] = await Promise.all([
+        apiRequest(`/cash-flow/templates?portfolio_id=${selectedFundId}`, { token }),
+        apiRequest(`/cash-flow/reports/history?portfolio_id=${selectedFundId}`, { token }),
+      ])
+      setCashFlowTemplates(templateResponse.data.templates || [])
+      setReportHistory(historyResponse.data.runs || [])
+    } finally {
+      setReportingContextLoading(false)
     }
-  }, [token, selectedFundId])
+  }, [selectedFundId, token])
 
   const loadFundProfile = useCallback(async () => {
     if (!selectedFundId) return
@@ -305,23 +336,25 @@ export function AdminWorkspace({ token, user, onLogout }) {
     setError("")
     try {
       await loadFunds()
-      await loadGlobal()
     } catch (err) {
       setError(err.message)
     } finally {
       setLoading(false)
     }
-  }, [loadFunds, loadGlobal])
+  }, [loadFunds])
 
   useEffect(() => {
     loadAll()
   }, [loadAll])
 
   useEffect(() => {
+    setFundProfile(null)
+    setCashFlowTemplates([])
+    setReportHistory([])
+    setCashFlowCoverageIssue(null)
     if (!selectedFundId) return
-    loadFundProfile()
-    loadFundScoped()
-  }, [selectedFundId, loadFundProfile, loadFundScoped])
+    Promise.all([loadFundProfile(), loadReportingContext()]).catch((err) => setError(err.message))
+  }, [selectedFundId, loadFundProfile, loadReportingContext])
 
   useEffect(() => {
     if (!error) return
@@ -613,6 +646,36 @@ export function AdminWorkspace({ token, user, onLogout }) {
     window.open(apiUrl(`/reports/download/${reportRun.id}/${format}`), "_blank")
   }
 
+  const downloadCashFlowRun = async (runId) => {
+    try {
+      setDownloadingRunId(runId)
+      const { blob, filename } = await apiDownload(`/cash-flow/reports/download/${runId}`, {
+        token,
+        defaultFileName: `cash_flow_${runId}.xlsx`,
+      })
+
+      const objectUrl = window.URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = objectUrl
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(objectUrl)
+
+      setNote(`Downloaded ${filename}`)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setDownloadingRunId(null)
+    }
+  }
+
+  const activeCoverageIssue = cashFlowCoverageIssue?.coverage || cashFlowCoverageIssue || null
+  const missingCoverageItems = Array.isArray(activeCoverageIssue?.missing_items)
+    ? activeCoverageIssue.missing_items
+    : []
+
   if (loading) {
     return <main className="auth-root">Loading fund admin workspace...</main>
   }
@@ -636,15 +699,18 @@ export function AdminWorkspace({ token, user, onLogout }) {
           </div>
         )}
 
-        <section className="panel">
-          <p className="kicker">Active Fund</p>
-          <div className="split-2">
-            <div>
-              <h2>{selectedFund?.name || "Select a fund"}</h2>
-              <p className="muted small">{selectedFund?.description || ""}</p>
-            </div>
+        <section className="workspace-hero">
+          <div>
+            <p className="kicker">Reporting Studio</p>
+            <h1>{selectedFund?.name || "Select a fund"}</h1>
+            <p className="muted">
+              Generate adaptable fund reports from templates, trial balances, and general ledgers without touching the
+              cash-flow engine.
+            </p>
+          </div>
+          <div className="hero-actions">
             <label>
-              Fund
+              Active Fund
               <select value={selectedFundId} onChange={(e) => setSelectedFundId(e.target.value)}>
                 <option value="">Select fund</option>
                 {funds.map((fund) => (
@@ -654,45 +720,109 @@ export function AdminWorkspace({ token, user, onLogout }) {
                 ))}
               </select>
             </label>
+            <button className="primary" type="button" onClick={() => setActivePage("run-report")} disabled={!selectedFundId}>
+              Run Report
+            </button>
           </div>
         </section>
 
         {activePage === "overview" && (
           <section className="panel stack">
-            <h2>Fund Overview</h2>
-            <div className="cards-grid">
-              <div className="mini-card">
-                <p className="kicker">Share Classes</p>
-                <h3>{shareClasses.length}</h3>
+            <div className="section-heading">
+              <div>
+                <p className="kicker">Command Center</p>
+                <h2>Report readiness</h2>
               </div>
-              <div className="mini-card">
-                <p className="kicker">Investors</p>
-                <h3>{investors.length}</h3>
-              </div>
-              <div className="mini-card">
-                <p className="kicker">Commitments</p>
-                <h3>{commitments.length}</h3>
-              </div>
-              <div className="mini-card">
-                <p className="kicker">Capital Calls</p>
-                <h3>{capitalCalls.length}</h3>
-              </div>
-              <div className="mini-card">
-                <p className="kicker">Distributions</p>
-                <h3>{distributions.length}</h3>
-              </div>
-              <div className="mini-card">
-                <p className="kicker">Reports</p>
+              <button type="button" onClick={() => loadReportingContext().catch((err) => setError(err.message))} disabled={!selectedFundId || reportingContextLoading}>
+                {reportingContextLoading ? "Refreshing..." : "Refresh"}
+              </button>
+            </div>
+
+            <div className="cards-grid reporting-grid">
+              <button type="button" className="metric-card" onClick={() => setActivePage("templates-mapping")}>
+                <span className={activeCashFlowTemplate ? "status-dot ok" : "status-dot warn"} />
+                <p className="kicker">Active Template</p>
+                <h3>{activeCashFlowTemplate?.name || "Needs setup"}</h3>
+                <p className="muted small">
+                  {activeCashFlowTemplate ? "Ready for cash-flow report runs." : "Review and activate a template first."}
+                </p>
+              </button>
+              <button type="button" className="metric-card" onClick={() => setActivePage("review-issues")}>
+                <span className={templatesNeedingReview.length ? "status-dot warn" : "status-dot ok"} />
+                <p className="kicker">Open Review Items</p>
+                <h3>{templatesNeedingReview.length}</h3>
+                <p className="muted small">
+                  {templatesNeedingReview.length ? "Template drafts or blockers need attention." : "No template blockers found."}
+                </p>
+              </button>
+              <button type="button" className="metric-card" onClick={() => setActivePage("report-history")}>
+                <span className="status-dot neutral" />
+                <p className="kicker">Generated Reports</p>
                 <h3>{reportHistory.length}</h3>
+                <p className="muted small">
+                  {latestCashFlowRun ? `Latest run ${shortDate(latestCashFlowRun.created_at)}` : "No cash-flow runs yet."}
+                </p>
+              </button>
+              <button type="button" className="metric-card" onClick={() => setActivePage("fund-repository")}>
+                <span className={fundProfile?.profile ? "status-dot ok" : "status-dot warn"} />
+                <p className="kicker">Fund Context</p>
+                <h3>{profileForm.reporting_currency || selectedFund?.base_currency || "USD"}</h3>
+                <p className="muted small">Reporting currency and fund metadata used around generated outputs.</p>
+              </button>
+            </div>
+
+            <div className="next-steps">
+              <div>
+                <p className="kicker">Next Best Action</p>
+                <h3>{activeCashFlowTemplate ? "Generate the next cash-flow report" : "Activate a cash-flow template"}</h3>
+                <p className="muted small">
+                  {activeCashFlowTemplate
+                    ? "Upload the trial balance and general ledger, then review any mapping warnings before downloading."
+                    : "Analyze, review, and activate a template before reports can run."}
+                </p>
+              </div>
+              <div className="inline-actions">
+                <button type="button" onClick={() => setActivePage("templates-mapping")}>
+                  Templates
+                </button>
+                <button className="primary" type="button" onClick={() => setActivePage("run-report")} disabled={!activeCashFlowTemplate}>
+                  Generate Report
+                </button>
               </div>
             </div>
           </section>
         )}
 
-        {activePage === "fund-setup" && (
-          <section className="panel stack">
-            <h2>Fund Setup</h2>
-            <form className="panel stack" onSubmit={handleCreateFund}>
+        {activePage === "reporting-workbench" && (
+          <ReportingWorkbenchPanel
+            token={token}
+            user={user}
+            selectedFundId={selectedFundId}
+            selectedFund={selectedFund}
+            coverageIssue={cashFlowCoverageIssue}
+            onCoverageIssue={setCashFlowCoverageIssue}
+            onError={setError}
+            onNote={setNote}
+            onOpenRepository={() => setActivePage("fund-repository")}
+            onOpenTemplates={(coverageIssue) => {
+              setCashFlowCoverageIssue(coverageIssue)
+              setActivePage("templates-mapping")
+            }}
+          />
+        )}
+
+        {activePage === "fund-repository" && (
+          <FundRepositoryPanel
+            token={token}
+            selectedFundId={selectedFundId}
+            selectedFund={selectedFund}
+            fundProfile={fundProfile}
+            onError={setError}
+            onNote={setNote}
+            onRunReport={() => setActivePage("run-report")}
+          >
+            <div className="stack repository-context">
+            <form className="repository-context-section stack" onSubmit={handleCreateFund}>
               <h3>Create New Fund</h3>
               <div className="form-grid">
                 <label>
@@ -787,7 +917,7 @@ export function AdminWorkspace({ token, user, onLogout }) {
               </button>
             </form>
 
-            <form className="panel stack" onSubmit={handleSaveFundProfile}>
+            <form className="repository-context-section stack" onSubmit={handleSaveFundProfile}>
               <h3>Fund Profile</h3>
               <div className="form-grid">
                 <label>
@@ -1033,7 +1163,8 @@ export function AdminWorkspace({ token, user, onLogout }) {
                 Save Fund Profile
               </button>
             </form>
-          </section>
+            </div>
+          </FundRepositoryPanel>
         )}
         {activePage === "share-classes" && (
           <section className="panel stack">
@@ -1626,22 +1757,159 @@ export function AdminWorkspace({ token, user, onLogout }) {
           </section>
         )}
 
-        {activePage === "cash-flow-templates" && (
+        {activePage === "review-issues" && (
+          <section className="panel stack">
+            <div className="section-heading">
+              <div>
+                <p className="kicker">Review Queue</p>
+                <h2>Issues that block reliable reports</h2>
+              </div>
+              <button type="button" onClick={() => setActivePage("templates-mapping")}>
+                Open Template Review
+              </button>
+            </div>
+
+            {activeCoverageIssue ? (
+              <div className="alert warn">
+                <strong>{activeCoverageIssue.title || "Template coverage needs attention"}</strong>
+                <p className="small">
+                  {activeCoverageIssue.message ||
+                    "Add or map the missing cash-flow rows before generating this report."}
+                </p>
+              </div>
+            ) : (
+              <div className="alert ok">
+                <strong>No active coverage blocker.</strong>
+                <p className="small">New issues will appear here if a report run finds template rows it cannot write.</p>
+              </div>
+            )}
+
+            {missingCoverageItems.length > 0 && (
+              <div className="cards-grid">
+                {missingCoverageItems.map((item, index) => (
+                  <article className="mini-card stack" key={`${item.display_name || "missing"}_${index}`}>
+                    <p className="kicker">Missing Row</p>
+                    <h3>{item.display_name || "Cash-flow category"}</h3>
+                    <p className="muted small">Amount found: {currency(item.total_amount || 0)}</p>
+                    {item.suggested_template_row_label && (
+                      <p className="muted small">Suggested row: {item.suggested_template_row_label}</p>
+                    )}
+                  </article>
+                ))}
+              </div>
+            )}
+
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Template</th>
+                    <th>Status</th>
+                    <th>Review</th>
+                    <th>Updated</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {templatesNeedingReview.map((template) => (
+                    <tr key={template.id}>
+                      <td>{template.name}</td>
+                      <td>{template.status || (template.is_active ? "active" : "draft")}</td>
+                      <td>{template.activation_block_reason || template.review_state || "Needs review"}</td>
+                      <td>{shortDate(template.updated_at || template.created_at)}</td>
+                    </tr>
+                  ))}
+                  {templatesNeedingReview.length === 0 && (
+                    <tr>
+                      <td colSpan={4}>No saved templates need review.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
+
+        {activePage === "report-history" && (
+          <section className="panel stack">
+            <div className="section-heading">
+              <div>
+                <p className="kicker">Generated Outputs</p>
+                <h2>Cash-flow report history</h2>
+              </div>
+              <button type="button" onClick={() => loadReportingContext().catch((err) => setError(err.message))} disabled={!selectedFundId || reportingContextLoading}>
+                {reportingContextLoading ? "Refreshing..." : "Refresh"}
+              </button>
+            </div>
+
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Created</th>
+                    <th>Range</th>
+                    <th>Template</th>
+                    <th>Auto Mapped</th>
+                    <th>Low Confidence</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {reportHistory.map((run) => (
+                    <tr key={run.id}>
+                      <td>{shortDate(run.created_at)}</td>
+                      <td>
+                        {run.inputs_json?.date_start || run.period_start || "-"} to{" "}
+                        {run.inputs_json?.date_end || run.period_end || "-"}
+                      </td>
+                      <td>{run.inputs_json?.template_name || "-"}</td>
+                      <td>{run.inputs_json?.auto_mappings_created?.length || 0}</td>
+                      <td>{run.inputs_json?.low_confidence_mappings?.length || 0}</td>
+                      <td>
+                        <button
+                          type="button"
+                          onClick={() => downloadCashFlowRun(run.id)}
+                          disabled={downloadingRunId === run.id}
+                        >
+                          {downloadingRunId === run.id ? "Downloading..." : "Download XLSX"}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {reportHistory.length === 0 && (
+                    <tr>
+                      <td colSpan={6}>No cash-flow report runs yet.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
+
+        {activePage === "templates-mapping" && (
           <CashFlowTemplatesPanel
             token={token}
             selectedFundId={selectedFundId}
             onError={setError}
             onNote={setNote}
+            coverageIssue={cashFlowCoverageIssue}
+            onClearCoverageIssue={() => setCashFlowCoverageIssue(null)}
+            onTemplatesChanged={() => loadReportingContext().catch((err) => setError(err.message))}
           />
         )}
 
-        {activePage === "cash-flow-extractor" && (
+        {activePage === "run-report" && (
           <CashFlowExtractorPanel
             token={token}
             selectedFundId={selectedFundId}
             onError={setError}
             onNote={setNote}
-            onOpenTemplates={() => setActivePage("cash-flow-templates")}
+            onOpenRepository={() => setActivePage("fund-repository")}
+            onReportGenerated={() => loadReportingContext().catch((err) => setError(err.message))}
+            onOpenTemplates={(coverageIssue = null) => {
+              setCashFlowCoverageIssue(coverageIssue)
+              setActivePage("templates-mapping")
+            }}
           />
         )}
 

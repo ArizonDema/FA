@@ -1,6 +1,7 @@
 const logger = require("../../../config/logger")
 const {
   ReportRun,
+  ReportLineage,
   ReportRunRow,
   TemplateVersion,
   ValidationCheckResult,
@@ -8,6 +9,7 @@ const {
   sequelize,
 } = require("../../../models")
 const AuditService = require("../../audit/services/audit.service")
+const ReviewTaskService = require("../../reviews/services/reviewTask.service")
 const ReportReadinessService = require("./reportReadiness.service")
 const ValidationResultService = require("./validationResult.service")
 const ValidationRuleRegistry = require("./validationRuleRegistry.service")
@@ -40,6 +42,13 @@ class ValidationEngineService {
         ["created_at", "ASC"],
       ],
     })
+    const lineageRecords =
+      ReportLineage && typeof ReportLineage.findAll === "function"
+        ? await ReportLineage.findAll({
+            where: { report_run_id: runId },
+            order: [["created_at", "ASC"]],
+          })
+        : []
 
     const run = asPlainObject(runRecord)
     const rows = rowRecords.map((record) => {
@@ -82,6 +91,7 @@ class ValidationEngineService {
       runRecord,
       templateVersion: runRecord.templateVersion ? asPlainObject(runRecord.templateVersion) : null,
       rows,
+      lineage: lineageRecords.map(asPlainObject),
       generationSummary: run.summary_json || {},
     }
   }
@@ -178,8 +188,24 @@ class ValidationEngineService {
         },
       })
 
+      let exceptionReview = null
+      try {
+        exceptionReview = await ReviewTaskService.generateValidationReviewTasks({
+          run: context.run,
+          validationResult: result?.validationResult || null,
+          checks: result?.checks || [],
+          actorId,
+        })
+      } catch (reviewError) {
+        logger.warn("[phase2] Validation exception review task generation failed", {
+          report_run_id: runId,
+          message: reviewError.message,
+        })
+      }
+
       return {
         ...result,
+        exceptionReview,
         reportRun: {
           id: context.run.id,
           status: context.runRecord.status,

@@ -456,20 +456,31 @@ class ValidationRuleRegistry {
   static auditabilityRule(context) {
     const issues = []
     const approvedRowMappingIds = context.run.mappingSnapshot?.approved_row_mapping_ids || []
+    const finalAssignments = context.run.mappingSnapshot?.final_bucket_assignments || []
+    const generationMode = context.run.inputs?.generation_mode || null
+    const lineageCount = Array.isArray(context.lineage) ? context.lineage.length : 0
+    const rowLineageMode = generationMode === "approved_mapping_report_engine"
+    const extractorMode = generationMode === "cash_flow_extractor"
 
-    if (!context.rows.length) {
+    if (!context.rows.length && !lineageCount) {
       issues.push("missing_persisted_report_rows")
     }
     if (!context.run.templateVersionId) {
       issues.push("missing_template_version_id")
     }
-    if (context.run.inputs?.generation_mode !== "approved_mapping_report_engine") {
+    if (!rowLineageMode && !extractorMode) {
       issues.push("unexpected_generation_mode")
     }
-    if (!Array.isArray(approvedRowMappingIds)) {
+    if (rowLineageMode && !Array.isArray(approvedRowMappingIds)) {
       issues.push("missing_approved_mapping_snapshot")
-    } else if (context.generationSummary?.resolvedRows > 0 && approvedRowMappingIds.length === 0) {
+    } else if (rowLineageMode && context.generationSummary?.resolvedRows > 0 && approvedRowMappingIds.length === 0) {
       issues.push("resolved_rows_without_mapping_lineage")
+    }
+    if (extractorMode && !Array.isArray(finalAssignments)) {
+      issues.push("missing_extractor_mapping_snapshot")
+    }
+    if (extractorMode && !lineageCount) {
+      issues.push("missing_extractor_lineage")
     }
 
     if (!issues.length) {
@@ -477,10 +488,12 @@ class ValidationRuleRegistry {
         checkType: VALIDATION_CHECK_TYPES.AUDITABILITY,
         severity: VALIDATION_SEVERITIES.INFO,
         status: VALIDATION_STATUSES.PASS,
-        message: "Report run retains template and approved-mapping lineage needed for auditability.",
+        message: "Report run retains source, mapping, and output lineage needed for auditability.",
         details: {
           templateVersionId: context.run.templateVersionId,
           approvedRowMappingIdsCount: approvedRowMappingIds.length,
+          lineageCount,
+          generationMode,
         },
         targetId: context.run.id,
       })
@@ -495,6 +508,8 @@ class ValidationRuleRegistry {
         issues,
         templateVersionId: context.run.templateVersionId,
         approvedRowMappingIdsCount: Array.isArray(approvedRowMappingIds) ? approvedRowMappingIds.length : null,
+        lineageCount,
+        generationMode,
       },
       targetId: context.run.id,
     })

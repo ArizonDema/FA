@@ -57,6 +57,8 @@ router.post(
 router.post("/reports/generate", CashFlowReportController.generateApprovedMappingReport)
 router.get("/reports/history", CashFlowReportController.getReportHistory)
 router.get("/reports/download/:run_id", CashFlowReportController.downloadReport)
+router.post("/reports/:run_id/export-requests", CashFlowReportController.requestFinalExport)
+router.get("/reports/:run_id/exports", CashFlowReportController.listExports)
 router.post("/reports/:run_id/validate", CashFlowReportController.validateGeneratedReport)
 router.get("/reports/:run_id/validation", CashFlowReportController.getGeneratedReportValidation)
 router.get("/reports/:run_id/readiness", CashFlowReportController.getGeneratedReportReadiness)

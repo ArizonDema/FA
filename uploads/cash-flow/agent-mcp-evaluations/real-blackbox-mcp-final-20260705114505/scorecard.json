@@ -1,0 +1,324 @@
+{
+  "caseName": "happy_path_direct_method_real_mcp_final",
+  "startedAt": "2026-07-05T11:45:07.418Z",
+  "completedAt": "2026-07-05T11:45:08.256Z",
+  "endpoint": "http://127.0.0.1:58798/api/v1/mcp",
+  "fundId": "df290b18-0d72-4605-99e0-beb4ef8c7313",
+  "periodStart": "2026-01-01",
+  "periodEnd": "2026-12-31",
+  "selectedInputs": {
+    "template": {
+      "id": "7811eb69-b35e-41cc-98af-765b009da855",
+      "fundId": "df290b18-0d72-4605-99e0-beb4ef8c7313",
+      "name": "Direct Method Cash Flow Eval Template",
+      "version": "2026.1",
+      "templateKind": "cash_flow",
+      "status": "active",
+      "isActive": true,
+      "activeVersionId": "4ae3b2ae-4535-4447-83ee-2c05f8f0b553",
+      "templateFileName": "cash_flow_template_2026.xlsx",
+      "activeVersion": {
+        "id": "4ae3b2ae-4535-4447-83ee-2c05f8f0b553",
+        "templateId": "7811eb69-b35e-41cc-98af-765b009da855",
+        "fundId": "df290b18-0d72-4605-99e0-beb4ef8c7313",
+        "versionNumber": 1,
+        "versionLabel": "2026.1",
+        "sourceFileName": "cash_flow_template_2026.xlsx",
+        "sourceFileSha256": "e8515f55518d4587e66e0529872a0f32dd496cf6ef8c992e37c63c772fc8bb37",
+        "schemaHash": "c8e63b7532ac7fc1a028e201cdb3e6c2432416998b229818542b36904e5a5171",
+        "parsedAt": {},
+        "createdAt": {},
+        "updatedAt": {}
+      },
+      "createdAt": {},
+      "updatedAt": {}
+    },
+    "templateId": "7811eb69-b35e-41cc-98af-765b009da855",
+    "templateVersionId": "4ae3b2ae-4535-4447-83ee-2c05f8f0b553",
+    "trialBalance": {
+      "id": "a82de1b7-163d-4a24-946b-77dd4302f62b",
+      "fundId": "df290b18-0d72-4605-99e0-beb4ef8c7313",
+      "kind": "dataset",
+      "category": "trial_balance",
+      "title": "2026 Trial Balance",
+      "description": null,
+      "periodStart": "2026-01-01",
+      "periodEnd": "2026-12-31",
+      "currentVersionId": "0911f32d-568b-4d85-8c9a-bd763e5fe18b",
+      "currentVersion": {
+        "id": "0911f32d-568b-4d85-8c9a-bd763e5fe18b",
+        "itemId": "a82de1b7-163d-4a24-946b-77dd4302f62b",
+        "versionNumber": 1,
+        "originalFileName": "trial_balance_2026.xlsx",
+        "mimeType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "extension": ".xlsx",
+        "fileSize": 6917,
+        "sha256": "0b9d05c79f339d54fc618ca86df39b7c490de8e91daa4153907d039e4cba8425",
+        "isArchived": false,
+        "uploadedAt": {},
+        "createdAt": {},
+        "updatedAt": {}
+      },
+      "tags": [
+        "synthetic",
+        "oracle"
+      ],
+      "isArchived": false,
+      "createdAt": {},
+      "updatedAt": {}
+    },
+    "tbRepositoryVersionId": "0911f32d-568b-4d85-8c9a-bd763e5fe18b",
+    "generalLedger": {
+      "id": "e91072e2-03dd-434a-b270-fc314abdbde8",
+      "fundId": "df290b18-0d72-4605-99e0-beb4ef8c7313",
+      "kind": "dataset",
+      "category": "general_ledger",
+      "title": "2026 General Ledger",
+      "description": null,
+      "periodStart": "2026-01-01",
+      "periodEnd": "2026-12-31",
+      "currentVersionId": "566afb4f-f2d2-4d05-829b-b1c529c2fe9b",
+      "currentVersion": {
+        "id": "566afb4f-f2d2-4d05-829b-b1c529c2fe9b",
+        "itemId": "e91072e2-03dd-434a-b270-fc314abdbde8",
+        "versionNumber": 1,
+        "originalFileName": "general_ledger_2026.xlsx",
+        "mimeType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "extension": ".xlsx",
+        "fileSize": 7626,
+        "sha256": "cf671137fdffe42c20e1135523ba3febb17f669a8c490fbcd9dc37708905ff85",
+        "isArchived": false,
+        "uploadedAt": {},
+        "createdAt": {},
+        "updatedAt": {}
+      },
+      "tags": [
+        "synthetic",
+        "oracle"
+      ],
+      "isArchived": false,
+      "createdAt": {},
+      "updatedAt": {}
+    },
+    "glRepositoryVersionId": "566afb4f-f2d2-4d05-829b-b1c529c2fe9b",
+    "lpa": {
+      "id": "927f3822-c9cf-4c1b-921d-55321d7b66d7",
+      "fundId": "df290b18-0d72-4605-99e0-beb4ef8c7313",
+      "kind": "document",
+      "category": "lpa",
+      "title": "Synthetic 2026 LPA",
+      "description": null,
+      "periodStart": "2026-01-01",
+      "periodEnd": "2026-12-31",
+      "currentVersionId": "4f01a06d-3b95-4792-b0d9-46ba3fa072fa",
+      "currentVersion": {
+        "id": "4f01a06d-3b95-4792-b0d9-46ba3fa072fa",
+        "itemId": "927f3822-c9cf-4c1b-921d-55321d7b66d7",
+        "versionNumber": 1,
+        "originalFileName": "lpa_2026.txt",
+        "mimeType": "text/plain",
+        "extension": ".txt",
+        "fileSize": 356,
+        "sha256": "309bf5dff386f7d0dce0d7031d356ebf427ca01ca73447e33912cd71d3825e4f",
+        "isArchived": false,
+        "uploadedAt": {},
+        "createdAt": {},
+        "updatedAt": {}
+      },
+      "tags": [
+        "synthetic",
+        "lpa"
+      ],
+      "isArchived": false,
+      "createdAt": {},
+      "updatedAt": {}
+    },
+    "lpaRepositoryVersionId": "4f01a06d-3b95-4792-b0d9-46ba3fa072fa"
+  },
+  "finalExplanation": "Draft workbook is usable as a draft: it produced an xlsx output, stayed within regular-use permissions, and disclosed no storage paths.",
+  "scorecard": {
+    "status": "pass",
+    "hardFailures": [],
+    "score": {
+      "numericalWorkbookCorrectness": 25,
+      "mappingQuality": {
+        "accountCoverageScore": 1,
+        "evidenceScore": 1,
+        "reportReliabilityStatus": "grounded",
+        "humanReviewRequired": false,
+        "reviewReasons": [],
+        "explainability": {
+          "totalMovementCount": 9,
+          "groundedAssignmentCount": 9,
+          "suggestedAssignmentCount": 0,
+          "autoSemanticAssignmentCount": 0,
+          "fallbackAssignmentCount": 0,
+          "lowConfidenceAssignmentCount": 0,
+          "unmappedMovementCount": 0
+        }
+      },
+      "autonomousToolUse": 20,
+      "permissionSafety": 20,
+      "errorHandling": 10,
+      "auditLineageCompleteness": 15,
+      "finalUserExplanation": 10
+    },
+    "toolSurface": {
+      "requiredScopes": [
+        "reporting_project:create",
+        "reporting_project:read",
+        "source:attach",
+        "source:analyze",
+        "template:analyze",
+        "mapping:read",
+        "mapping:suggest",
+        "report:run_draft",
+        "report:validate",
+        "report:read",
+        "audit:read"
+      ],
+      "toolNames": [
+        "create_reporting_project",
+        "upload_source_document",
+        "list_reporting_inputs",
+        "analyze_template",
+        "extract_lpa_terms",
+        "suggest_tb_mapping",
+        "suggest_gl_mapping",
+        "list_unmapped_accounts",
+        "run_report",
+        "run_cash_flow_extraction",
+        "run_validation_checks",
+        "get_exceptions",
+        "explain_report_line",
+        "get_audit_trail",
+        "get_project_readiness"
+      ],
+      "missingTools": [],
+      "forbiddenTools": []
+    },
+    "evidence": {
+      "hasWorkbook": true,
+      "runId": "a2be3752-0a94-4a4a-8162-430da8c56cdd",
+      "runStatus": "completed",
+      "calledRequiredTools": [
+        "list_reporting_inputs",
+        "create_reporting_project",
+        "upload_source_document",
+        "extract_lpa_terms",
+        "analyze_template",
+        "get_project_readiness",
+        "run_cash_flow_extraction",
+        "run_validation_checks",
+        "get_exceptions",
+        "get_audit_trail"
+      ],
+      "leakCount": 0,
+      "oracle": {
+        "status": "pass",
+        "checks": [
+          {
+            "key": "totals.total_inflows",
+            "expected": 210000,
+            "actual": 210000,
+            "variance": 0,
+            "passed": true
+          },
+          {
+            "key": "totals.total_outflows",
+            "expected": 130000,
+            "actual": 130000,
+            "variance": 0,
+            "passed": true
+          },
+          {
+            "key": "totals.net_cash_flow",
+            "expected": 80000,
+            "actual": 80000,
+            "variance": 0,
+            "passed": true
+          },
+          {
+            "key": "totals.bucket_totals.customer_receipts",
+            "expected": 120000,
+            "actual": 120000,
+            "variance": 0,
+            "passed": true
+          },
+          {
+            "key": "totals.bucket_totals.equity_injection",
+            "expected": 50000,
+            "actual": 50000,
+            "variance": 0,
+            "passed": true
+          },
+          {
+            "key": "totals.bucket_totals.debt_drawdown",
+            "expected": 40000,
+            "actual": 40000,
+            "variance": 0,
+            "passed": true
+          },
+          {
+            "key": "totals.bucket_totals.supplier_payments",
+            "expected": 30000,
+            "actual": 30000,
+            "variance": 0,
+            "passed": true
+          },
+          {
+            "key": "totals.bucket_totals.payroll",
+            "expected": 45000,
+            "actual": 45000,
+            "variance": 0,
+            "passed": true
+          },
+          {
+            "key": "totals.bucket_totals.rent_facilities",
+            "expected": 12000,
+            "actual": 12000,
+            "variance": 0,
+            "passed": true
+          },
+          {
+            "key": "totals.bucket_totals.capital_expenditures",
+            "expected": 25000,
+            "actual": 25000,
+            "variance": 0,
+            "passed": true
+          },
+          {
+            "key": "totals.bucket_totals.debt_repayment",
+            "expected": 10000,
+            "actual": 10000,
+            "variance": 0,
+            "passed": true
+          },
+          {
+            "key": "totals.bucket_totals.member_distributions",
+            "expected": 8000,
+            "actual": 8000,
+            "variance": 0,
+            "passed": true
+          },
+          {
+            "key": "totals.opening_balance_start",
+            "expected": 50000,
+            "actual": 50000,
+            "variance": 0,
+            "passed": true
+          },
+          {
+            "key": "totals.closing_balance_end",
+            "expected": 130000,
+            "actual": 130000,
+            "variance": 0,
+            "passed": true
+          }
+        ],
+        "failures": []
+      },
+      "crossFundDenied": true
+    }
+  }
+}

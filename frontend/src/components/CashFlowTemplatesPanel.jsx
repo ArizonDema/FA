@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { apiMultipartRequest, apiRequest, shortDate } from "../api"
+import { apiMultipartRequest, apiRequest, currency, shortDate } from "../api"
+import { TemplateReviewWorkspace } from "./TemplateReviewWorkspace"
+import {
+  buildReviewModel,
+  createReviewSession,
+  isReviewSessionDirty,
+  markReviewSessionSaved,
+  syncReviewWithConfig,
+} from "./templateReviewModel"
 
 function createEmptyV3Config() {
   const today = new Date().toISOString().slice(0, 10)
@@ -214,6 +222,14 @@ function normalizeSemanticCoverage(rawCoverage, config = {}) {
     })),
     review_tasks: toArray(coverage.review_tasks),
   }
+}
+
+function displayCoverageAccountList(accounts = []) {
+  const names = accounts
+    .map((account) => account?.account_name || account?.normalized_account)
+    .filter(Boolean)
+    .slice(0, 3)
+  return names.length ? names.join(", ") : "No account names available"
 }
 
 function toArray(value) {
@@ -1268,14 +1284,6 @@ function AdvancedTemplateTools({
           Use this only when the analyzer picked the wrong workbook cells, periods, or low-level rules.
         </p>
 
-        <AnchorReviewWorkspace
-          config={config}
-          review={review}
-          editorContext={editorContext}
-          onConfigChange={onConfigChange}
-          onReviewChange={onReviewChange}
-        />
-
         <div className="form-grid">
           <label>
             Sheet Name
@@ -1380,7 +1388,88 @@ function AdvancedTemplateTools({
   )
 }
 
-export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote }) {
+function TemplateCoverageIssuePanel({
+  coverageIssue,
+  activeTemplate,
+  reanalyzingTemplateId,
+  onOpenTemplateEditor,
+  onReanalyzeTemplate,
+  onDismiss,
+}) {
+  const coverage = coverageIssue?.coverage || coverageIssue || null
+  const missingItems = toArray(coverage?.missing_items)
+  if (!coverage || missingItems.length === 0) return null
+
+  return (
+    <section className="template-coverage-issue panel stack">
+      <div className="alert warn">
+        <strong>{coverage.title || "Template needs rows before this report can run"}</strong>
+        <p className="small">
+          Accepting review items only confirms rows the template already has. These cards are cash-flow categories found
+          in the uploaded GL that the current template cannot write to yet.
+        </p>
+      </div>
+
+      <div className="cards-grid">
+        {missingItems.map((item, index) => (
+          <article className="mini-card stack" key={`${item.display_name || "missing"}_${index}`}>
+            <p className="kicker">Missing template row</p>
+            <h3>{item.display_name || "Cash-flow category"}</h3>
+            {item.plain_description && <p className="muted small">{item.plain_description}</p>}
+            <p className="muted small">
+              GL amount found: <strong>{currency(item.total_amount || 0)}</strong>
+            </p>
+            <p className="muted small">
+              Affected accounts: <strong>{displayCoverageAccountList(item.accounts)}</strong>
+            </p>
+            {toArray(item.sample_gl_descriptions)[0] && (
+              <p className="muted small">Example GL memo: {toArray(item.sample_gl_descriptions)[0]}</p>
+            )}
+            {item.suggested_template_row_label && (
+              <p className="muted small">Add a writable row like: {item.suggested_template_row_label}</p>
+            )}
+          </article>
+        ))}
+      </div>
+
+      <div className="inline-actions">
+        <button
+          type="button"
+          onClick={() => activeTemplate && onOpenTemplateEditor(activeTemplate)}
+          disabled={!activeTemplate}
+        >
+          Open current template review
+        </button>
+        <button
+          type="button"
+          onClick={() => activeTemplate && onReanalyzeTemplate(activeTemplate)}
+          disabled={!activeTemplate?.reanalyze_available || Boolean(reanalyzingTemplateId)}
+        >
+          {reanalyzingTemplateId === activeTemplate?.id ? "Reanalyzing..." : "Reanalyze active template"}
+        </button>
+        <button type="button" onClick={onDismiss}>
+          Dismiss
+        </button>
+      </div>
+
+      <p className="muted small">
+        If you just accepted every review item, that confirmed the rows already found in the template. Add the missing
+        rows to the XLSX template, then reanalyze or upload the updated file. If a matching row already exists, open the
+        current template review and change what that row represents.
+      </p>
+    </section>
+  )
+}
+
+export function CashFlowTemplatesPanel({
+  token,
+  selectedFundId,
+  onError,
+  onNote,
+  coverageIssue = null,
+  onClearCoverageIssue,
+  onTemplatesChanged,
+}) {
   const [loading, setLoading] = useState(false)
   const [analyzing, setAnalyzing] = useState(false)
   const [savingUpload, setSavingUpload] = useState(false)
@@ -1397,6 +1486,7 @@ export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote 
   const [configDraft, setConfigDraft] = useState(createEmptyV3Config())
   const [rawConfigText, setRawConfigText] = useState(JSON.stringify(createEmptyV3Config(), null, 2))
   const [editingTemplate, setEditingTemplate] = useState(null)
+  const [reviewSession, setReviewSession] = useState(null)
 
   const activeTemplate = useMemo(
     () => templates.find((template) => template.is_active) || null,
@@ -1426,6 +1516,7 @@ export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote 
     setAnalysis(null)
     setEditorContext(null)
     setEditingTemplate(null)
+    setReviewSession(null)
     setConfigDraft(createEmptyV3Config())
     setRawConfigText(JSON.stringify(createEmptyV3Config(), null, 2))
     setUploadForm({ name: "", version: "", template_file: null })
@@ -1445,7 +1536,42 @@ export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote 
   const applyReviewChange = (nextReview) => {
     setEditorContext((prev) => (prev ? { ...prev, review: nextReview } : prev))
     setAnalysis((prev) => mergeReviewPayload(prev, nextReview))
+    setReviewSession((prev) => (prev ? { ...prev, review: nextReview } : prev))
   }
+
+  const applyWorkspaceChange = (nextConfig, nextReview) => {
+    applyDraftConfig(nextConfig)
+    applyReviewChange(nextReview)
+  }
+
+  const reviewSessionDirty = isReviewSessionDirty(reviewSession, {
+    config: configDraft,
+    rawConfigText,
+    name: editingTemplate?.name || reviewSession?.baselineName || "",
+    version: editingTemplate?.version || reviewSession?.baselineVersion || "",
+  })
+
+  const confirmDiscardReview = () =>
+    !reviewSessionDirty || window.confirm("Discard the unsaved template review changes?")
+
+  const closeReviewSession = () => {
+    if (!confirmDiscardReview()) return
+    setReviewSession(null)
+    setAnalysis(null)
+    setEditorContext(null)
+    setEditingTemplate(null)
+    applyDraftConfig(createEmptyV3Config())
+  }
+
+  useEffect(() => {
+    if (!reviewSessionDirty) return undefined
+    const warnBeforeUnload = (event) => {
+      event.preventDefault()
+      event.returnValue = ""
+    }
+    window.addEventListener("beforeunload", warnBeforeUnload)
+    return () => window.removeEventListener("beforeunload", warnBeforeUnload)
+  }, [reviewSessionDirty])
 
   const handleAnalyzeTemplate = async () => {
     if (!selectedFundId) {
@@ -1467,8 +1593,8 @@ export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote 
         formData,
       })
       const nextAnalysis = response.data.analysis
-      const suggestedConfig = response.data.suggested_config_json || createEmptyV3Config()
-      setAnalysis({
+      const suggestedConfig = normalizeTemplateConfigForUi(response.data.suggested_config_json || createEmptyV3Config())
+      const nextReview = {
         ...nextAnalysis,
         analysis_scope: "upload",
         file_signature: getFileSignature(uploadForm.template_file),
@@ -1484,9 +1610,30 @@ export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote 
         schema_cache_hit: Boolean(response.data.schema_cache_hit),
         analysis_source: response.data.analysis_source || "llm",
         semantic_coverage: response.data.semantic_coverage || response.data.coverage_summary || null,
-      })
+      }
+      setAnalysis(nextReview)
       setEditorContext(response.data.editor_context || null)
       applyDraftConfig(suggestedConfig)
+      setReviewSession(createReviewSession({
+        mode: "new_upload",
+        isNew: true,
+        templateId: null,
+        config: suggestedConfig,
+        review: nextReview,
+        workbook: response.data.editor_context?.workbook || null,
+        name: uploadForm.name || "",
+        version: uploadForm.version || "",
+        analysisDetails: {
+          detectedLayout: response.data.detected_layout,
+          coverageMessage: response.data.semantic_coverage?.message || response.data.coverage_summary?.message || "",
+          categories: toArray(response.data.semantic_coverage?.categories || response.data.coverage_summary?.categories).map(
+            (category) => category.display_name || category.label || category.semantic_key,
+          ).filter(Boolean),
+          issues: normalizeMessageList(response.data.issues),
+          source: response.data.analysis_source || "llm",
+        },
+      }))
+      onClearCoverageIssue?.()
       if (response.data.needs_human_review) {
         onNote("Template analyzed. Save it as a draft now, or review the highlighted rows before activation.")
       } else {
@@ -1530,8 +1677,9 @@ export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote 
       return
     }
 
-    if (activationMode !== "draft" && !buildPlainReviewSummary(parsedConfig, analysis).canActivate) {
-      onError("Save this template as a draft first, then finish the review items before activation.")
+    const currentReview = syncReviewWithConfig(parsedConfig, reviewSession?.review || analysis)
+    if (activationMode !== "draft" && !buildReviewModel(parsedConfig, currentReview).canActivate) {
+      onError("Finish the remaining mapping and workbook review items before activation.")
       return
     }
 
@@ -1555,13 +1703,31 @@ export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote 
           ? "Template saved as a draft. It will not be used for reports until the review items are finished and it is activated."
           : "Cash flow template uploaded and activated.",
       )
-      setAnalysis(null)
-      setEditorContext(null)
-      setEditingTemplate(null)
-      setUploadForm({ name: "", version: "", template_file: null })
-      setConfigDraft(createEmptyV3Config())
-      setRawConfigText(JSON.stringify(createEmptyV3Config(), null, 2))
+      if (activationMode === "draft") {
+        const savedTemplate = response.data.template
+        const savedReview = mergeReviewPayload(currentReview, response.data)
+        applyDraftConfig(parsedConfig)
+        setEditingTemplate(savedTemplate)
+        setAnalysis(null)
+        setEditorContext((prev) => prev ? { ...prev, mode: "draft", template_id: savedTemplate?.id, review: savedReview } : prev)
+        setReviewSession((prev) => markReviewSessionSaved(prev, {
+          templateId: savedTemplate?.id,
+          config: parsedConfig,
+          name: savedTemplate?.name || uploadForm.name || "",
+          version: savedTemplate?.version || uploadForm.version || "",
+          review: savedReview,
+        }))
+      } else {
+        setReviewSession(null)
+        setAnalysis(null)
+        setEditorContext(null)
+        setEditingTemplate(null)
+        setUploadForm({ name: "", version: "", template_file: null })
+        applyDraftConfig(createEmptyV3Config())
+      }
+      onClearCoverageIssue?.()
       await loadTemplates()
+      onTemplatesChanged?.()
     } catch (error) {
       onError(formatApiError(error))
     } finally {
@@ -1570,6 +1736,7 @@ export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote 
   }
 
   const handleReanalyzeTemplate = async (template) => {
+    if (reviewSessionDirty && !confirmDiscardReview()) return
     if (!template?.reanalyze_available) {
       onError(template?.reanalyze_block_reason || "Template source file is missing. Re-upload template first.")
       return
@@ -1582,8 +1749,8 @@ export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote 
         method: "POST",
         token,
       })
-      const suggestedConfig = response.data.suggested_config_json || createEmptyV3Config()
-      setAnalysis({
+      const suggestedConfig = normalizeTemplateConfigForUi(response.data.suggested_config_json || createEmptyV3Config())
+      const nextReview = {
         ...response.data.analysis,
         analysis_scope: "template",
         file_signature: null,
@@ -1599,9 +1766,33 @@ export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote 
         schema_cache_hit: Boolean(response.data.schema_cache_hit),
         analysis_source: response.data.analysis_source || "llm",
         semantic_coverage: response.data.semantic_coverage || response.data.coverage_summary || null,
-      })
+      }
+      setAnalysis(nextReview)
+      setEditingTemplate(template)
       setEditorContext(response.data.editor_context || null)
       applyDraftConfig(suggestedConfig)
+      const previousConfig = normalizeTemplateConfigForUi(getTemplateConfig(template))
+      setReviewSession(createReviewSession({
+        mode: "reanalysis",
+        isNew: false,
+        templateId: template.id,
+        config: suggestedConfig,
+        baselineConfig: previousConfig,
+        review: nextReview,
+        workbook: response.data.editor_context?.workbook || null,
+        name: template.name || "",
+        version: template.version || "",
+        analysisDetails: {
+          detectedLayout: response.data.detected_layout,
+          coverageMessage: response.data.semantic_coverage?.message || response.data.coverage_summary?.message || "",
+          categories: toArray(response.data.semantic_coverage?.categories || response.data.coverage_summary?.categories).map(
+            (category) => category.display_name || category.label || category.semantic_key,
+          ).filter(Boolean),
+          issues: normalizeMessageList(response.data.issues),
+          source: response.data.analysis_source || "llm",
+        },
+      }))
+      onClearCoverageIssue?.()
       onNote("Template reanalyzed. Review the updated cash-flow categories.")
     } catch (error) {
       onError(formatApiError(error))
@@ -1611,6 +1802,11 @@ export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote 
   }
 
   const loadTemplateIntoEditor = async (template) => {
+    if (reviewSession?.templateId === template?.id) {
+      onNote("This template is already open in the review workspace.")
+      return
+    }
+    if (reviewSessionDirty && reviewSession?.templateId !== template?.id && !confirmDiscardReview()) return
     try {
       const response = await apiRequest(`/cash-flow/templates/${template.id}/editor-context`, { token })
       const nextTemplate = response.data.template || template
@@ -1620,6 +1816,24 @@ export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote 
       setAnalysis(null)
       setEditorContext(context)
       applyDraftConfig(nextConfig)
+      setReviewSession(createReviewSession({
+        mode: "saved_template",
+        isNew: false,
+        templateId: nextTemplate.id,
+        config: nextConfig,
+        review: context?.review || nextTemplate,
+        workbook: context?.workbook || null,
+        name: nextTemplate.name || "",
+        version: nextTemplate.version || "",
+        analysisDetails: {
+          coverageMessage: nextTemplate.semantic_coverage?.message || "",
+          categories: toArray(nextTemplate.semantic_coverage?.categories).map(
+            (category) => category.display_name || category.label || category.semantic_key,
+          ).filter(Boolean),
+          issues: [],
+          source: "saved template",
+        },
+      }))
       onNote("Template loaded into the review workspace.")
     } catch (error) {
       onError(formatApiError(error))
@@ -1641,14 +1855,15 @@ export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote 
       return
     }
 
-    if (activationMode !== "draft" && !buildPlainReviewSummary(parsedConfig, editorReview).canActivate) {
-      onError("Save this template as a draft first, then finish the review items before activation.")
+    const currentReview = syncReviewWithConfig(parsedConfig, reviewSession?.review || editorReview)
+    if (activationMode !== "draft" && !buildReviewModel(parsedConfig, currentReview).canActivate) {
+      onError("Finish the remaining mapping and workbook review items before activation.")
       return
     }
 
     try {
       setSavingEditor(true)
-      await apiRequest(`/cash-flow/templates/${editingTemplate.id}`, {
+      const response = await apiRequest(`/cash-flow/templates/${editingTemplate.id}`, {
         method: "PUT",
         token,
         body: {
@@ -1664,7 +1879,29 @@ export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote 
           ? "Template changes saved as a draft. Active templates remain untouched."
           : "Template saved and activated.",
       )
+      if (activationMode !== "draft") {
+        onClearCoverageIssue?.()
+        setReviewSession(null)
+        setAnalysis(null)
+        setEditorContext(null)
+        setEditingTemplate(null)
+        applyDraftConfig(createEmptyV3Config())
+      } else {
+        const savedTemplate = response.data.template || editingTemplate
+        const savedReview = mergeReviewPayload(currentReview, response.data)
+        applyDraftConfig(parsedConfig)
+        setEditingTemplate(savedTemplate)
+        setEditorContext((prev) => prev ? { ...prev, mode: "draft", review: savedReview } : prev)
+        setReviewSession((prev) => markReviewSessionSaved(prev, {
+          templateId: savedTemplate.id,
+          config: parsedConfig,
+          name: savedTemplate.name || "",
+          version: savedTemplate.version || "",
+          review: savedReview,
+        }))
+      }
       await loadTemplates()
+      onTemplatesChanged?.()
     } catch (error) {
       onError(formatApiError(error))
     } finally {
@@ -1677,6 +1914,7 @@ export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote 
       await apiRequest(`/cash-flow/templates/${templateId}/activate`, { method: "PUT", token })
       onNote("Template activated.")
       await loadTemplates()
+      onTemplatesChanged?.()
     } catch (error) {
       onError(formatApiError(error))
     }
@@ -1685,28 +1923,22 @@ export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote 
   if (!selectedFundId) {
     return (
       <section className="panel stack">
-        <h2>Cash Flow Templates</h2>
+        <h2>Templates & Mapping</h2>
         <p className="muted">Select a fund to manage cash flow templates.</p>
       </section>
     )
   }
 
-  const semanticCoverage = normalizeSemanticCoverage(
-    analysis?.semantic_coverage || analysis?.coverage_summary || editingTemplate?.semantic_coverage,
-    configDraft,
-  )
-  const uploadReview = analysis || null
-  const editorReview = editorContext?.review || editingTemplate || null
-  const uploadPlainReview = buildPlainReviewSummary(configDraft, uploadReview)
-  const editorPlainReview = buildPlainReviewSummary(configDraft, editorReview)
-  const canActivateUpload = Boolean(hasMatchingUploadAnalysis && uploadPlainReview.canActivate)
-  const canActivateEditor = Boolean(editingTemplate && editorPlainReview.canActivate)
+  const editorReview = reviewSession?.review || editorContext?.review || editingTemplate || null
   const activeTemplateReview = activeTemplate ? getTemplateListReview(activeTemplate) : null
 
   return (
     <section className="panel stack">
-      <div className="inline-actions">
-        <h2>Cash Flow Templates</h2>
+      <div className="section-heading">
+        <div>
+          <p className="kicker">Template Control</p>
+          <h2>Templates & Mapping</h2>
+        </div>
         <button type="button" onClick={loadTemplates} disabled={loading}>
           {loading ? "Refreshing..." : "Refresh"}
         </button>
@@ -1719,7 +1951,16 @@ export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote 
         ) : null}
       </p>
 
-      <form className="panel stack" onSubmit={handleUploadTemplate}>
+      <TemplateCoverageIssuePanel
+        coverageIssue={coverageIssue}
+        activeTemplate={activeTemplate}
+        reanalyzingTemplateId={reanalyzingTemplateId}
+        onOpenTemplateEditor={loadTemplateIntoEditor}
+        onReanalyzeTemplate={handleReanalyzeTemplate}
+        onDismiss={onClearCoverageIssue}
+      />
+
+      <form className="panel stack new-template-panel" onSubmit={(event) => { event.preventDefault(); handleAnalyzeTemplate() }}>
         <h3>Upload, Analyze, Review</h3>
         <div className="form-grid">
           <label>
@@ -1743,6 +1984,10 @@ export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote 
               type="file"
               accept=".xlsx"
               onChange={(event) => {
+                if (reviewSessionDirty && !confirmDiscardReview()) {
+                  event.target.value = ""
+                  return
+                }
                 const nextFile = event.target.files?.[0] || null
                 setUploadForm({
                   ...uploadForm,
@@ -1750,6 +1995,8 @@ export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote 
                 })
                 setAnalysis(null)
                 setEditorContext(null)
+                setEditingTemplate(null)
+                setReviewSession(null)
               }}
               required
             />
@@ -1757,121 +2004,58 @@ export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote 
         </div>
 
         <div className="inline-actions">
-          <button type="button" onClick={handleAnalyzeTemplate} disabled={analyzing || savingUpload}>
+          <button type="submit" disabled={analyzing || savingUpload}>
             {analyzing ? "Analyzing..." : "Analyze Template"}
-          </button>
-          <button
-            type="button"
-            onClick={(event) => handleUploadTemplate(event, "draft")}
-            disabled={savingUpload || analyzing || !hasMatchingUploadAnalysis}
-          >
-            {savingUpload ? "Saving..." : "Save Draft for Review"}
-          </button>
-          <button className="primary" type="submit" disabled={savingUpload || analyzing || !canActivateUpload}>
-            {savingUpload ? "Saving..." : "Activate Template"}
           </button>
         </div>
         <p className="muted small">
-          Next step:{" "}
-          {hasMatchingUploadAnalysis
-            ? canActivateUpload
-              ? "This can be activated now, or saved as a draft."
-              : "Save as draft now, then finish the review items before activation."
-            : uploadForm.template_file
-              ? "Run Analyze Template for this file before saving"
-              : "Select a template file to begin"}
+          {uploadForm.template_file ? "Analyze the file to open the focused review workspace." : "Select a template file to begin."}
         </p>
-
-        {analysis && (
-          <div className="template-analysis-review stack">
-            <div className="alert ok">
-              <strong>Analysis finished.</strong>
-              <p className="small">
-                The template can be saved as a draft. Activation waits until every review item below is resolved.
-              </p>
-            </div>
-            {analysis.activation_block_reason && (
-              <div className={analysis.can_activate ? "alert ok" : "alert warn"}>
-                {analysis.activation_block_reason}
-              </div>
-            )}
-            {semanticCoverage && (
-              <div className={semanticCoverage.unlabeled_targets ? "alert warn" : "alert ok"}>
-                <strong>{semanticCoverage.message}</strong>
-                {toArray(semanticCoverage.categories).length > 0 && (
-                  <ul className="chip-list">
-                    {toArray(semanticCoverage.categories)
-                      .slice(0, 12)
-                      .map((category, index) => (
-                        <li key={`${category.display_name || "category"}_${index}`}>
-                          {category.display_name || "Cash-flow category"}
-                        </li>
-                      ))}
-                  </ul>
-                )}
-                {toArray(semanticCoverage.review_tasks).length > 0 && (
-                  <ul className="simple-list">
-                    {toArray(semanticCoverage.review_tasks).slice(0, 5).map((task, index) => (
-                      <li key={`${task.title || task.message || "task"}_${index}`}>
-                        {humanizeTemplateMessage(task.message || task.title, "Confirm what this row represents.")}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
-            {analysis.analysis_scope === "upload" && analysis.file_signature !== currentUploadSignature && (
-              <div className="alert warn">
-                Analyzed file no longer matches the selected upload. Re-run Analyze Template before saving.
-              </div>
-            )}
-            {toArray(analysis.issues).length > 0 && (
-              <div className="alert warn">
-                <strong>Analysis Notes</strong>
-                <ul className="simple-list">
-                  {toArray(analysis.issues).map((issue, index) => (
-                    <li key={`${humanizeTemplateMessage(issue)}_${index}`}>{humanizeTemplateMessage(issue)}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {toArray(analysis.required_anchors).length > 0 && (
-              (() => {
-                const reviewMessages = toArray(analysis.anchor_statuses)
-                  .filter((status) => status.status !== "ready")
-                  .map((status) => status.message || status.label)
-                  .map(humanizeTemplateMessage)
-                  .filter(Boolean)
-                return (
-                  <p className="muted small">
-                    Review tasks:{" "}
-                    {reviewMessages.length
-                      ? reviewMessages.join(" ")
-                      : toArray(analysis.required_anchors).map(getReviewTaskLabel).join(" ")}
-                  </p>
-                )
-              })()
-            )}
-
-            <TemplateReviewPanel
-              config={configDraft}
-              review={uploadReview}
-              onConfigChange={applyDraftConfig}
-              onReviewChange={applyReviewChange}
-            />
-
-            <AdvancedTemplateTools
-              config={configDraft}
-              review={uploadReview}
-              editorContext={editorContext}
-              onConfigChange={applyDraftConfig}
-              onReviewChange={applyReviewChange}
-              rawConfigText={rawConfigText}
-              onRawConfigTextChange={setRawConfigText}
-            />
-          </div>
-        )}
       </form>
+
+      {reviewSession && (
+        <div className="stack active-template-review">
+          {editingTemplate && (
+            <div className="form-grid review-template-identity">
+              <label>
+                Name
+                <input value={editingTemplate.name || ""} onChange={(event) => setEditingTemplate({ ...editingTemplate, name: event.target.value })} />
+              </label>
+              <label>
+                Version
+                <input value={editingTemplate.version || ""} onChange={(event) => setEditingTemplate({ ...editingTemplate, version: event.target.value })} />
+              </label>
+            </div>
+          )}
+          <TemplateReviewWorkspace
+            config={configDraft}
+            review={reviewSession.review}
+            workbook={reviewSession.workbook}
+            dirty={reviewSessionDirty}
+            isNew={reviewSession.isNew}
+            saving={savingUpload || savingEditor}
+            blockingMessage={
+              reviewSession.mode === "new_upload" && !hasMatchingUploadAnalysis
+                ? "The selected file no longer matches this analysis. Re-run analysis before saving."
+                : ""
+            }
+            analysisDetails={reviewSession.analysisDetails}
+            onChange={applyWorkspaceChange}
+            onSaveDraft={(event) => reviewSession.isNew ? handleUploadTemplate(event, "draft") : handleSaveEditor(event, "draft")}
+            onActivate={(event) => reviewSession.isNew ? handleUploadTemplate(event, "activate_if_ready") : handleSaveEditor(event, "activate_if_ready")}
+            onClose={closeReviewSession}
+          />
+          <AdvancedTemplateTools
+            config={configDraft}
+            review={reviewSession.review}
+            editorContext={editorContext}
+            onConfigChange={(nextConfig) => applyWorkspaceChange(nextConfig, syncReviewWithConfig(nextConfig, reviewSession.review))}
+            onReviewChange={applyReviewChange}
+            rawConfigText={rawConfigText}
+            onRawConfigTextChange={setRawConfigText}
+          />
+        </div>
+      )}
 
       <div className="table-wrap">
         <table>
@@ -1937,60 +2121,7 @@ export function CashFlowTemplatesPanel({ token, selectedFundId, onError, onNote 
         </table>
       </div>
 
-      <form className="panel stack" onSubmit={handleSaveEditor}>
-        <h3>Review Saved Template</h3>
-        {!editingTemplate && <p className="muted small">Choose Edit on a template row to review or change it.</p>}
-        {editingTemplate && (
-          <>
-            <div className="form-grid">
-              <label>
-                Name
-                <input
-                  value={editingTemplate.name || ""}
-                  onChange={(event) => setEditingTemplate({ ...editingTemplate, name: event.target.value })}
-                />
-              </label>
-              <label>
-                Version
-                <input
-                  value={editingTemplate.version || ""}
-                  onChange={(event) => setEditingTemplate({ ...editingTemplate, version: event.target.value })}
-                />
-              </label>
-            </div>
-            <TemplateReviewPanel
-              config={configDraft}
-              review={editorReview}
-              onConfigChange={applyDraftConfig}
-              onReviewChange={applyReviewChange}
-            />
-            <AdvancedTemplateTools
-              config={configDraft}
-              review={editorReview}
-              editorContext={editorContext}
-              onConfigChange={applyDraftConfig}
-              onReviewChange={applyReviewChange}
-              rawConfigText={rawConfigText}
-              onRawConfigTextChange={setRawConfigText}
-            />
-            <div className="inline-actions">
-              <button
-                type="button"
-                onClick={(event) => handleSaveEditor(event, "draft")}
-                disabled={savingEditor}
-              >
-                {savingEditor ? "Saving..." : "Save Draft"}
-              </button>
-              <button className="primary" type="submit" disabled={savingEditor || !canActivateEditor}>
-                {savingEditor ? "Saving..." : "Activate Template"}
-              </button>
-            </div>
-            {!canActivateEditor && (
-              <p className="muted small">Save the draft now, then finish the review items above before activation.</p>
-            )}
-          </>
-        )}
-      </form>
+      {!reviewSession && <p className="muted small">Choose Edit or Reanalyze on a saved template to open its review workspace.</p>}
     </section>
   )
 }

@@ -65,6 +65,31 @@ module.exports = (sequelize, DataTypes) => {
         as: "reportRuns",
       })
 
+      Portfolio.hasMany(models.ReportLineage, {
+        foreignKey: "portfolio_id",
+        as: "reportLineage",
+      })
+
+      Portfolio.hasMany(models.AgentToolInvocation, {
+        foreignKey: "portfolio_id",
+        as: "agentToolInvocations",
+      })
+
+      Portfolio.hasMany(models.AgentWorkflowRun, {
+        foreignKey: "portfolio_id",
+        as: "agentWorkflowRuns",
+      })
+
+      Portfolio.hasMany(models.ExternalIntegration, {
+        foreignKey: "portfolio_id",
+        as: "externalIntegrations",
+      })
+
+      Portfolio.hasMany(models.ExternalSyncRun, {
+        foreignKey: "portfolio_id",
+        as: "externalSyncRuns",
+      })
+
       Portfolio.hasMany(models.CashFlowTemplate, {
         foreignKey: "portfolio_id",
         as: "cashFlowTemplates",
@@ -73,6 +98,31 @@ module.exports = (sequelize, DataTypes) => {
       Portfolio.hasMany(models.FundDocument, {
         foreignKey: "portfolio_id",
         as: "fundDocuments",
+      })
+
+      Portfolio.hasMany(models.FundRepositoryItem, {
+        foreignKey: "portfolio_id",
+        as: "fundRepositoryItems",
+      })
+
+      Portfolio.hasMany(models.FundRepositoryAnalysis, {
+        foreignKey: "portfolio_id",
+        as: "fundRepositoryAnalyses",
+      })
+
+      Portfolio.hasMany(models.FundRepositoryKeyPoint, {
+        foreignKey: "portfolio_id",
+        as: "fundRepositoryKeyPoints",
+      })
+
+      Portfolio.hasMany(models.ReportingProject, {
+        foreignKey: "portfolio_id",
+        as: "reportingProjects",
+      })
+
+      Portfolio.hasMany(models.ReportingProjectSource, {
+        foreignKey: "portfolio_id",
+        as: "reportingProjectSources",
       })
 
       Portfolio.hasMany(models.Account, {

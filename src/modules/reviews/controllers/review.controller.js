@@ -2,6 +2,7 @@ const ResponseHandler = require("../../../utils/responseHandler")
 const { resolveFundId } = require("../../shared/fund")
 const MappingReviewService = require("../services/mappingReview.service")
 const ReviewTaskService = require("../services/reviewTask.service")
+const { REVIEW_TARGET_TYPES } = require("../review.constants")
 
 function isTruthy(value) {
   if (typeof value === "boolean") return value
@@ -66,6 +67,17 @@ class ReviewController {
 
   static async approveReviewTask(req, res, next) {
     try {
+      const targetType = await ReviewTaskService.getTaskTargetType({ taskId: req.params.id })
+      if (targetType && targetType !== REVIEW_TARGET_TYPES.TEMPLATE_ROW) {
+        const result = await ReviewTaskService.approveGenericTask({
+          taskId: req.params.id,
+          actorId: req.user?.id || null,
+          rationale: req.body.rationale || null,
+        })
+
+        return ResponseHandler.success(res, { review_task: result }, "Review task approved")
+      }
+
       const result = await MappingReviewService.approveTask({
         taskId: req.params.id,
         actorId: req.user?.id || null,
@@ -86,6 +98,17 @@ class ReviewController {
 
   static async rejectReviewTask(req, res, next) {
     try {
+      const targetType = await ReviewTaskService.getTaskTargetType({ taskId: req.params.id })
+      if (targetType && targetType !== REVIEW_TARGET_TYPES.TEMPLATE_ROW) {
+        const result = await ReviewTaskService.rejectGenericTask({
+          taskId: req.params.id,
+          actorId: req.user?.id || null,
+          rationale: req.body.rationale || null,
+        })
+
+        return ResponseHandler.success(res, { review_task: result }, "Review task rejected")
+      }
+
       const result = await MappingReviewService.rejectTask({
         taskId: req.params.id,
         actorId: req.user?.id || null,
@@ -105,6 +128,11 @@ class ReviewController {
 
   static async overrideReviewTask(req, res, next) {
     try {
+      const targetType = await ReviewTaskService.getTaskTargetType({ taskId: req.params.id })
+      if (targetType && targetType !== REVIEW_TARGET_TYPES.TEMPLATE_ROW) {
+        return ResponseHandler.badRequest(res, "Only template row mapping tasks support override")
+      }
+
       const result = await MappingReviewService.overrideTask({
         taskId: req.params.id,
         actorId: req.user?.id || null,
@@ -124,6 +152,17 @@ class ReviewController {
 
   static async deferReviewTask(req, res, next) {
     try {
+      const targetType = await ReviewTaskService.getTaskTargetType({ taskId: req.params.id })
+      if (targetType && targetType !== REVIEW_TARGET_TYPES.TEMPLATE_ROW) {
+        const result = await ReviewTaskService.deferGenericTask({
+          taskId: req.params.id,
+          actorId: req.user?.id || null,
+          rationale: req.body.rationale || null,
+        })
+
+        return ResponseHandler.success(res, { review_task: result }, "Review task deferred")
+      }
+
       const result = await MappingReviewService.deferTask({
         taskId: req.params.id,
         actorId: req.user?.id || null,

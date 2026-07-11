@@ -1,0 +1,20 @@
+{
+  "totals": {
+    "total_inflows": 210000,
+    "total_outflows": 130000,
+    "net_cash_flow": 80000,
+    "bucket_totals": {
+      "customer_receipts": 120000,
+      "equity_injection": 50000,
+      "debt_drawdown": 40000,
+      "supplier_payments": 30000,
+      "payroll": 45000,
+      "rent_facilities": 12000,
+      "capital_expenditures": 25000,
+      "debt_repayment": 10000,
+      "member_distributions": 8000
+    },
+    "opening_balance_start": 50000,
+    "closing_balance_end": 130000
+  }
+}

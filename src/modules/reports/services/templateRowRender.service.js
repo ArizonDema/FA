@@ -45,6 +45,7 @@ function buildBaseRowPayload({ row, approvedMapping = null, semanticValue = null
       matchedSourceAccountCount: semanticValue?.matchedSourceAccountCount || 0,
       supportingLineCount: semanticValue?.supportingLineCount || 0,
       supportingEntryCount: semanticValue?.supportingEntryCount || 0,
+      supportingEntryIds: semanticValue?.supportingEntryIds || [],
       matchedSourceAccounts: semanticValue?.matchedSourceAccounts || [],
       approvedAccounts: semanticValue?.approvedAccounts || [],
       currencies: semanticValue?.currencies || [],

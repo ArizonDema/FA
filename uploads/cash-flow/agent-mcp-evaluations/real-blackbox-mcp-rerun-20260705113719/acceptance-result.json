@@ -1,0 +1,64 @@
+{
+  "status": "fail",
+  "database": "css_invest_eval_20260705142517",
+  "outputDir": "C:\\Users\\Mano PC\\FA\\uploads\\cash-flow\\agent-mcp-evaluations\\real-blackbox-mcp-rerun-20260705113719",
+  "evaluator": {
+    "exitStatus": 1,
+    "timedOut": false,
+    "stdout": "",
+    "stderr": "Error: No active cash-flow template/version was discoverable from list_reporting_inputs\n    at run (C:\\Users\\Mano PC\\FA\\scripts\\evaluate-agent-cashflow-mcp.js:361:11)\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n",
+    "scorecard": null,
+    "finalExplanation": null
+  },
+  "workbook": {
+    "runId": null,
+    "runStatus": null,
+    "outputPath": null,
+    "exists": false,
+    "mismatches": [
+      "no output path"
+    ],
+    "formulasSurvive": false
+  },
+  "security": {
+    "transcriptLeakCount": 0,
+    "transcriptLeakSamples": []
+  },
+  "principal": {
+    "id": "dcd91506-e921-4a4c-b4e1-10e2d1f1010e",
+    "scopes": [
+      "reporting_project:create",
+      "reporting_project:read",
+      "source:attach",
+      "source:analyze",
+      "template:analyze",
+      "mapping:read",
+      "mapping:suggest",
+      "report:run_draft",
+      "report:validate",
+      "report:read",
+      "audit:read"
+    ],
+    "allowedFunds": [
+      "df290b18-0d72-4605-99e0-beb4ef8c7313"
+    ]
+  },
+  "expected": {
+    "total_inflows": 210000,
+    "total_outflows": 130000,
+    "net_cash_flow": 80000,
+    "bucket_totals": {
+      "customer_receipts": 120000,
+      "equity_injection": 50000,
+      "debt_drawdown": 40000,
+      "supplier_payments": 30000,
+      "payroll": 45000,
+      "rent_facilities": 12000,
+      "capital_expenditures": 25000,
+      "debt_repayment": 10000,
+      "member_distributions": 8000
+    },
+    "opening_balance_start": 50000,
+    "closing_balance_end": 130000
+  }
+}
