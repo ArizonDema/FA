@@ -48,6 +48,9 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING(50),
         allowNull: false,
         defaultValue: "cash_flow",
+        validate: {
+          isIn: [["cash_flow", "capital_account_statement"]],
+        },
       },
       status: {
         type: DataTypes.ENUM("draft", "active", "archived"),

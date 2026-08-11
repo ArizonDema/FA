@@ -19,6 +19,8 @@ const {
   GLAccount,
   ReportTemplate,
 } = require("../models")
+const CapitalAccountStatementService = require("./capitalAccountStatement.service")
+const CapitalAccountTemplateWriterService = require("../modules/templates/services/capitalAccountTemplateWriter.service")
 
 let puppeteer = null
 try {
@@ -377,11 +379,37 @@ async function generateXlsxReport(runId, title, data) {
     sheet.addRow(["Equity", data.financialStatements.balanceSheet.equity])
   }
 
+  if (data.capitalAccountStatements) {
+    CapitalAccountStatementService.addWorkbookSheets(workbook, data.capitalAccountStatements, {
+      fundName: data.fund?.name || "Fund",
+    })
+  }
+
   await workbook.xlsx.writeFile(filePath)
   return filePath
 }
 
-async function buildReportData({ type, portfolioId, periodStart, periodEnd, shareClassId }) {
+async function generateCapitalAccountTemplateReport(runId, data, { templatePath, config }) {
+  ensureReportDir()
+  const filePath = path.join(REPORT_DIR, `${runId}.xlsx`)
+  await CapitalAccountTemplateWriterService.write({
+    templatePath,
+    config,
+    data: data.capitalAccountStatements,
+    fundName: data.fund?.name || "Fund",
+    outputPath: filePath,
+  })
+  return filePath
+}
+
+async function buildReportData({
+  type,
+  portfolioId,
+  periodStart,
+  periodEnd,
+  shareClassId,
+  investorProfileId,
+}) {
   const portfolio = await Portfolio.findByPk(portfolioId)
   const startDate = normalizeDate(periodStart)
   const endDate = normalizeDate(periodEnd)
@@ -411,6 +439,17 @@ async function buildReportData({ type, portfolioId, periodStart, periodEnd, shar
     payload.financialStatements = await buildFinancialStatements(portfolioId, startDate, endDate)
   }
 
+  if (type === CapitalAccountStatementService.REPORT_TYPE) {
+    payload.capitalAccountStatements = await CapitalAccountStatementService.buildStatementData({
+      portfolioId,
+      periodStart: payload.period.start,
+      periodEnd: payload.period.end,
+      investorProfileId,
+      shareClassId,
+      currency: portfolio?.base_currency || "USD",
+    })
+  }
+
   return payload
 }
 
@@ -423,5 +462,6 @@ module.exports = {
   buildReportData,
   generatePdfReport,
   generateXlsxReport,
+  generateCapitalAccountTemplateReport,
   getTemplate,
 }

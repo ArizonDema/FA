@@ -44,6 +44,14 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.UUID,
         allowNull: true,
       },
+      template_kind: {
+        type: DataTypes.STRING(50),
+        allowNull: false,
+        defaultValue: "cash_flow",
+        validate: {
+          isIn: [["cash_flow", "capital_account_statement"]],
+        },
+      },
       source_file_name: {
         type: DataTypes.STRING(255),
         allowNull: false,

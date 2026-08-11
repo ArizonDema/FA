@@ -518,7 +518,7 @@ export function CashFlowExtractorPanel({
   if (!selectedFundId) {
     return (
       <section className="panel stack">
-        <h2>Run Report</h2>
+        <h2>Cash Flow Report</h2>
         <p className="muted">Select a fund to run cash flow extraction.</p>
       </section>
     )
@@ -528,8 +528,8 @@ export function CashFlowExtractorPanel({
     <section className="panel stack">
       <div className="section-heading">
         <div>
-          <p className="kicker">Report Builder</p>
-          <h2>Run Report</h2>
+          <p className="kicker">Cash Flow</p>
+          <h2>Cash Flow Report</h2>
         </div>
         <button type="button" onClick={loadData} disabled={loading}>
           {loading ? "Refreshing..." : "Refresh"}

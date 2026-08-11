@@ -10,6 +10,16 @@ const TemplateService = require("../services/template.service")
 const TemplateParsingService = require("../services/templateParsing.service")
 const { resolveFundId } = require("../../shared/fund")
 const { buildAnalysisConfigPayload } = require("../utils/templateAnalysis.util")
+const { TEMPLATE_KINDS } = require("../template.constants")
+
+const CASH_FLOW_TEMPLATE_KIND = TEMPLATE_KINDS.CASH_FLOW
+
+async function requireCashFlowTemplate(req, res) {
+  const template = await TemplateService.getTemplate(req.params.id, CASH_FLOW_TEMPLATE_KIND)
+  if (template) return template
+  ResponseHandler.notFound(res, "Cash flow template not found")
+  return null
+}
 
 const FundModel = Fund || Portfolio
 
@@ -36,7 +46,7 @@ class CashFlowTemplateController {
         return ResponseHandler.badRequest(res, "portfolio_id is required")
       }
 
-      const templates = await TemplateService.listTemplates(fundId)
+      const templates = await TemplateService.listTemplates(fundId, CASH_FLOW_TEMPLATE_KIND)
       return ResponseHandler.success(res, { templates }, "Cash flow templates retrieved")
     } catch (error) {
       return next(error)
@@ -75,6 +85,7 @@ class CashFlowTemplateController {
       })
       const { analysis, analysisConfigPayload } = await TemplateAnalysisService.createAnalysisRecord({
         fundId,
+        templateKind: CASH_FLOW_TEMPLATE_KIND,
         sourceFileName: req.file.originalname,
         sourceFilePath: analysisFilePath,
         actorId: req.user?.id || null,
@@ -156,6 +167,7 @@ class CashFlowTemplateController {
       const resolved = await TemplateAnalysisService.resolveConfigFromAnalysisOrPayload({
         body: req.body,
         fundId,
+        templateKind: CASH_FLOW_TEMPLATE_KIND,
         templatePath: req.file.path,
         sourceFileName: req.file.originalname,
       })
@@ -172,6 +184,7 @@ class CashFlowTemplateController {
         ingestionResult: resolved.ingestionResult,
         normalizedConfig: resolved.normalizedConfig,
         review: resolved.review,
+        templateKind: CASH_FLOW_TEMPLATE_KIND,
       })
 
       return ResponseHandler.created(
@@ -204,6 +217,7 @@ class CashFlowTemplateController {
         templateId: req.params.id,
         updates: req.body,
         actorId: req.user?.id || null,
+        templateKind: CASH_FLOW_TEMPLATE_KIND,
       })
       if (!template) {
         return ResponseHandler.notFound(res, "Cash flow template not found")
@@ -236,6 +250,7 @@ class CashFlowTemplateController {
       const template = await TemplateService.activateTemplate({
         templateId: req.params.id,
         actorId: req.user?.id || null,
+        templateKind: CASH_FLOW_TEMPLATE_KIND,
       })
       if (!template) {
         return ResponseHandler.notFound(res, "Cash flow template not found")
@@ -263,7 +278,7 @@ class CashFlowTemplateController {
 
   static async reanalyzeTemplate(req, res, next) {
     try {
-      const template = await TemplateService.getTemplate(req.params.id)
+      const template = await TemplateService.getTemplate(req.params.id, CASH_FLOW_TEMPLATE_KIND)
       if (!template) {
         return ResponseHandler.notFound(res, "Cash flow template not found")
       }
@@ -278,6 +293,7 @@ class CashFlowTemplateController {
 
       const { analysis, analysisConfigPayload } = await TemplateAnalysisService.createAnalysisRecord({
         fundId: template.portfolio_id,
+        templateKind: CASH_FLOW_TEMPLATE_KIND,
         templateId: template.id,
         templateVersionId: template.active_version_id || null,
         sourceFileName: template.template_file_name,
@@ -300,6 +316,7 @@ class CashFlowTemplateController {
           templateId: template.id,
           analysis,
           actorId: req.user?.id || null,
+          templateKind: CASH_FLOW_TEMPLATE_KIND,
         })
       }
 
@@ -351,6 +368,7 @@ class CashFlowTemplateController {
     try {
       const result = await TemplateService.getTemplateEditorContext({
         templateId: req.params.id,
+        templateKind: CASH_FLOW_TEMPLATE_KIND,
       })
 
       if (!result) {
@@ -368,6 +386,7 @@ class CashFlowTemplateController {
 
   static async parseTemplateVersion(req, res, next) {
     try {
+      if (!(await requireCashFlowTemplate(req, res))) return
       const result = await TemplateParsingService.parseTemplateVersion({
         templateId: req.params.id,
         versionId: req.params.versionId,
@@ -398,6 +417,7 @@ class CashFlowTemplateController {
 
   static async getTemplateVersionStructure(req, res, next) {
     try {
+      if (!(await requireCashFlowTemplate(req, res))) return
       const result = await TemplateParsingService.getParsedStructure({
         templateId: req.params.id,
         versionId: req.params.versionId,
@@ -423,6 +443,7 @@ class CashFlowTemplateController {
 
   static async getTemplateVersionRows(req, res, next) {
     try {
+      if (!(await requireCashFlowTemplate(req, res))) return
       const result = await TemplateParsingService.getTemplateRows({
         templateId: req.params.id,
         versionId: req.params.versionId,
@@ -448,6 +469,7 @@ class CashFlowTemplateController {
 
   static async suggestTemplateVersionMappings(req, res, next) {
     try {
+      if (!(await requireCashFlowTemplate(req, res))) return
       const result = await MappingSuggestionService.suggestTemplateVersionMappings({
         templateId: req.params.id,
         versionId: req.params.versionId,
@@ -477,6 +499,7 @@ class CashFlowTemplateController {
 
   static async getTemplateVersionMappingSuggestions(req, res, next) {
     try {
+      if (!(await requireCashFlowTemplate(req, res))) return
       const result = await MappingSuggestionService.getTemplateVersionSuggestions({
         templateId: req.params.id,
         versionId: req.params.versionId,
@@ -502,6 +525,7 @@ class CashFlowTemplateController {
 
   static async assistTemplateVersionMappings(req, res, next) {
     try {
+      if (!(await requireCashFlowTemplate(req, res))) return
       const result = await LlmMappingAssistantService.assistTemplateVersionMappings({
         templateId: req.params.id,
         versionId: req.params.versionId,
@@ -531,6 +555,7 @@ class CashFlowTemplateController {
 
   static async getTemplateVersionLlmMappingSuggestions(req, res, next) {
     try {
+      if (!(await requireCashFlowTemplate(req, res))) return
       const result = await LlmMappingAssistantService.getTemplateVersionAssistedSuggestions({
         templateId: req.params.id,
         versionId: req.params.versionId,
@@ -556,6 +581,7 @@ class CashFlowTemplateController {
 
   static async createTemplateVersionReviewTasks(req, res, next) {
     try {
+      if (!(await requireCashFlowTemplate(req, res))) return
       const result = await ReviewTaskService.generateTemplateVersionReviewTasks({
         templateId: req.params.id,
         versionId: req.params.versionId,

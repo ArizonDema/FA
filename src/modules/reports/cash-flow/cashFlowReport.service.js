@@ -12,6 +12,7 @@ const AuditService = require("../../audit/services/audit.service")
 const RepositoryAnalysisService = require("../../repository/services/repositoryAnalysis.service")
 const RepositoryService = require("../../repository/services/repository.service")
 const TemplateService = require("../../templates/services/template.service")
+const { TEMPLATE_KINDS } = require("../../templates/template.constants")
 const ReportLineageService = require("../services/reportLineage.service")
 const ReportExportService = require("../services/reportExport.service")
 const ReportReliabilityService = require("./reportReliability.service")
@@ -83,12 +84,12 @@ class CashFlowReportService {
     let template = null
 
     if (templateId) {
-      template = await TemplateService.getTemplate(templateId)
+      template = await TemplateService.getTemplate(templateId, TEMPLATE_KINDS.CASH_FLOW)
       if (!template || template.portfolio_id !== fundId) {
         throw new CashFlowService.CashFlowValidationError("template_id is invalid for the selected fund")
       }
     } else {
-      template = await TemplateService.getActiveTemplateForFund(fundId)
+      template = await TemplateService.getActiveTemplateForFund(fundId, TEMPLATE_KINDS.CASH_FLOW)
     }
 
     if (!template) {

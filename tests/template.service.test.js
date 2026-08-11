@@ -92,6 +92,33 @@ function createTemplateRecord(overrides = {}) {
   }
 }
 
+function readyCasConfig() {
+  const statementFields = [
+    "fund_name", "investor_name", "share_class", "period_start", "period_end",
+    "beginning_capital", "contributions", "distributions", "ending_capital",
+    "commitment_amount", "called_capital", "paid_capital", "unfunded_commitment",
+  ]
+  return {
+    version: "cas_v1",
+    summary: {
+      sheet_name: "Summary",
+      scalar_bindings: { fund_name: "B1", period_start: "B2", period_end: "B3" },
+      table: {
+        data_start_row: 5,
+        columns: {
+          investor_name: "A", share_class: "B", beginning_capital: "C", contributions: "D",
+          distributions: "E", ending_capital: "F", unfunded_commitment: "G",
+        },
+      },
+    },
+    statement: {
+      prototype_sheet_name: "Prototype",
+      scalar_bindings: Object.fromEntries(statementFields.map((field, index) => [field, `B${index + 1}`])),
+      activity_table: { data_start_row: 20, columns: { date: "A", type: "B", amount: "C" } },
+    },
+  }
+}
+
 describe("TemplateService", () => {
   beforeEach(() => {
     mockTemplateFindByPk.mockReset()
@@ -199,5 +226,48 @@ describe("TemplateService", () => {
     expect(template.update).not.toHaveBeenCalled()
     expect(updated.template.id).toBe("template-draft")
     expect(updated.savedAsDraft).toBe(true)
+  })
+
+  test("activating CAS deactivates only the CAS slot", async () => {
+    const casConfig = readyCasConfig()
+    const template = createTemplateRecord({
+      template_kind: "capital_account_statement",
+      is_active: false,
+      status: "draft",
+      config_json: casConfig,
+      activeVersion: {
+        id: "cas-version-1",
+        config_json: casConfig,
+        source_file_name: "cas.xlsx",
+        source_file_path: "C:\\temp\\cas.xlsx",
+      },
+    })
+    mockTemplateFindByPk.mockResolvedValue(template)
+
+    await TemplateService.activateTemplate({
+      templateId: template.id,
+      templateKind: "capital_account_statement",
+      actorId: "admin-1",
+    })
+
+    expect(mockTemplateUpdateAll).toHaveBeenCalledWith(
+      { is_active: false, status: "draft" },
+      expect.objectContaining({
+        where: {
+          portfolio_id: "fund-1",
+          template_kind: "capital_account_statement",
+          is_active: true,
+        },
+      }),
+    )
+    expect(template.update).toHaveBeenCalledWith(
+      { is_active: true, status: "active" },
+      expect.any(Object),
+    )
+  })
+
+  test("rejects a template identity requested through the wrong kind", async () => {
+    mockTemplateFindByPk.mockResolvedValue(createTemplateRecord({ template_kind: "capital_account_statement" }))
+    await expect(TemplateService.getTemplate("template-1", "cash_flow")).resolves.toBeNull()
   })
 })

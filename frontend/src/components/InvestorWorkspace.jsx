@@ -229,7 +229,7 @@ export function InvestorWorkspace({ token, user, onLogout, onUserUpdate }) {
           </section>
 
           <section className="split-2">
-            <article className="panel">
+            <article className="panel investor-overview-table">
               <h3>Recent Investments</h3>
               <div className="table-wrap">
                 <table>

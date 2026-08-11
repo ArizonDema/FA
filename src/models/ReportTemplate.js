@@ -18,7 +18,12 @@ module.exports = (sequelize, DataTypes) => {
         primaryKey: true,
       },
       type: {
-        type: DataTypes.ENUM("cash_flow", "shareholder_register", "financial_statements"),
+        type: DataTypes.ENUM(
+          "cash_flow",
+          "shareholder_register",
+          "financial_statements",
+          "capital_account_statement",
+        ),
         allowNull: false,
       },
       name: {

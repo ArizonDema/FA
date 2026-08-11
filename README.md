@@ -397,6 +397,22 @@ http://localhost:8000/api/docs
 - `PUT /api/v1/admin/withdrawals/:id/approve` - Approve withdrawal
 - `GET /api/v1/admin/aum` - View AUM
 
+#### Capital Account Statements
+- `GET /api/v1/capital-account-statements/templates?portfolio_id=:id` - List CAS templates for a fund
+- `POST /api/v1/capital-account-statements/templates/analyze` - Analyze an XLSX and suggest CAS cell/table mappings
+- `POST /api/v1/capital-account-statements/templates` - Upload a mapped CAS template or save it as a draft
+- `PUT /api/v1/capital-account-statements/templates/:id/activate` - Activate a ready CAS template without changing the active cash-flow template
+- `POST /api/v1/capital-account-statements/reports/run` - Generate transaction-based investor capital account statements as XLSX
+- `GET /api/v1/capital-account-statements/reports/history?portfolio_id=:id` - List statement runs for a fund
+- `GET /api/v1/capital-account-statements/reports/download/:run_id` - Download a generated statement workbook
+
+Capital account statement generation requires one active, mapped CAS template for the selected fund. CAS and cash-flow
+templates have independent active slots. The active CAS workbook supplies a consolidated summary sheet and an investor
+statement prototype that is cloned once per investor/share class. Statements use recorded commitments, capital-call
+payments, and distributions. Because the current ledger does not store investor-level
+income, fee, or carry allocations, the output identifies itself as transaction-based and flags that allocation boundary
+for review.
+
 #### System
 - `GET /api/v1/system/health` - System health
 - `GET /api/v1/system/llm/health` - Ollama connectivity/model health for template analysis

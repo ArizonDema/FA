@@ -162,6 +162,33 @@ class ReportLineageService {
     return await this.bulkCreate(payloads)
   }
 
+  static async persistForTemplateDrivenRun({ run, template, templateVersion, templateKind, configVersion = null }) {
+    const runPayload = asPlainObject(run) || {}
+    const templatePayload = asPlainObject(template) || {}
+    const versionPayload = asPlainObject(templateVersion) || {}
+    return await this.bulkCreate([
+      {
+        report_run_id: runPayload.id,
+        portfolio_id: runPayload.portfolio_id || templatePayload.portfolio_id || null,
+        template_version_id: versionPayload.id || runPayload.template_version_id || null,
+        source_type: "report_template_version",
+        source_id: versionPayload.id || templatePayload.id || null,
+        source_reference_json: {
+          template_id: templatePayload.id || null,
+          template_kind: templateKind || templatePayload.template_kind || null,
+          version_label: versionPayload.version_label || templatePayload.version || null,
+          source_file_name: versionPayload.source_file_name || templatePayload.template_file_name || null,
+          source_file_sha256: versionPayload.source_file_sha256 || null,
+        },
+        mapping_snapshot_json: {
+          config_version: configVersion || versionPayload.config_json?.version || null,
+        },
+        confidence: 1,
+        evidence_json: { active_template_version: true },
+      },
+    ])
+  }
+
   static async listForRun({ runId }) {
     if (!ReportLineage || typeof ReportLineage.findAll !== "function") return []
     const records = await ReportLineage.findAll({

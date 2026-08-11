@@ -3,6 +3,7 @@ import { apiRequest } from "./api"
 import { AuthScreen } from "./components/AuthScreen"
 import { InvestorWorkspace } from "./components/InvestorWorkspace"
 import { AdminWorkspace } from "./components/AdminWorkspace"
+import { BrandLockup } from "./components/BrandLogo"
 
 const STORAGE_KEY = "css_invest_auth"
 
@@ -78,7 +79,11 @@ export default function App() {
   }, [token, onLogout])
 
   if (checking) {
-    return <main className="auth-root">Checking session...</main>
+    return (
+      <main className="auth-root session-loading">
+        <BrandLockup context="Securing your workspace…" />
+      </main>
+    )
   }
 
   if (!token || !user) {

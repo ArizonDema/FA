@@ -60,6 +60,7 @@ class ReportController {
     try {
       const runs = await ReportRunService.getHistory({
         fundId: resolveFundId(req.query),
+        type: req.query.type || null,
       })
       return ResponseHandler.success(res, { runs }, "Report history retrieved")
     } catch (error) {

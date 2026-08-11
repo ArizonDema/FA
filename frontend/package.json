@@ -7,7 +7,7 @@
     "dev": "node scripts/dev-with-backend.mjs",
     "dev:solo": "vite",
     "build": "vite build",
-    "test": "node --test src/components/templateReviewModel.test.js",
+    "test": "node --test src/components/templateReviewModel.test.js src/components/casTemplateModel.test.js",
     "preview": "vite preview --port 3000"
   },
   "dependencies": {

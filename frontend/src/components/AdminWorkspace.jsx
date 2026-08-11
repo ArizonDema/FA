@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { apiDownload, apiMultipartRequest, apiRequest, apiUrl, currency, percent, shortDate } from "../api"
 import { AppShell } from "./AppShell"
-import { CashFlowTemplatesPanel } from "./CashFlowTemplatesPanel"
-import { CashFlowExtractorPanel } from "./CashFlowExtractorPanel"
+import { TemplatesMappingPanel } from "./TemplatesMappingPanel"
 import { FundRepositoryPanel } from "./FundRepositoryPanel"
+import { ReportRunnerPanel } from "./ReportRunnerPanel"
 import { ReportingWorkbenchPanel } from "./ReportingWorkbenchPanel"
 
 const emptyBank = {
@@ -19,7 +19,7 @@ export function AdminWorkspace({ token, user, onLogout }) {
   const navItems = [
     { key: "reporting-workbench", label: "Reporting Workbench", description: "Own cycles, controls and outputs" },
     { key: "overview", label: "Overview", description: "Readiness and next actions" },
-    { key: "run-report", label: "Run Report", description: "Generate cash-flow workbook" },
+    { key: "run-report", label: "Run Reports", description: "Cash flow or investor statements" },
     { key: "templates-mapping", label: "Templates & Mapping", description: "Review and activate templates" },
     { key: "review-issues", label: "Review Issues", description: "Resolve blockers and warnings" },
     { key: "report-history", label: "Report History", description: "Download generated outputs" },
@@ -31,6 +31,8 @@ export function AdminWorkspace({ token, user, onLogout }) {
   const [error, setError] = useState("")
   const [note, setNote] = useState("")
   const [cashFlowCoverageIssue, setCashFlowCoverageIssue] = useState(null)
+  const [templatesMappingTab, setTemplatesMappingTab] = useState("cash_flow")
+  const [reportRunnerKind, setReportRunnerKind] = useState("cash_flow")
 
   const [funds, setFunds] = useState([])
   const [selectedFundId, setSelectedFundId] = useState("")
@@ -721,7 +723,7 @@ export function AdminWorkspace({ token, user, onLogout }) {
               </select>
             </label>
             <button className="primary" type="button" onClick={() => setActivePage("run-report")} disabled={!selectedFundId}>
-              Run Report
+              Run Reports
             </button>
           </div>
         </section>
@@ -806,6 +808,7 @@ export function AdminWorkspace({ token, user, onLogout }) {
             onOpenRepository={() => setActivePage("fund-repository")}
             onOpenTemplates={(coverageIssue) => {
               setCashFlowCoverageIssue(coverageIssue)
+              setTemplatesMappingTab("cash_flow")
               setActivePage("templates-mapping")
             }}
           />
@@ -1887,7 +1890,9 @@ export function AdminWorkspace({ token, user, onLogout }) {
         )}
 
         {activePage === "templates-mapping" && (
-          <CashFlowTemplatesPanel
+          <TemplatesMappingPanel
+            activeTab={templatesMappingTab}
+            onTabChange={setTemplatesMappingTab}
             token={token}
             selectedFundId={selectedFundId}
             onError={setError}
@@ -1899,16 +1904,32 @@ export function AdminWorkspace({ token, user, onLogout }) {
         )}
 
         {activePage === "run-report" && (
-          <CashFlowExtractorPanel
-            token={token}
-            selectedFundId={selectedFundId}
-            onError={setError}
-            onNote={setNote}
-            onOpenRepository={() => setActivePage("fund-repository")}
-            onReportGenerated={() => loadReportingContext().catch((err) => setError(err.message))}
-            onOpenTemplates={(coverageIssue = null) => {
-              setCashFlowCoverageIssue(coverageIssue)
-              setActivePage("templates-mapping")
+          <ReportRunnerPanel
+            reportKind={reportRunnerKind}
+            onReportKindChange={setReportRunnerKind}
+            cashFlowProps={{
+              token,
+              selectedFundId,
+              onError: setError,
+              onNote: setNote,
+              onOpenRepository: () => setActivePage("fund-repository"),
+              onReportGenerated: () => loadReportingContext().catch((err) => setError(err.message)),
+              onOpenTemplates: (coverageIssue = null) => {
+                setCashFlowCoverageIssue(coverageIssue)
+                setTemplatesMappingTab("cash_flow")
+                setActivePage("templates-mapping")
+              },
+            }}
+            casProps={{
+              token,
+              selectedFundId,
+              selectedFund,
+              onError: setError,
+              onNote: setNote,
+              onOpenTemplates: () => {
+                setTemplatesMappingTab("capital_account_statement")
+                setActivePage("templates-mapping")
+              },
             }}
           />
         )}

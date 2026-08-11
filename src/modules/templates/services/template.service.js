@@ -17,6 +17,8 @@ const { createSchemaHash } = require("../utils/templateAnalysis.util")
 const TemplateAnalysisService = require("./templateAnalysis.service")
 const TemplateParsingService = require("./templateParsing.service")
 const { evaluateTemplateReadiness, uniqueAnchors } = require("./templateReadiness.service")
+const CapitalAccountTemplateService = require("./capitalAccountTemplate.service")
+const { TEMPLATE_KINDS, normalizeTemplateKind } = require("../template.constants")
 
 const TemplateModel = Template || CashFlowTemplate
 
@@ -32,6 +34,21 @@ function parseBoolean(value, fallback = false) {
 function parseActivationMode(value) {
   const normalized = String(value || "activate_if_ready").trim().toLowerCase()
   return normalized === "draft" ? "draft" : "activate_if_ready"
+}
+
+function storageNamespaceForKind(templateKind) {
+  return templateKind === TEMPLATE_KINDS.CAPITAL_ACCOUNT_STATEMENT ? "capital-account-statements" : "cash-flow"
+}
+
+async function normalizeTemplateConfigForKind({ templateKind, config, templatePath }) {
+  if (templateKind === TEMPLATE_KINDS.CAPITAL_ACCOUNT_STATEMENT) {
+    return CapitalAccountTemplateService.validateConfig(config)
+  }
+  const normalizedV3 = await CashFlowService.ensureV3TemplateConfig({
+    templateConfig: config,
+    templatePath,
+  })
+  return CashFlowService.validateTemplateConfig(normalizedV3)
 }
 
 function decorateConfigWithReviewMetadata(config, review) {
@@ -75,7 +92,8 @@ class TemplateService {
   }
 
   static findRecoverySourceForTemplate(template) {
-    const analysesDir = StorageService.getNamespacePath("cash-flow", "template-analyses")
+    const templateKind = normalizeTemplateKind(template?.template_kind)
+    const analysesDir = StorageService.getNamespacePath(storageNamespaceForKind(templateKind), "template-analyses")
     if (!fs.existsSync(analysesDir)) return null
 
     const candidateNames = this.listTemplateSourceCandidates(template).map((name) => name.toLowerCase())
@@ -118,8 +136,13 @@ class TemplateService {
     const preferredName = String(
       template?.template_file_name || template?.activeVersion?.source_file_name || path.basename(recoveryPath),
     ).trim()
-    const restoredName = StorageService.sanitizeFileName(preferredName, "cash_flow_template")
-    const restoredPath = StorageService.getNamespacePath("cash-flow", "templates", `${template.id}_${restoredName}`)
+    const templateKind = normalizeTemplateKind(template?.template_kind)
+    const restoredName = StorageService.sanitizeFileName(preferredName, `${templateKind}_template`)
+    const restoredPath = StorageService.getNamespacePath(
+      storageNamespaceForKind(templateKind),
+      "templates",
+      `${template.id}_${restoredName}`,
+    )
 
     StorageService.ensureDirectory(path.dirname(restoredPath))
     if (!fs.existsSync(restoredPath)) {
@@ -161,7 +184,17 @@ class TemplateService {
     return "Template source file is missing on disk. Re-upload this template before reanalyzing."
   }
 
-  static evaluateReadinessForConfig({ config, analysis = null, requiredAnchors = [], baseConfig = null } = {}) {
+  static evaluateReadinessForConfig({
+    config,
+    analysis = null,
+    requiredAnchors = [],
+    baseConfig = null,
+    templateKind = TEMPLATE_KINDS.CASH_FLOW,
+  } = {}) {
+    const resolvedKind = normalizeTemplateKind(templateKind)
+    if (resolvedKind === TEMPLATE_KINDS.CAPITAL_ACCOUNT_STATEMENT) {
+      return CapitalAccountTemplateService.evaluateReadiness(config || {})
+    }
     return evaluateTemplateReadiness({
       config,
       analysisNeedsReview: Boolean(analysis?.needs_human_review),
@@ -172,7 +205,7 @@ class TemplateService {
 
   static evaluateReadinessForTemplate(template) {
     const config = template?.activeVersion?.config_json || template?.config_json
-    return this.evaluateReadinessForConfig({ config })
+    return this.evaluateReadinessForConfig({ config, templateKind: template?.template_kind })
   }
 
   static decorateTemplatePayload(template, readiness = null) {
@@ -181,10 +214,12 @@ class TemplateService {
     const review = readiness || this.evaluateReadinessForTemplate(template)
     const config = template?.activeVersion?.config_json || template?.config_json || null
     let semanticCoverage = null
-    try {
-      semanticCoverage = CashFlowService.summarizeTemplateSemanticCoverage(config || {})
-    } catch (error) {
-      semanticCoverage = null
+    if (normalizeTemplateKind(template?.template_kind) === TEMPLATE_KINDS.CASH_FLOW) {
+      try {
+        semanticCoverage = CashFlowService.summarizeTemplateSemanticCoverage(config || {})
+      } catch (error) {
+        semanticCoverage = null
+      }
     }
     return {
       ...payload,
@@ -250,6 +285,7 @@ class TemplateService {
       this.evaluateReadinessForConfig({
         config: resolvedConfig,
         analysis,
+        templateKind: template?.template_kind || analysis?.template_kind,
       })
 
     return {
@@ -295,9 +331,10 @@ class TemplateService {
     )
   }
 
-  static async listTemplates(fundId) {
+  static async listTemplates(fundId, templateKind = TEMPLATE_KINDS.CASH_FLOW) {
+    const resolvedKind = normalizeTemplateKind(templateKind)
     const templates = await TemplateModel.findAll({
-      where: { portfolio_id: fundId },
+      where: { portfolio_id: fundId, template_kind: resolvedKind },
       include: [{ model: TemplateVersion, as: "activeVersion" }],
       order: [
         ["is_active", "DESC"],
@@ -316,12 +353,16 @@ class TemplateService {
     })
   }
 
-  static async getTemplate(templateId) {
+  static async getTemplate(templateId, templateKind = null) {
     const template = await TemplateModel.findByPk(templateId, {
       include: [{ model: TemplateVersion, as: "activeVersion" }],
     })
 
-    return template || null
+    if (!template) return null
+    if (templateKind && normalizeTemplateKind(template.template_kind) !== normalizeTemplateKind(templateKind)) {
+      return null
+    }
+    return template
   }
 
   static async getTemplateVersion({ templateId, versionId }) {
@@ -333,9 +374,10 @@ class TemplateService {
     })
   }
 
-  static async getActiveTemplateForFund(fundId) {
+  static async getActiveTemplateForFund(fundId, templateKind = TEMPLATE_KINDS.CASH_FLOW) {
+    const resolvedKind = normalizeTemplateKind(templateKind)
     return await TemplateModel.findOne({
-      where: { portfolio_id: fundId, is_active: true },
+      where: { portfolio_id: fundId, template_kind: resolvedKind, is_active: true },
       include: [{ model: TemplateVersion, as: "activeVersion" }],
       order: [["created_at", "DESC"]],
     })
@@ -353,8 +395,10 @@ class TemplateService {
     ingestionResult = null,
     normalizedConfig,
     review = null,
+    templateKind = TEMPLATE_KINDS.CASH_FLOW,
   }) {
-    const activeTemplate = await this.getActiveTemplateForFund(fundId)
+    const resolvedKind = normalizeTemplateKind(templateKind)
+    const activeTemplate = await this.getActiveTemplateForFund(fundId, resolvedKind)
     const readiness =
       review ||
       this.evaluateReadinessForConfig({
@@ -362,6 +406,7 @@ class TemplateService {
         analysis,
         requiredAnchors: ingestionResult?.required_anchors || [],
         baseConfig: analysis?.suggested_config_json || ingestionResult?.suggested_config_json || null,
+        templateKind: resolvedKind,
       })
     const mode = parseActivationMode(activationMode)
     const isActive = mode !== "draft" && readiness.can_activate && (requestedActive || !activeTemplate)
@@ -372,7 +417,7 @@ class TemplateService {
         await TemplateModel.update(
           { is_active: false, status: "draft" },
           {
-            where: { portfolio_id: fundId, is_active: true },
+            where: { portfolio_id: fundId, template_kind: resolvedKind, is_active: true },
             transaction,
           },
         )
@@ -383,7 +428,7 @@ class TemplateService {
           portfolio_id: fundId,
           name: String(name).trim(),
           version: versionLabel ? String(versionLabel).trim() : null,
-          template_kind: "cash_flow",
+          template_kind: resolvedKind,
           status: isActive ? "active" : "draft",
           template_file_name: upload.originalname,
           template_file_path: upload.path,
@@ -395,9 +440,9 @@ class TemplateService {
       )
 
       const finalPath = StorageService.getNamespacePath(
-        "cash-flow",
+        storageNamespaceForKind(resolvedKind),
         "templates",
-        `${identity.id}_${StorageService.sanitizeFileName(upload.originalname, "cash_flow_template")}`,
+        `${identity.id}_${StorageService.sanitizeFileName(upload.originalname, `${resolvedKind}_template`)}`,
       )
       StorageService.moveFile(upload.path, finalPath)
 
@@ -444,6 +489,7 @@ class TemplateService {
           {
             where: {
               portfolio_id: fundId,
+              template_kind: resolvedKind,
               id: { [Op.ne]: analysis.id },
               status: "suggested",
             },
@@ -453,6 +499,7 @@ class TemplateService {
       } else if (ingestionResult) {
         await TemplateAnalysisService.createAnalysisRecord({
           fundId,
+          templateKind: resolvedKind,
           templateId: identity.id,
           templateVersionId: version.id,
           sourceFileName: upload.originalname,
@@ -474,7 +521,7 @@ class TemplateService {
         entityType: "template",
         entityId: identity.id,
         after: identity.toJSON(),
-        metadata: { fund_id: fundId },
+        metadata: { fund_id: fundId, template_kind: resolvedKind },
       })
 
       return identity
@@ -482,7 +529,7 @@ class TemplateService {
 
     return {
       template,
-      readiness: this.evaluateReadinessForConfig({ config: persistedConfig }),
+      readiness: this.evaluateReadinessForConfig({ config: persistedConfig, templateKind: resolvedKind }),
       savedAsDraft: !isActive,
     }
   }
@@ -548,9 +595,11 @@ class TemplateService {
     templateId,
     updates,
     actorId = null,
+    templateKind = null,
   }) {
-    const template = await this.getTemplate(templateId)
+    const template = await this.getTemplate(templateId, templateKind)
     if (!template) return null
+    const resolvedKind = normalizeTemplateKind(template.template_kind)
 
     const before = template.toJSON()
     const nextValues = {}
@@ -578,12 +627,12 @@ class TemplateService {
             ? TemplateAnalysisService.parseConfigJson(updates.config_json)
             : baseVersion?.config_json || template.config_json
 
-        const normalizedV3 = await CashFlowService.ensureV3TemplateConfig({
-          templateConfig: configPayload,
+        const normalizedConfig = await normalizeTemplateConfigForKind({
+          templateKind: resolvedKind,
+          config: configPayload,
           templatePath: template.template_file_path,
         })
-        const normalizedConfig = CashFlowService.validateTemplateConfig(normalizedV3)
-        const readiness = this.evaluateReadinessForConfig({ config: normalizedConfig })
+        const readiness = this.evaluateReadinessForConfig({ config: normalizedConfig, templateKind: resolvedKind })
         responseReadiness = readiness
         const persistedConfig = decorateConfigWithReviewMetadata(normalizedConfig, readiness)
 
@@ -593,7 +642,7 @@ class TemplateService {
               portfolio_id: template.portfolio_id,
               name: nextValues.name || `${template.name} Draft`,
               version: versionLabel,
-              template_kind: "cash_flow",
+              template_kind: resolvedKind,
               status: "draft",
               template_file_name: baseVersion?.source_file_name || template.template_file_name,
               template_file_path: baseVersion?.source_file_path || template.template_file_path,
@@ -660,6 +709,7 @@ class TemplateService {
           responseReadiness ||
           this.evaluateReadinessForConfig({
             config: nextValues.config_json || template.activeVersion?.config_json || template.config_json,
+            templateKind: resolvedKind,
           })
         responseReadiness = readiness
         if (!readiness.can_activate) {
@@ -672,7 +722,7 @@ class TemplateService {
         await TemplateModel.update(
           { is_active: false, status: "draft" },
           {
-            where: { portfolio_id: template.portfolio_id, is_active: true },
+            where: { portfolio_id: template.portfolio_id, template_kind: resolvedKind, is_active: true },
             transaction,
           },
         )
@@ -697,7 +747,7 @@ class TemplateService {
       entityId: resultTemplate.id,
       before,
       after: resultTemplate.toJSON(),
-      metadata: { fund_id: template.portfolio_id },
+      metadata: { fund_id: template.portfolio_id, template_kind: resolvedKind },
     })
 
     return {
@@ -707,9 +757,10 @@ class TemplateService {
     }
   }
 
-  static async activateTemplate({ templateId, actorId = null }) {
-    const template = await this.getTemplate(templateId)
+  static async activateTemplate({ templateId, actorId = null, templateKind = null }) {
+    const template = await this.getTemplate(templateId, templateKind)
     if (!template) return null
+    const resolvedKind = normalizeTemplateKind(template.template_kind)
 
     const before = template.toJSON()
     const readiness = this.evaluateReadinessForTemplate(template)
@@ -724,7 +775,7 @@ class TemplateService {
       await TemplateModel.update(
         { is_active: false, status: "draft" },
         {
-          where: { portfolio_id: template.portfolio_id, is_active: true },
+          where: { portfolio_id: template.portfolio_id, template_kind: resolvedKind, is_active: true },
           transaction,
         },
       )
@@ -738,7 +789,7 @@ class TemplateService {
       entityId: template.id,
       before,
       after: template.toJSON(),
-      metadata: { fund_id: template.portfolio_id },
+      metadata: { fund_id: template.portfolio_id, template_kind: resolvedKind },
     })
 
     return {
@@ -752,18 +803,21 @@ class TemplateService {
     templateId,
     analysis,
     actorId = null,
+    templateKind = null,
   }) {
-    const template = await this.getTemplate(templateId)
+    const template = await this.getTemplate(templateId, templateKind)
     if (!template) return null
+    const resolvedKind = normalizeTemplateKind(template.template_kind)
 
-    const normalizedV3 = await CashFlowService.ensureV3TemplateConfig({
-      templateConfig: analysis.suggested_config_json,
+    const normalizedConfig = await normalizeTemplateConfigForKind({
+      templateKind: resolvedKind,
+      config: analysis.suggested_config_json,
       templatePath: template.template_file_path,
     })
-    const normalizedConfig = CashFlowService.validateTemplateConfig(normalizedV3)
     const readiness = this.evaluateReadinessForConfig({
       config: normalizedConfig,
       analysis,
+      templateKind: resolvedKind,
     })
     if (!readiness.can_activate) {
       throw new CashFlowService.CashFlowValidationError(
@@ -815,13 +869,13 @@ class TemplateService {
     }
   }
 
-  static async getTemplateEditorContext({ templateId }) {
-    const template = await this.getTemplate(templateId)
+  static async getTemplateEditorContext({ templateId, templateKind = null }) {
+    const template = await this.getTemplate(templateId, templateKind)
     if (!template) return null
 
     const version = template.activeVersion || (await TemplateVersion.findByPk(template.active_version_id))
     const analyses = await CashFlowTemplateAnalysis.findAll({
-      where: { template_id: template.id },
+      where: { template_id: template.id, template_kind: normalizeTemplateKind(template.template_kind) },
       order: [["created_at", "DESC"]],
       limit: 1,
     })

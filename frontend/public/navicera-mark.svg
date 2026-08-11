@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">Navicera mark</title>
+  <rect width="64" height="64" rx="14" fill="#071B26"/>
+  <path d="M13 14h18l15 15h7v8H42L27 22H13v-8Z" fill="#EAF2F0"/>
+  <path d="M13 27h15l15 15h6v8H39L24 35H13v-8Z" fill="#EAF2F0"/>
+  <path d="M13 40h18l10 10H13V40Z" fill="#EAF2F0"/>
+  <rect x="44" y="43" width="11" height="11" rx="3" fill="#35D0A5"/>
+</svg>

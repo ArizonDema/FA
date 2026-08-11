@@ -14,6 +14,7 @@ const {
   toAnalysisResultPayload,
 } = require("../utils/templateAnalysis.util")
 const { evaluateTemplateReadiness } = require("./templateReadiness.service")
+const { TEMPLATE_KINDS, normalizeTemplateKind } = require("../template.constants")
 
 const ANALYSIS_TTL_MS = 7 * 24 * 60 * 60 * 1000
 
@@ -38,6 +39,7 @@ class TemplateAnalysisService {
 
   static async createAnalysisRecord({
     fundId,
+    templateKind = TEMPLATE_KINDS.CASH_FLOW,
     templateId = null,
     templateVersionId = null,
     sourceFileName,
@@ -47,9 +49,11 @@ class TemplateAnalysisService {
     status = "suggested",
     expiresAt = new Date(Date.now() + ANALYSIS_TTL_MS),
   }) {
+    const resolvedTemplateKind = normalizeTemplateKind(templateKind)
     const analysisConfigPayload = buildAnalysisConfigPayload(ingestionResult)
     const analysis = await CashFlowTemplateAnalysis.create({
       portfolio_id: fundId,
+      template_kind: resolvedTemplateKind,
       template_id: templateId,
       template_version_id: templateVersionId,
       source_file_name: sourceFileName,
@@ -83,6 +87,7 @@ class TemplateAnalysisService {
       after: analysis.toJSON(),
       metadata: {
         fund_id: fundId,
+        template_kind: resolvedTemplateKind,
         template_id: templateId,
         template_version_id: templateVersionId,
       },
@@ -97,9 +102,11 @@ class TemplateAnalysisService {
   static async resolveConfigFromAnalysisOrPayload({
     body,
     fundId,
+    templateKind = TEMPLATE_KINDS.CASH_FLOW,
     templatePath,
     sourceFileName,
   }) {
+    const resolvedTemplateKind = normalizeTemplateKind(templateKind)
     const hasAnalysisId = Boolean(body.analysis_id)
     const explicitConfig = this.parseConfigJson(body.config_json)
 
@@ -113,7 +120,11 @@ class TemplateAnalysisService {
 
     if (hasAnalysisId) {
       analysis = await CashFlowTemplateAnalysis.findByPk(body.analysis_id)
-      if (!analysis || analysis.portfolio_id !== fundId) {
+      if (
+        !analysis ||
+        analysis.portfolio_id !== fundId ||
+        normalizeTemplateKind(analysis.template_kind) !== resolvedTemplateKind
+      ) {
         throw new CashFlowService.CashFlowValidationError("analysis_id is invalid for the selected fund")
       }
 
